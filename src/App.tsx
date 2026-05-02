@@ -1,17 +1,27 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { useState } from "react";
+import TabBar from "./components/TabBar";
+import Settings from "./views/Settings";
+import Modes from "./views/Modes";
+import Logs from "./views/Logs";
+import { useUIStore } from "./store";
 
 export default function App(): JSX.Element {
-  const [active] = useState<string>("Phase 1 — Scaffolding");
+  const activeTab = useUIStore((s) => s.activeTab);
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-8 gap-4">
-      <h1 className="text-3xl font-bold text-brand-500">VoiceTypeX</h1>
-      <p className="text-slate-400">{active}</p>
-      <p className="text-xs text-slate-600 mt-8">
-        Diktiere — VoiceTypeX schreibt es. Lokal, Cloud, oder beides. Du
-        entscheidest pro Modus.
-      </p>
-    </main>
+    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
+      <header className="px-6 pt-5 pb-3">
+        <h1 className="text-2xl font-bold text-brand-500">VoiceTypeX</h1>
+        <p className="text-xs text-slate-500">
+          Diktiere — VoiceTypeX schreibt es. Phase 1 (lokales Diktat).
+        </p>
+      </header>
+      <TabBar />
+      <main className="flex-1 p-6 overflow-auto">
+        {activeTab === "settings" ? <Settings /> : null}
+        {activeTab === "modes" ? <Modes /> : null}
+        {activeTab === "logs" ? <Logs /> : null}
+      </main>
+    </div>
   );
 }

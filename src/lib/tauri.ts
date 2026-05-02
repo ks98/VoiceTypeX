@@ -1,0 +1,38 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Dünner Wrapper über Tauris invoke(), mit Fehler-Normalisierung
+// und IPC-Command-Namen als zentralem Punkt.
+
+import { invoke } from "@tauri-apps/api/core";
+import type { Mode, Settings } from "./types";
+
+export async function ipcGetSettings(): Promise<Settings> {
+  return invoke<Settings>("get_settings");
+}
+
+export async function ipcSetSettings(settings: Settings): Promise<void> {
+  return invoke("set_settings", { settings });
+}
+
+export async function ipcListAudioDevices(): Promise<string[]> {
+  return invoke<string[]>("list_audio_devices");
+}
+
+export async function ipcSetWhisperModelPath(path: string): Promise<void> {
+  return invoke("set_whisper_model_path", { path });
+}
+
+export async function ipcGetModes(): Promise<Mode[]> {
+  return invoke<Mode[]>("get_modes");
+}
+
+export async function ipcReloadModes(): Promise<Mode[]> {
+  return invoke<Mode[]>("reload_modes");
+}
+
+export async function ipcGetAppVersion(): Promise<string> {
+  return invoke<string>("get_app_version");
+}
+
+export async function ipcGetRecentLogs(limit: number): Promise<string[]> {
+  return invoke<string[]>("get_recent_logs", { limit });
+}
