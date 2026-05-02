@@ -29,6 +29,7 @@ export interface Settings {
   diagnostic_logging: boolean;
   autostart: boolean;
   ollama_url: string;
+  onboarding_done: boolean;
 }
 
 export interface LogLine {

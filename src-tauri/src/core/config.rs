@@ -36,6 +36,12 @@ pub struct Settings {
     /// Ollama-HTTP-Endpunkt (lokales LLM).
     #[serde(default = "default_ollama_url")]
     pub ollama_url: String,
+
+    /// Wird beim ersten erfolgreichen Onboarding-Wizard-Durchlauf auf
+    /// `true` gesetzt. Steuert, ob der Wizard beim Start automatisch
+    /// erscheint.
+    #[serde(default)]
+    pub onboarding_done: bool,
 }
 
 fn default_whisper_slot() -> String {
