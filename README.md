@@ -2,7 +2,7 @@
 
 Plattformübergreifendes Desktop-Werkzeug, das Diktate in Text verwandelt und ihn an der aktuellen Cursor-Position einfügt — überall, in jeder App.
 
-**Status:** Phase 1 — lokales STT auf Windows + Linux/X11. Cloud-Provider und Wayland/macOS folgen in späteren Phasen.
+**Status:** Phase 2 — xAI End-to-End plus lokales STT (Windows + Linux/X11). Wayland/macOS folgen in späteren Phasen.
 
 ## Kernablauf
 
@@ -67,6 +67,28 @@ Das ist der Definition-of-Done-Walkthrough für Phase 1 (CLAUDE.md §6.1):
 6. **Modi-Hot-Reload:** Editiere `app_config_dir/modes/exaktes_diktat.toml`
    im Editor (z.B. ändere `name`). Speichern. Tab *Modi* aktualisiert
    sich nach ~1 Sekunde.
+
+## Phase-2-Test (Cloud / xAI End-to-End)
+
+Nachdem Phase 1 sauber läuft:
+
+1. **xAI-Key beziehen:** Account auf <https://console.x.ai>, API-Key
+   generieren. Derselbe Key wird für STT und LLM (Grok) verwendet.
+2. **Key hinterlegen:** Tab *Einstellungen* → "Cloud-API-Keys (BYOK)"
+   → "Setzen" neben *xAI*. Key einfügen, speichern.
+3. **Verbindung testen:** Button "Verbindung testen" neben *xAI*.
+   Erfolgsmeldung "✓ Verbindung erfolgreich" sollte erscheinen.
+4. **Cloud-Diktat testen:** Cursor in einem E-Mail-Entwurf,
+   `Ctrl+Alt+E` drücken → Beep → diktiere → `Ctrl+Alt+E` →
+   Tray-Icon zeigt sequentiell Recording → Transcribing → Postprocessing
+   → Injecting → Idle. Der formell ausformulierte E-Mail-Text
+   landet an der Cursor-Position.
+5. **Andere Cloud-Modi:** `Ctrl+Alt+S` (Slack), `Ctrl+Alt+G` (GitHub Issue),
+   `Ctrl+Alt+C` (Claude-Code-Anweisung) — alle nutzen denselben xAI-Key.
+6. **Lokales LLM-Diktat (`Ctrl+Alt+K`):** braucht zusätzlich einen
+   laufenden Ollama-Server (`ollama serve`) und das gewählte Modell
+   (`ollama pull qwen2.5:7b`). Konfiguration in den Einstellungen unter
+   "Ollama-Endpunkt".
 
 ## Datenschutz
 

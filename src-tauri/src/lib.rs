@@ -67,6 +67,7 @@ pub fn run() {
             ipc::secrets::get_provider_status,
             ipc::secrets::set_provider_key,
             ipc::secrets::delete_provider_key,
+            ipc::secrets::test_provider_connection,
         ])
         .setup(move |app| {
             let app_handle = app.handle().clone();

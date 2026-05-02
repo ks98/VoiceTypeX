@@ -4,6 +4,7 @@
 //! Frontend bekommt **nie** den Klartext-Key zurueck — nur Status-Booleans.
 //! Schreiboperationen senden den Key aus dem UI direkt in den OS-Keychain.
 
+use crate::processing::cloud::openai_compatible::OpenAICompatibleClient;
 use crate::secrets::SecretStore;
 use serde::Serialize;
 
@@ -49,4 +50,37 @@ pub async fn delete_provider_key(provider: String) -> IpcResult<()> {
         return Err(format!("Unbekannter Provider: {provider}"));
     }
     SecretStore::delete(&provider).map_err(|e| e.to_string())
+}
+
+/// Pruefe Provider-Verbindung mit dem aktuell gespeicherten API-Key.
+/// Provider-spezifische Endpoints; xAI/OpenAI/Groq teilen den OpenAI-
+/// kompatiblen `GET /models`-Test. Anthropic/Deepgram folgen in Phase 2.5+.
+#[tauri::command]
+pub async fn test_provider_connection(provider: String) -> IpcResult<()> {
+    let key = SecretStore::get(&provider)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("Kein API-Key fuer '{provider}' gesetzt"))?;
+
+    match provider.as_str() {
+        "xai" => OpenAICompatibleClient::new("https://api.x.ai/v1", "grok-4", key)
+            .test_connection()
+            .await
+            .map_err(|e| e.to_string()),
+        "openai" => OpenAICompatibleClient::new("https://api.openai.com/v1", "gpt-4o-mini", key)
+            .test_connection()
+            .await
+            .map_err(|e| e.to_string()),
+        "groq" => OpenAICompatibleClient::new(
+            "https://api.groq.com/openai/v1",
+            "whisper-large-v3-turbo",
+            key,
+        )
+        .test_connection()
+        .await
+        .map_err(|e| e.to_string()),
+        "anthropic" | "deepgram" => Err(format!(
+            "Test-Verbindung fuer '{provider}' wird in einer spaeteren Phase ergaenzt"
+        )),
+        other => Err(format!("Unbekannter Provider: {other}")),
+    }
 }

@@ -65,3 +65,9 @@ export async function ipcSetProviderKey(
 export async function ipcDeleteProviderKey(provider: string): Promise<void> {
   return invoke("delete_provider_key", { provider });
 }
+
+export async function ipcTestProviderConnection(
+  provider: string,
+): Promise<void> {
+  return invoke("test_provider_connection", { provider });
+}
