@@ -51,6 +51,19 @@ export interface ProviderStatus {
   configured: boolean;
 }
 
+export interface TestTranscriptionResult {
+  rtf: number;
+  text: string;
+  audio_seconds: number;
+  processing_ms: number;
+}
+
+export async function ipcRunTestTranscription(
+  seconds: number,
+): Promise<TestTranscriptionResult> {
+  return invoke<TestTranscriptionResult>("run_test_transcription", { seconds });
+}
+
 export async function ipcGetProviderStatus(): Promise<ProviderStatus[]> {
   return invoke<ProviderStatus[]>("get_provider_status");
 }

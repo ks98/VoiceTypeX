@@ -23,7 +23,9 @@ use crate::core::modes::ModesRegistry;
 use crate::core::state::StateBus;
 use crate::core::AppContext;
 use crate::injection::{make_default_injector, TextInjector};
-use crate::pipeline::{register_mode_hotkeys, spawn_tray_state_listener};
+use crate::pipeline::{
+    register_mode_hotkeys, spawn_tray_recording_pulse, spawn_tray_state_listener,
+};
 use crate::transcription::local::LocalTranscriber;
 use crate::transcription::Transcriber;
 use parking_lot::{Mutex, RwLock};
@@ -120,8 +122,9 @@ pub fn run() {
             register_mode_hotkeys(&app_handle, Arc::clone(&ctx))
                 .map_err(|e| format!("register_mode_hotkeys: {e}"))?;
             spawn_tray_state_listener(app_handle.clone());
+            spawn_tray_recording_pulse(app_handle.clone());
 
-            tracing::info!("VoiceTypeX gestartet (Phase 1.4 — Pipeline verdrahtet)");
+            tracing::info!("VoiceTypeX gestartet (Phase 2 — Cloud + lokal)");
             Ok(())
         })
         .run(tauri::generate_context!())

@@ -56,6 +56,51 @@ async fn start_recording(ctx: &Arc<AppContext>, mode: &Mode) -> Result<()> {
     Ok(())
 }
 
+/// Spawnt eine Pulsing-Animation: alle 600 ms wechselt das Tray-Icon
+/// zwischen `recording` und `recording_pulse`, solange der StateBus
+/// `Recording` meldet. Der Loop terminiert sich selbst — kein Stop-Signal
+/// noetig.
+pub fn spawn_tray_recording_pulse(app: AppHandle) {
+    use std::time::Duration;
+
+    let state_rx = {
+        let state = app.state::<Arc<AppContext>>();
+        state.state_bus.subscribe()
+    };
+
+    tauri::async_runtime::spawn(async move {
+        let mut bright = false;
+        loop {
+            tokio::time::sleep(Duration::from_millis(600)).await;
+
+            let current = state_rx.borrow().clone();
+            if !matches!(current, AppState::Recording) {
+                // Pulse pausiert ausserhalb des Recording-States;
+                // wir bleiben im Loop, weil ein neuer Recording-Zyklus
+                // dieselbe Task wiederbeleben soll.
+                continue;
+            }
+
+            let bytes = if bright {
+                crate::tray::icon_bytes_recording_pulse()
+            } else {
+                crate::tray::icon_bytes_for_state(&AppState::Recording)
+            };
+            if let Some(tray) = app.tray_by_id("main") {
+                if let Ok(image) = tauri::image::Image::from_bytes(bytes) {
+                    let _ = tray.set_icon(Some(image));
+                }
+            }
+            bright = !bright;
+
+            // Wenn der Receiver geschlossen wurde (App-Shutdown), beende.
+            if state_rx.has_changed().is_err() {
+                break;
+            }
+        }
+    });
+}
+
 async fn finish_recording_and_inject(
     app: &AppHandle,
     ctx: &Arc<AppContext>,

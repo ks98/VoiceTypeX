@@ -15,9 +15,16 @@ use tauri::{AppHandle, Manager};
 
 const ICON_IDLE: &[u8] = include_bytes!("../../icons/tray/idle.png");
 const ICON_RECORDING: &[u8] = include_bytes!("../../icons/tray/recording.png");
+const ICON_RECORDING_PULSE: &[u8] = include_bytes!("../../icons/tray/recording_pulse.png");
 const ICON_PROCESSING: &[u8] = include_bytes!("../../icons/tray/processing.png");
 const ICON_DONE: &[u8] = include_bytes!("../../icons/tray/done.png");
 const ICON_ERROR: &[u8] = include_bytes!("../../icons/tray/error.png");
+
+/// Pulse-Variante des Recording-Icons (heller rot) — fuer Animation
+/// im Recording-State (CLAUDE.md DoD §6.1: "Tray-Icon pulsiert rot").
+pub fn icon_bytes_recording_pulse() -> &'static [u8] {
+    ICON_RECORDING_PULSE
+}
 
 pub fn icon_bytes_for_state(state: &AppState) -> &'static [u8] {
     match state {
