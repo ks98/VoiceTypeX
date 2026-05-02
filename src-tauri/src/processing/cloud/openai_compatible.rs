@@ -1,19 +1,23 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Geteilter HTTP-Client fuer alle OpenAI-Chat-Completions-kompatiblen
-//! Provider (xAI, OpenAI, perspektivisch andere).
+//! Provider (xAI, OpenAI, perspektivisch andere wie Together, Mistral, …).
 //!
-//! Der Client wird per Komposition in `XaiProcessor` und `OpenAIProcessor`
-//! eingebettet. Phase 1.2: Stub (konstruieren OK, `complete` returnt Err).
-//! Phase 2: echte reqwest-Implementation.
+//! Anforderungen ans API:
+//!   POST {base_url}/chat/completions
+//!   Authorization: Bearer {api_key}
+//!   Body: { model, messages: [system, user], temperature?, max_tokens? }
+//!   Response: { choices: [{ message: { content } }] }
 
 use crate::core::error::{Result, VoiceTypeError};
 use crate::processing::ProcessOpts;
+use serde::{Deserialize, Serialize};
 
-#[allow(dead_code)]
+#[derive(Clone)]
 pub struct OpenAICompatibleClient {
     pub base_url: String,
     pub default_model: String,
     pub api_key: String,
+    client: reqwest::Client,
 }
 
 impl OpenAICompatibleClient {
@@ -26,6 +30,12 @@ impl OpenAICompatibleClient {
             base_url: base_url.into(),
             default_model: default_model.into(),
             api_key,
+            // 60s Timeout deckt fast alle Chat-Completion-Anfragen ab; bei
+            // Streaming-Migration in Phase 4 wird das angepasst.
+            client: reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(60))
+                .build()
+                .unwrap_or_else(|_| reqwest::Client::new()),
         }
     }
 
@@ -33,13 +43,104 @@ impl OpenAICompatibleClient {
     /// finalen `assistant`-Content zurueck.
     pub async fn complete(
         &self,
-        _transcript: &str,
-        _system_prompt: &str,
-        _opts: ProcessOpts,
+        transcript: &str,
+        system_prompt: &str,
+        opts: ProcessOpts,
     ) -> Result<String> {
-        Err(VoiceTypeError::Processing(format!(
-            "OpenAI-kompatibler Client (base_url={}) noch nicht implementiert (Phase 2)",
-            self.base_url
-        )))
+        let model = opts.model.unwrap_or_else(|| self.default_model.clone());
+        let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
+
+        let req = ChatCompletionRequest {
+            model,
+            messages: vec![
+                ChatMessage {
+                    role: "system",
+                    content: system_prompt.to_string(),
+                },
+                ChatMessage {
+                    role: "user",
+                    content: transcript.to_string(),
+                },
+            ],
+            temperature: opts.temperature,
+            max_tokens: opts.max_tokens,
+        };
+
+        let response = self
+            .client
+            .post(&url)
+            .bearer_auth(&self.api_key)
+            .json(&req)
+            .send()
+            .await
+            .map_err(|e| VoiceTypeError::Processing(format!("HTTP {url}: {e}")))?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(VoiceTypeError::Processing(format!("HTTP {status}: {body}")));
+        }
+
+        let parsed: ChatCompletionResponse = response
+            .json()
+            .await
+            .map_err(|e| VoiceTypeError::Processing(format!("Response-JSON-Parse: {e}")))?;
+
+        parsed
+            .choices
+            .into_iter()
+            .next()
+            .map(|c| c.message.content)
+            .ok_or_else(|| VoiceTypeError::Processing("Keine choices in Response".into()))
     }
+
+    /// Pruefe Verbindung und Auth via `GET /models` — preiswertester
+    /// Endpoint, den OpenAI-kompatible Provider unterstuetzen.
+    pub async fn test_connection(&self) -> Result<()> {
+        let url = format!("{}/models", self.base_url.trim_end_matches('/'));
+        let response = self
+            .client
+            .get(&url)
+            .bearer_auth(&self.api_key)
+            .send()
+            .await
+            .map_err(|e| VoiceTypeError::Processing(format!("HTTP {url}: {e}")))?;
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(VoiceTypeError::Processing(format!("HTTP {status}: {body}")));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Serialize)]
+struct ChatCompletionRequest {
+    model: String,
+    messages: Vec<ChatMessage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    temperature: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    max_tokens: Option<u32>,
+}
+
+#[derive(Serialize)]
+struct ChatMessage {
+    role: &'static str,
+    content: String,
+}
+
+#[derive(Deserialize)]
+struct ChatCompletionResponse {
+    choices: Vec<Choice>,
+}
+
+#[derive(Deserialize)]
+struct Choice {
+    message: ResponseMessage,
+}
+
+#[derive(Deserialize)]
+struct ResponseMessage {
+    content: String,
 }
