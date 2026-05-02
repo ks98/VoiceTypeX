@@ -38,6 +38,18 @@ export async function ipcReloadModes(): Promise<Mode[]> {
   return invoke<Mode[]>("reload_modes");
 }
 
+export async function ipcCreateMode(mode: Mode): Promise<void> {
+  return invoke("create_mode", { mode });
+}
+
+export async function ipcUpdateMode(mode: Mode): Promise<void> {
+  return invoke("update_mode", { mode });
+}
+
+export async function ipcDeleteMode(id: string): Promise<void> {
+  return invoke("delete_mode", { id });
+}
+
 export async function ipcGetAppVersion(): Promise<string> {
   return invoke<string>("get_app_version");
 }
