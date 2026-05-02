@@ -12,6 +12,7 @@ use async_trait::async_trait;
 
 pub mod cloud;
 pub mod local;
+pub mod model_downloader;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TranscriptionMode {

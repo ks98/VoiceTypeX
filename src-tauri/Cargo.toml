@@ -49,6 +49,27 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # OS-Keychain (BYOK API-Keys, niemals im Klartext)
 keyring = "3"
 
+# Audio-Aufnahme (cpal) und WAV-IO (hound)
+cpal = "0.15"
+hound = "3.5"
+
+# Resampling 44.1k/48k -> 16 kHz Mono fuer Whisper-Eingabe
+rubato = "0.16"
+
+# Audio-Wiedergabe der Recording-Cues
+rodio = { version = "0.20", default-features = false, features = ["wav"] }
+
+# Lokales STT via whisper.cpp (Rust-Bindings)
+whisper-rs = "0.13"
+
+# HTTP-Client + Streaming + Hashing fuer Modell-Download
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream", "json"] }
+sha2 = "0.10"
+futures-util = "0.3"
+
+# Atomare Primitiven
+parking_lot = "0.12"
+
 [features]
 # Tauri 2 erwartet ein "default"-Feature
 default = ["custom-protocol"]
