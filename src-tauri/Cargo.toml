@@ -70,6 +70,12 @@ futures-util = "0.3"
 # Atomare Primitiven
 parking_lot = "0.12"
 
+# Filesystem-Watch fuer modes/-Hot-Reload
+notify = "6"
+
+# Cross-Plattform-Keystroke-Injection (Paste-Shortcut + Direct-Keystroke-Modus)
+enigo = "0.3"
+
 [features]
 # Tauri 2 erwartet ein "default"-Feature
 default = ["custom-protocol"]

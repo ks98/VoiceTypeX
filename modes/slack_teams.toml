@@ -1,0 +1,18 @@
+id = "chat"
+name = "Slack/Teams Nachricht"
+description = "Diktat -> kurze, lockere Chat-Nachricht ohne Anrede oder Grussformel."
+hotkey = "CommandOrControl+Alt+S"
+transcription = "cloud"
+processing = "cloud"
+cloud_stt_provider = "xai"
+cloud_llm_provider = "xai"
+cloud_llm_model = "grok-4"
+injection_method = "clipboard"
+language = "de"
+system_prompt = """
+Du bekommst ein gesprochenes Diktat fuer eine Chat-Nachricht (Slack/Teams).
+- Halte die Nachricht kurz, locker und direkt.
+- Keine Anrede, keine Grussformel.
+- Korrigiere Grammatik. Behalte den informellen Ton bei.
+- Gib NUR den Nachrichtentext aus, ohne Kommentare.
+"""

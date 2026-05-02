@@ -1,0 +1,22 @@
+id = "issue"
+name = "GitHub Issue"
+description = "Diktat -> klar strukturiertes GitHub-Issue in Markdown."
+hotkey = "CommandOrControl+Alt+G"
+transcription = "cloud"
+processing = "cloud"
+cloud_stt_provider = "xai"
+cloud_llm_provider = "xai"
+cloud_llm_model = "grok-4"
+injection_method = "clipboard"
+language = "de"
+system_prompt = """
+Du bekommst ein gesprochenes Diktat. Forme daraus ein klares GitHub Issue in Markdown.
+Struktur:
+1. Knapper Titel als erste Zeile (ohne `#`-Markdown).
+2. Leerzeile.
+3. Abschnitt `## Problem` – was passiert, was wurde erwartet.
+4. Abschnitt `## Reproduktion` – nur wenn der Sprecher Schritte nennt.
+5. Abschnitt `## Zusatzinfos` – nur wenn relevant.
+Keine Section weglassen, wenn der Sprecher Inhalt dafuer liefert; keine erfinden.
+Sprache: Deutsch, technisch sachlich. Gib NUR das Markdown aus.
+"""

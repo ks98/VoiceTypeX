@@ -7,9 +7,12 @@
 //! in Phase 1.4.
 
 use crate::core::error::{Result, VoiceTypeError};
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use tokio::sync::broadcast;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -145,6 +148,109 @@ pub fn load_modes_from_dir(dir: &Path) -> Result<Vec<Mode>> {
     let mut modes: Vec<Mode> = by_id.into_values().collect();
     modes.sort_by(|a, b| a.id.cmp(&b.id));
     Ok(modes)
+}
+
+#[derive(Debug, Clone)]
+pub enum ModesEvent {
+    /// Modi wurden erfolgreich neu geladen.
+    Reloaded,
+    /// Beim Reload trat ein Fehler auf — die zuvor geladenen Modi bleiben aktiv.
+    Error(String),
+}
+
+/// Beobachtbare, in-memory Modi-Liste mit optionalem Hot-Reload.
+///
+/// Verwendung:
+///   let registry = ModesRegistry::load(modes_dir.clone())?;
+///   registry.start_watching(modes_dir)?;  // optional
+pub struct ModesRegistry {
+    modes: Arc<RwLock<Vec<Mode>>>,
+    update_tx: broadcast::Sender<ModesEvent>,
+    /// Watcher wird hier gehalten, damit er nicht gedroppt wird (was das
+    /// File-Watching beendet). Der notify-Watcher selbst wird in
+    /// `start_watching` aktualisiert.
+    watcher: parking_lot::Mutex<Option<notify::RecommendedWatcher>>,
+}
+
+impl ModesRegistry {
+    pub fn load(dir: PathBuf) -> Result<Self> {
+        let modes = load_modes_from_dir(&dir)?;
+        let (tx, _) = broadcast::channel(8);
+        Ok(Self {
+            modes: Arc::new(RwLock::new(modes)),
+            update_tx: tx,
+            watcher: parking_lot::Mutex::new(None),
+        })
+    }
+
+    /// Aktuelle Modi-Liste (Snapshot).
+    pub fn current(&self) -> Vec<Mode> {
+        self.modes.read().clone()
+    }
+
+    pub fn find_by_id(&self, id: &str) -> Option<Mode> {
+        self.modes.read().iter().find(|m| m.id == id).cloned()
+    }
+
+    pub fn find_by_hotkey(&self, hotkey: &str) -> Option<Mode> {
+        self.modes
+            .read()
+            .iter()
+            .find(|m| m.hotkey == hotkey)
+            .cloned()
+    }
+
+    pub fn subscribe(&self) -> broadcast::Receiver<ModesEvent> {
+        self.update_tx.subscribe()
+    }
+
+    /// Starte File-Watching. Bei Aenderungen an `*.toml` im Verzeichnis wird
+    /// die komplette Modi-Liste neu geladen und Subscriber benachrichtigt.
+    pub fn start_watching(&self, dir: PathBuf) -> Result<()> {
+        use notify::Watcher;
+
+        let modes = Arc::clone(&self.modes);
+        let tx = self.update_tx.clone();
+        let dir_for_load = dir.clone();
+
+        let mut watcher =
+            notify::recommended_watcher(move |res: notify::Result<notify::Event>| match res {
+                Ok(event) => {
+                    if !event_touches_toml(&event) {
+                        return;
+                    }
+                    match load_modes_from_dir(&dir_for_load) {
+                        Ok(new_modes) => {
+                            *modes.write() = new_modes;
+                            let _ = tx.send(ModesEvent::Reloaded);
+                            tracing::info!("modes/ neu geladen");
+                        }
+                        Err(e) => {
+                            tracing::error!(error = %e, "Modes-Reload fehlgeschlagen");
+                            let _ = tx.send(ModesEvent::Error(e.to_string()));
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::error!(error = %e, "notify-Watcher meldete Fehler");
+                }
+            })
+            .map_err(|e| VoiceTypeError::Mode(format!("notify::watcher: {e}")))?;
+
+        watcher
+            .watch(&dir, notify::RecursiveMode::NonRecursive)
+            .map_err(|e| VoiceTypeError::Mode(format!("watch({dir:?}): {e}")))?;
+
+        *self.watcher.lock() = Some(watcher);
+        Ok(())
+    }
+}
+
+fn event_touches_toml(event: &notify::Event) -> bool {
+    event
+        .paths
+        .iter()
+        .any(|p| p.extension().and_then(|s| s.to_str()) == Some("toml"))
 }
 
 #[cfg(test)]

@@ -1,0 +1,8 @@
+id = "exakt"
+name = "Exaktes Diktat"
+description = "Woertliche Transkription, nur offensichtliche Erkennungsfehler korrigieren."
+hotkey = "CommandOrControl+Alt+D"
+transcription = "local"
+processing = "none"
+injection_method = "clipboard"
+language = "de"

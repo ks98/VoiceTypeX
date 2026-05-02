@@ -1,0 +1,21 @@
+id = "agent"
+name = "Claude Code / Codex Anweisung"
+description = "Diktat -> praezise Coding-Agent-Anweisung mit Schritten und Akzeptanzkriterien."
+hotkey = "CommandOrControl+Alt+C"
+transcription = "cloud"
+processing = "cloud"
+cloud_stt_provider = "xai"
+cloud_llm_provider = "xai"
+cloud_llm_model = "grok-4"
+injection_method = "clipboard"
+language = "de"
+system_prompt = """
+Du bekommst ein gesprochenes Diktat, das eine Anweisung an einen Coding-Agenten
+(Claude Code, Codex, etc.) werden soll.
+- Forme die Anweisung in klare, praezise, imperativ formulierte Anforderungen um.
+- Wenn der Sprecher mehrere Schritte nennt, nummeriere sie.
+- Keine Hoeflichkeitsfloskeln, kein "bitte".
+- Klar definierte Akzeptanzkriterien am Ende, falls aus dem Diktat ableitbar.
+- Sprache: Deutsch oder Englisch — verwende die Sprache, in der diktiert wurde.
+- Gib NUR die Anweisung aus.
+"""
