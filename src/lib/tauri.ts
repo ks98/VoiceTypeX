@@ -58,6 +58,20 @@ export async function ipcGetRecentLogs(limit: number): Promise<string[]> {
   return invoke<string[]>("get_recent_logs", { limit });
 }
 
+export interface SessionInfo {
+  display_server: "wayland" | "x11" | "windows" | "macos" | "unknown";
+  global_hotkeys_supported: boolean;
+  auto_paste_supported: boolean;
+}
+
+export async function ipcGetSessionInfo(): Promise<SessionInfo> {
+  return invoke<SessionInfo>("get_session_info");
+}
+
+export async function ipcStartRecording(modeId: string): Promise<void> {
+  return invoke("start_recording", { modeId });
+}
+
 export interface ProviderStatus {
   provider: string;
   configured: boolean;

@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { useEffect, useState } from "react";
 import { useModesStore } from "../store";
-import { ipcDeleteMode } from "../lib/tauri";
+import {
+  ipcDeleteMode,
+  ipcGetSessionInfo,
+  ipcStartRecording,
+  type SessionInfo,
+} from "../lib/tauri";
 import type { Mode } from "../lib/types";
 import ModeEditor from "../components/ModeEditor";
 
@@ -14,6 +19,26 @@ export default function Modes(): JSX.Element {
   const [editing, setEditing] = useState<Mode | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [opError, setOpError] = useState<string | null>(null);
+  const [session, setSession] = useState<SessionInfo | null>(null);
+  const [triggering, setTriggering] = useState<string | null>(null);
+
+  useEffect(() => {
+    void ipcGetSessionInfo()
+      .then(setSession)
+      .catch(() => null);
+  }, []);
+
+  const onTrigger = async (modeId: string) => {
+    setTriggering(modeId);
+    setOpError(null);
+    try {
+      await ipcStartRecording(modeId);
+    } catch (e) {
+      setOpError(String(e));
+    } finally {
+      setTriggering(null);
+    }
+  };
 
   useEffect(() => {
     void load();
@@ -53,8 +78,21 @@ export default function Modes(): JSX.Element {
     );
   }
 
+  const noHotkeys = session !== null && !session.global_hotkeys_supported;
+
   return (
     <div className="flex flex-col gap-3">
+      {noHotkeys ? (
+        <div className="rounded-md bg-amber-900/20 border border-amber-700/50 px-3 py-2 text-xs text-amber-200">
+          <strong>Display-Server: {session?.display_server}.</strong> Globale
+          Hotkeys sind hier nicht verfuegbar (Phase 5 ergaenzt das via
+          xdg-desktop-portal). Nutze die <em>Trigger</em>-Buttons unten — sie
+          starten/stoppen die Aufnahme. Der Text landet im Clipboard;
+          {session?.auto_paste_supported
+            ? ""
+            : " danach drueck Ctrl+V in der Ziel-App."}
+        </div>
+      ) : null}
       <div className="flex justify-between items-start">
         <p className="text-sm text-slate-400 max-w-3xl">
           Modi werden in{" "}
@@ -111,6 +149,15 @@ export default function Modes(): JSX.Element {
               </td>
               <td className="py-2 capitalize">{m.injection_method}</td>
               <td className="py-2 text-right">
+                <button
+                  type="button"
+                  onClick={() => void onTrigger(m.id)}
+                  disabled={triggering !== null}
+                  className="text-xs px-2 py-1 rounded bg-brand-700 hover:bg-brand-500 mr-1 disabled:opacity-50"
+                  title="Aufnahme starten/stoppen (Toggle)"
+                >
+                  {triggering === m.id ? "…" : "Trigger"}
+                </button>
                 <button
                   type="button"
                   onClick={() => setEditing(m)}

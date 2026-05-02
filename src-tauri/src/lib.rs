@@ -69,6 +69,7 @@ pub fn run() {
             ipc::recording::run_test_transcription,
             ipc::diagnostics::get_app_version,
             ipc::diagnostics::get_recent_logs,
+            ipc::diagnostics::get_session_info,
             ipc::secrets::get_provider_status,
             ipc::secrets::set_provider_key,
             ipc::secrets::delete_provider_key,
@@ -122,12 +123,29 @@ pub fn run() {
 
             // Tray, Hotkeys, State-Listener
             tray::setup_tray(&app_handle).map_err(|e| format!("setup_tray: {e}"))?;
-            register_mode_hotkeys(&app_handle, Arc::clone(&ctx))
-                .map_err(|e| format!("register_mode_hotkeys: {e}"))?;
+
+            // Auf Wayland scheitert die Hotkey-Registrierung (XGrabKey nicht
+            // erlaubt). Skip statt Crash; Frontend zeigt Banner + UI-Trigger.
+            // Phase 5-full wird via xdg-desktop-portal.GlobalShortcuts
+            // ergaenzt.
+            let session = crate::core::session::detect_session();
+            if session.global_hotkeys_supported {
+                register_mode_hotkeys(&app_handle, Arc::clone(&ctx))
+                    .map_err(|e| format!("register_mode_hotkeys: {e}"))?;
+            } else {
+                tracing::warn!(
+                    display_server = %session.display_server,
+                    "Globale Hotkeys nicht unterstuetzt — UI-Trigger als Workaround"
+                );
+            }
+
             spawn_tray_state_listener(app_handle.clone());
             spawn_tray_recording_pulse(app_handle.clone());
 
-            tracing::info!("VoiceTypeX gestartet (Phase 2 — Cloud + lokal)");
+            tracing::info!(
+                display_server = %session.display_server,
+                "VoiceTypeX gestartet (Phase 3 — Editor + Onboarding)"
+            );
             Ok(())
         })
         .run(tauri::generate_context!())
