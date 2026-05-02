@@ -85,8 +85,8 @@ impl Processor for AnthropicProcessor {
         let text = parsed
             .content
             .into_iter()
-            .filter_map(|block| match block {
-                ContentBlock::Text { text } => Some(text),
+            .map(|block| match block {
+                ContentBlock::Text { text } => text,
             })
             .collect::<Vec<_>>()
             .join("");

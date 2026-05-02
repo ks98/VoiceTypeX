@@ -13,7 +13,8 @@ use crate::core::modes::{Mode, ProcessingTarget, TranscriptionTarget};
 use crate::core::state::AppState;
 use crate::core::AppContext;
 use crate::injection::{InjectOptions, InjectionStrategy};
-use crate::transcription::TranscribeOpts;
+use crate::processing::{make_cloud_processor, make_local_processor, ProcessOpts, Processor};
+use crate::transcription::{make_cloud_transcriber, TranscribeOpts, Transcriber};
 use std::sync::Arc;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
@@ -77,15 +78,19 @@ async fn finish_recording_and_inject(
         let _ = ctx.state_bus.transition(AppState::Idle);
     })?;
 
-    // Phase 1: nur der Modus `exakt` ist end-to-end. Andere bleiben Stub.
-    if mode.transcription != TranscriptionTarget::Local {
-        notify_unimplemented(app, mode);
-        ctx.state_bus.transition(AppState::Idle)?;
-        return Ok(());
-    }
+    // STT — lokal oder Cloud, je nach Modus.
+    let transcriber: Arc<dyn Transcriber> = match mode.transcription {
+        TranscriptionTarget::Local => Arc::clone(&ctx.transcriber),
+        TranscriptionTarget::Cloud => {
+            let provider = mode.cloud_stt_provider.as_deref().unwrap_or("xai");
+            make_cloud_transcriber(provider).inspect_err(|e| {
+                let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
+                let _ = ctx.state_bus.transition(AppState::Idle);
+            })?
+        }
+    };
 
-    let transcript = ctx
-        .transcriber
+    let transcript = transcriber
         .transcribe_oneshot(
             &wav,
             TranscribeOpts {
@@ -99,26 +104,47 @@ async fn finish_recording_and_inject(
             let _ = ctx.state_bus.transition(AppState::Idle);
         })?;
 
-    if mode.processing != ProcessingTarget::None {
-        // LLM-Nachbearbeitung steht in Phase 1.4 nur als Stub bereit.
-        notify_unimplemented(app, mode);
-        ctx.state_bus.transition(AppState::Idle)?;
-        return Ok(());
-    }
+    // Postprocessing — none / lokal (Ollama) / Cloud-LLM.
+    let final_text = match mode.processing {
+        ProcessingTarget::None => transcript,
+        ProcessingTarget::Local => {
+            ctx.state_bus.transition(AppState::Postprocessing)?;
+            run_local_processing(ctx, mode, &transcript)
+                .await
+                .inspect_err(|e| {
+                    let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
+                    let _ = ctx.state_bus.transition(AppState::Idle);
+                })?
+        }
+        ProcessingTarget::Cloud => {
+            ctx.state_bus.transition(AppState::Postprocessing)?;
+            run_cloud_processing(mode, &transcript)
+                .await
+                .inspect_err(|e| {
+                    let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
+                    let _ = ctx.state_bus.transition(AppState::Idle);
+                })?
+        }
+    };
 
     ctx.state_bus.transition(AppState::Injecting)?;
 
-    if transcript.trim().is_empty() {
-        tracing::warn!(mode = %mode.id, "Transkript leer — kein Inject");
+    if final_text.trim().is_empty() {
+        tracing::warn!(mode = %mode.id, "Pipeline-Output leer — kein Inject");
         ctx.state_bus.transition(AppState::Idle)?;
         return Ok(());
     }
 
+    let injection_strategy = match mode.injection_method {
+        crate::core::modes::InjectionMethod::Clipboard => InjectionStrategy::Clipboard,
+        crate::core::modes::InjectionMethod::Keystrokes => InjectionStrategy::Keystrokes,
+    };
+
     ctx.injector
         .inject(
-            &transcript,
+            &final_text,
             InjectOptions {
-                strategy: InjectionStrategy::Clipboard,
+                strategy: injection_strategy,
             },
         )
         .await
@@ -128,21 +154,45 @@ async fn finish_recording_and_inject(
         })?;
 
     ctx.state_bus.transition(AppState::Idle)?;
-    tracing::info!(mode = %mode.id, len = transcript.len(), "Pipeline abgeschlossen");
+    tracing::info!(mode = %mode.id, len = final_text.len(), "Pipeline abgeschlossen");
+
+    let _ = app; // app wird perspektivisch fuer Erfolgs-Notifications genutzt
     Ok(())
 }
 
-fn notify_unimplemented(app: &AppHandle, mode: &Mode) {
-    tracing::info!(mode = %mode.id, "Modus noch nicht implementiert (Phase 2+)");
-    let _ = app
-        .notification()
-        .builder()
-        .title("VoiceTypeX")
-        .body(format!(
-            "Modus '{}' wird in einer spaeteren Phase implementiert.",
-            mode.name
+async fn run_local_processing(
+    ctx: &Arc<AppContext>,
+    mode: &Mode,
+    transcript: &str,
+) -> Result<String> {
+    let model = mode.local_llm_model.clone().ok_or_else(|| {
+        VoiceTypeError::Mode(format!(
+            "Modus '{}': processing=local, aber kein local_llm_model gesetzt",
+            mode.id
         ))
-        .show();
+    })?;
+    let ollama_url = ctx.settings.read().ollama_url.clone();
+    let processor = make_local_processor(ollama_url, model);
+    let system_prompt = mode.system_prompt.as_deref().unwrap_or("");
+    processor
+        .process(transcript, system_prompt, ProcessOpts::default())
+        .await
+}
+
+async fn run_cloud_processing(mode: &Mode, transcript: &str) -> Result<String> {
+    let provider = mode.cloud_llm_provider.as_deref().ok_or_else(|| {
+        VoiceTypeError::Mode(format!(
+            "Modus '{}': processing=cloud, aber kein cloud_llm_provider gesetzt",
+            mode.id
+        ))
+    })?;
+    let processor: Arc<dyn Processor> = make_cloud_processor(provider)?;
+    let system_prompt = mode.system_prompt.as_deref().unwrap_or("");
+    let opts = ProcessOpts {
+        model: mode.cloud_llm_model.clone(),
+        ..Default::default()
+    };
+    processor.process(transcript, system_prompt, opts).await
 }
 
 /// Registriere die Hotkeys aller geladenen Modi und verbinde sie mit
