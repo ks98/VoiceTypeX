@@ -1,0 +1,63 @@
+# --- Rust / Cargo ---
+target/
+**/*.rs.bk
+**/*.pdb
+
+# --- Tauri ---
+src-tauri/target/
+src-tauri/gen/
+
+# --- Node / Frontend ---
+node_modules/
+dist/
+dist-ssr/
+.vite/
+.eslintcache
+*.tsbuildinfo
+
+# --- pnpm ---
+.pnpm-store/
+
+# --- Editor / IDE ---
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+.idea/
+*.swp
+*.swo
+*~
+
+# --- OS ---
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# --- Logs / Runtime ---
+*.log
+logs/
+*.pid
+*.seed
+*.pid.lock
+coverage/
+
+# --- Environment / Secrets ---
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# --- Whisper-Modelle (zur Laufzeit nach app_data_dir geladen, nie ins Repo) ---
+models/
+*.ggml
+*.gguf
+
+# --- Build-Bundles (entstehen bei Tag-Releases via CI) ---
+release/
+*.msi
+*.dmg
+*.AppImage
+*.deb
+*.rpm

@@ -1,0 +1,159 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# VoiceTypeX — GitLab CI Pipeline.
+#
+# Ziel: leichtgewichtige Checks bei jedem Push, vollstaendiger Bundle-Build
+# nur bei Tag-Releases (Tag-Schema `v*`). Linux + Windows in Matrix.
+#
+# Erforderliche GitLab-Runner-Tags:
+#   - shared-amd64-linux-medium  (oder gleichwertige saas-linux-runner)
+#   - saas-windows-medium-amd64  (GitLab.com SaaS Runners)
+
+stages:
+  - lint
+  - test
+  - build
+  - bundle
+
+variables:
+  CARGO_HOME: "${CI_PROJECT_DIR}/.cargo"
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+
+# ----------------------------------------------------------------------------
+# Linux Setup (Tauri-Systemabhaengigkeiten + Node + pnpm)
+# ----------------------------------------------------------------------------
+.linux-base: &linux-base
+  image: rust:1.94-slim-bookworm
+  cache:
+    key:
+      files:
+        - pnpm-lock.yaml
+        - src-tauri/Cargo.lock
+    paths:
+      - .cargo/registry/cache
+      - .cargo/registry/index
+      - .cargo/git/db
+      - node_modules/
+      - .pnpm-store/
+      - src-tauri/target/
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq --no-install-recommends
+        ca-certificates curl pkg-config build-essential
+        libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev
+        libayatana-appindicator3-dev librsvg2-dev
+        libssl-dev libasound2-dev libxdo-dev
+        libxcb1-dev libxcb-xtest0-dev libxcb-xfixes0-dev
+        libdbus-1-dev libudev-dev
+    - curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+    - apt-get install -y -qq nodejs
+    - npm config set prefix "$HOME/.local"
+    - npm install -g --silent --no-fund --no-audit pnpm@9.15.0
+    - export PATH="$HOME/.local/bin:$PATH"
+    - pnpm config set store-dir "${CI_PROJECT_DIR}/.pnpm-store"
+    - rustup component add clippy rustfmt
+
+# ----------------------------------------------------------------------------
+# Windows Setup
+# ----------------------------------------------------------------------------
+.windows-base: &windows-base
+  tags: [saas-windows-medium-amd64]
+  before_script:
+    - choco install -y nodejs-lts --version=22.12.0 --no-progress
+    - choco install -y rust-ms --no-progress
+    - refreshenv
+    - npm config set prefix "$env:USERPROFILE\\.local"
+    - npm install -g --silent --no-fund --no-audit pnpm@9.15.0
+    - $env:Path = "$env:USERPROFILE\\.local;$env:Path"
+
+# ----------------------------------------------------------------------------
+# Lint Stage (Linux nur — Windows-Lint ist redundant)
+# ----------------------------------------------------------------------------
+lint:linux:
+  <<: *linux-base
+  stage: lint
+  script:
+    - cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+    - cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+    - pnpm install --frozen-lockfile
+    - pnpm lint
+    - pnpm format:check
+  rules:
+    - if: '$CI_COMMIT_TAG'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "merge_request_event"'
+
+# ----------------------------------------------------------------------------
+# Test Stage
+# ----------------------------------------------------------------------------
+test:linux:
+  <<: *linux-base
+  stage: test
+  needs: [lint:linux]
+  script:
+    - cargo test --manifest-path src-tauri/Cargo.toml --all-features
+  rules:
+    - if: '$CI_COMMIT_TAG'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "merge_request_event"'
+
+# ----------------------------------------------------------------------------
+# Build Stage (cargo check + pnpm build, ohne Bundle)
+# ----------------------------------------------------------------------------
+build:linux:
+  <<: *linux-base
+  stage: build
+  needs: [test:linux]
+  script:
+    - pnpm install --frozen-lockfile
+    - pnpm build
+    - cargo check --manifest-path src-tauri/Cargo.toml --all-features
+  rules:
+    - if: '$CI_COMMIT_TAG'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "merge_request_event"'
+
+build:windows:
+  <<: *windows-base
+  stage: build
+  needs: [lint:linux]
+  script:
+    - pnpm install --frozen-lockfile
+    - pnpm build
+    - cargo check --manifest-path src-tauri/Cargo.toml --all-features
+  rules:
+    - if: '$CI_COMMIT_TAG'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "merge_request_event"'
+
+# ----------------------------------------------------------------------------
+# Bundle Stage — NUR auf Tags v*
+# ----------------------------------------------------------------------------
+bundle:linux:
+  <<: *linux-base
+  stage: bundle
+  script:
+    - pnpm install --frozen-lockfile
+    - pnpm tauri build
+  artifacts:
+    paths:
+      - src-tauri/target/release/bundle/
+    expire_in: 1 month
+    name: "voicetypex-${CI_COMMIT_TAG}-linux"
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\\.[0-9]+\\.[0-9]+/'
+
+bundle:windows:
+  <<: *windows-base
+  stage: bundle
+  script:
+    - pnpm install --frozen-lockfile
+    - pnpm tauri build
+  artifacts:
+    paths:
+      - src-tauri/target/release/bundle/
+    expire_in: 1 month
+    name: "voicetypex-${CI_COMMIT_TAG}-windows"
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\\.[0-9]+\\.[0-9]+/'

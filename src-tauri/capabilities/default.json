@@ -1,0 +1,21 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Default capabilities fuer das Hauptfenster von VoiceTypeX. Fuer Phase 1 liberal gesetzt; in Phase 6 (Production-Hardening) auf konkrete allow-* Permissions reduzieren.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-set-focus",
+    "global-shortcut:default",
+    "store:default",
+    "dialog:default",
+    "notification:default",
+    "os:default",
+    "fs:default",
+    "clipboard-manager:default",
+    "autostart:default",
+    "updater:default"
+  ]
+}
