@@ -64,6 +64,9 @@ pub fn run() {
             ipc::recording::run_test_transcription,
             ipc::diagnostics::get_app_version,
             ipc::diagnostics::get_recent_logs,
+            ipc::secrets::get_provider_status,
+            ipc::secrets::set_provider_key,
+            ipc::secrets::delete_provider_key,
         ])
         .setup(move |app| {
             let app_handle = app.handle().clone();

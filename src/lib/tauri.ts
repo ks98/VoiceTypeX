@@ -45,3 +45,23 @@ export async function ipcGetAppVersion(): Promise<string> {
 export async function ipcGetRecentLogs(limit: number): Promise<string[]> {
   return invoke<string[]>("get_recent_logs", { limit });
 }
+
+export interface ProviderStatus {
+  provider: string;
+  configured: boolean;
+}
+
+export async function ipcGetProviderStatus(): Promise<ProviderStatus[]> {
+  return invoke<ProviderStatus[]>("get_provider_status");
+}
+
+export async function ipcSetProviderKey(
+  provider: string,
+  key: string,
+): Promise<void> {
+  return invoke("set_provider_key", { provider, key });
+}
+
+export async function ipcDeleteProviderKey(provider: string): Promise<void> {
+  return invoke("delete_provider_key", { provider });
+}

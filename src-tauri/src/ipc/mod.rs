@@ -4,4 +4,5 @@
 pub mod diagnostics;
 pub mod modes;
 pub mod recording;
+pub mod secrets;
 pub mod settings;
