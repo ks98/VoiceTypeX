@@ -1,27 +1,27 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Groq Whisper — `POST https://api.groq.com/openai/v1/audio/transcriptions`.
-//! OpenAI-Whisper-API-kompatibel, kann perspektivisch denselben Helper wie
-//! `openai.rs` nutzen, falls beide langfristig im Stack bleiben.
+//! OpenAI-Whisper-API-kompatibel. Default-Modell `whisper-large-v3-turbo`
+//! (Groq's schnellste Variante).
 
-use crate::core::error::{Result, VoiceTypeError};
+use crate::core::error::Result;
+use crate::transcription::cloud::whisper_compatible::WhisperCompatibleClient;
 use crate::transcription::{TranscribeOpts, Transcriber, TranscriptionMode};
 use async_trait::async_trait;
 
 const SUPPORTED: &[TranscriptionMode] = &[TranscriptionMode::OneShot];
 
-#[allow(dead_code)]
 pub struct GroqTranscriber {
-    api_key: String,
-    base_url: String,
-    model: String,
+    inner: WhisperCompatibleClient,
 }
 
 impl GroqTranscriber {
     pub fn new(api_key: String) -> Self {
         Self {
-            api_key,
-            base_url: "https://api.groq.com/openai/v1".to_string(),
-            model: "whisper-large-v3-turbo".to_string(),
+            inner: WhisperCompatibleClient::new(
+                "https://api.groq.com/openai/v1",
+                "whisper-large-v3-turbo",
+                api_key,
+            ),
         }
     }
 }
@@ -36,9 +36,7 @@ impl Transcriber for GroqTranscriber {
         SUPPORTED
     }
 
-    async fn transcribe_oneshot(&self, _audio: &[u8], _opts: TranscribeOpts) -> Result<String> {
-        Err(VoiceTypeError::Transcription(
-            "Groq Whisper noch nicht implementiert (Phase 2.5)".into(),
-        ))
+    async fn transcribe_oneshot(&self, audio: &[u8], opts: TranscribeOpts) -> Result<String> {
+        self.inner.transcribe(audio, &opts).await
     }
 }

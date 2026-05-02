@@ -31,6 +31,35 @@ impl AnthropicProcessor {
                 .unwrap_or_else(|_| reqwest::Client::new()),
         }
     }
+
+    /// Pruefe Auth via einer minimalen `POST /messages`-Anfrage (max_tokens=1)
+    /// gegen das billigste Modell. Anthropic hat keinen kostenlosen
+    /// Auth-Endpoint, daher kostet der Test ~1 Token (Cent-Bruchteil).
+    pub async fn test_connection(&self) -> Result<()> {
+        let url = format!("{}/messages", self.base_url.trim_end_matches('/'));
+        let body = serde_json::json!({
+            "model": "claude-3-haiku-20240307",
+            "max_tokens": 1,
+            "messages": [{"role": "user", "content": "ok"}],
+        });
+        let response = self
+            .client
+            .post(&url)
+            .header("x-api-key", &self.api_key)
+            .header("anthropic-version", API_VERSION)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| VoiceTypeError::Processing(format!("HTTP {url}: {e}")))?;
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(VoiceTypeError::Processing(format!(
+                "Anthropic HTTP {status}: {body}"
+            )));
+        }
+        Ok(())
+    }
 }
 
 #[async_trait]

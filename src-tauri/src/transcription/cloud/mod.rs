@@ -8,4 +8,5 @@
 pub mod deepgram;
 pub mod groq;
 pub mod openai;
+pub mod whisper_compatible;
 pub mod xai;

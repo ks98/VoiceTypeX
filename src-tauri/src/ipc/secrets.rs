@@ -4,8 +4,10 @@
 //! Frontend bekommt **nie** den Klartext-Key zurueck — nur Status-Booleans.
 //! Schreiboperationen senden den Key aus dem UI direkt in den OS-Keychain.
 
+use crate::processing::cloud::anthropic::AnthropicProcessor;
 use crate::processing::cloud::openai_compatible::OpenAICompatibleClient;
 use crate::secrets::SecretStore;
+use crate::transcription::cloud::deepgram::DeepgramTranscriber;
 use serde::Serialize;
 
 type IpcResult<T> = std::result::Result<T, String>;
@@ -78,9 +80,14 @@ pub async fn test_provider_connection(provider: String) -> IpcResult<()> {
         .test_connection()
         .await
         .map_err(|e| e.to_string()),
-        "anthropic" | "deepgram" => Err(format!(
-            "Test-Verbindung fuer '{provider}' wird in einer spaeteren Phase ergaenzt"
-        )),
+        "anthropic" => AnthropicProcessor::new(key)
+            .test_connection()
+            .await
+            .map_err(|e| e.to_string()),
+        "deepgram" => DeepgramTranscriber::new(key)
+            .test_connection()
+            .await
+            .map_err(|e| e.to_string()),
         other => Err(format!("Unbekannter Provider: {other}")),
     }
 }
