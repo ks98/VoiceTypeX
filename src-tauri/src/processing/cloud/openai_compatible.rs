@@ -9,6 +9,7 @@
 //!   Response: { choices: [{ message: { content } }] }
 
 use crate::core::error::{Result, VoiceTypeError};
+use crate::core::retry::with_retry;
 use crate::processing::ProcessOpts;
 use serde::{Deserialize, Serialize};
 
@@ -40,7 +41,8 @@ impl OpenAICompatibleClient {
     }
 
     /// Sende eine Chat-Completion mit System+User-Message und gib den
-    /// finalen `assistant`-Content zurueck.
+    /// finalen `assistant`-Content zurueck. Retryt bei transienten Fehlern
+    /// (5xx, 429, Network) mit exponentiellem Backoff.
     pub async fn complete(
         &self,
         transcript: &str,
@@ -66,32 +68,35 @@ impl OpenAICompatibleClient {
             max_tokens: opts.max_tokens,
         };
 
-        let response = self
-            .client
-            .post(&url)
-            .bearer_auth(&self.api_key)
-            .json(&req)
-            .send()
-            .await
-            .map_err(|e| VoiceTypeError::Processing(format!("HTTP {url}: {e}")))?;
+        with_retry(|| async {
+            let response = self
+                .client
+                .post(&url)
+                .bearer_auth(&self.api_key)
+                .json(&req)
+                .send()
+                .await
+                .map_err(|e| VoiceTypeError::Processing(format!("HTTP {url}: {e}")))?;
 
-        let status = response.status();
-        if !status.is_success() {
-            let body = response.text().await.unwrap_or_default();
-            return Err(VoiceTypeError::Processing(format!("HTTP {status}: {body}")));
-        }
+            let status = response.status();
+            if !status.is_success() {
+                let body = response.text().await.unwrap_or_default();
+                return Err(VoiceTypeError::Processing(format!("HTTP {status}: {body}")));
+            }
 
-        let parsed: ChatCompletionResponse = response
-            .json()
-            .await
-            .map_err(|e| VoiceTypeError::Processing(format!("Response-JSON-Parse: {e}")))?;
+            let parsed: ChatCompletionResponse = response
+                .json()
+                .await
+                .map_err(|e| VoiceTypeError::Processing(format!("Response-JSON-Parse: {e}")))?;
 
-        parsed
-            .choices
-            .into_iter()
-            .next()
-            .map(|c| c.message.content)
-            .ok_or_else(|| VoiceTypeError::Processing("Keine choices in Response".into()))
+            parsed
+                .choices
+                .into_iter()
+                .next()
+                .map(|c| c.message.content)
+                .ok_or_else(|| VoiceTypeError::Processing("Keine choices in Response".into()))
+        })
+        .await
     }
 
     /// Pruefe Verbindung und Auth via `GET /models` — preiswertester
@@ -114,7 +119,7 @@ impl OpenAICompatibleClient {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 struct ChatCompletionRequest {
     model: String,
     messages: Vec<ChatMessage>,
@@ -124,7 +129,7 @@ struct ChatCompletionRequest {
     max_tokens: Option<u32>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 struct ChatMessage {
     role: &'static str,
     content: String,

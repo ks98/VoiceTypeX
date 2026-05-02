@@ -7,6 +7,7 @@ pub mod default_modes;
 pub mod error;
 pub mod log_buffer;
 pub mod modes;
+pub mod retry;
 pub mod session;
 pub mod state;
 
