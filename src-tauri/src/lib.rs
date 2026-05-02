@@ -18,6 +18,7 @@ pub mod tray;
 
 use crate::core::config::Settings;
 use crate::core::default_modes::bootstrap_defaults_if_empty;
+use crate::core::log_buffer::LogRingBuffer;
 use crate::core::modes::ModesRegistry;
 use crate::core::state::StateBus;
 use crate::core::AppContext;
@@ -29,10 +30,13 @@ use parking_lot::{Mutex, RwLock};
 use std::sync::Arc;
 use tauri::Manager;
 use tauri_plugin_autostart::MacosLauncher;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 
 pub fn run() {
-    init_tracing();
+    let log_buffer = LogRingBuffer::default();
+    init_tracing(&log_buffer);
 
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -60,7 +64,7 @@ pub fn run() {
             ipc::diagnostics::get_app_version,
             ipc::diagnostics::get_recent_logs,
         ])
-        .setup(|app| {
+        .setup(move |app| {
             let app_handle = app.handle().clone();
 
             let config_dir = app
@@ -99,6 +103,7 @@ pub fn run() {
                 transcriber,
                 injector,
                 settings: Arc::new(RwLock::new(Settings::default())),
+                log_buffer: log_buffer.clone(),
                 model_dir,
                 modes_dir,
             });
@@ -118,11 +123,14 @@ pub fn run() {
         .expect("Tauri-App konnte nicht gestartet werden");
 }
 
-fn init_tracing() {
+fn init_tracing(buffer: &LogRingBuffer) {
     let filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new("voicetypex=info,tauri=info,warn"));
-    tracing_subscriber::fmt()
-        .with_env_filter(filter)
-        .with_target(true)
+    let fmt_layer = tracing_subscriber::fmt::layer().with_target(true);
+    let buffer_layer = buffer.layer();
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(fmt_layer)
+        .with(buffer_layer)
         .init();
 }

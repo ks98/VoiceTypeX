@@ -6,6 +6,7 @@
 
 use crate::audio::recorder::RecorderHandle;
 use crate::core::config::Settings;
+use crate::core::log_buffer::LogRingBuffer;
 use crate::core::modes::ModesRegistry;
 use crate::core::state::StateBus;
 use crate::injection::TextInjector;
@@ -21,6 +22,7 @@ pub struct AppContext {
     pub transcriber: Arc<dyn Transcriber>,
     pub injector: Arc<dyn TextInjector>,
     pub settings: Arc<RwLock<Settings>>,
+    pub log_buffer: LogRingBuffer,
     pub model_dir: PathBuf,
     pub modes_dir: PathBuf,
 }

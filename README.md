@@ -30,13 +30,45 @@ Detaillierte Architektur-Entscheidungen: siehe [`CLAUDE.md`](CLAUDE.md) und [`do
 Voraussetzungen:
 - Rust stable (über `rustup`; `rust-toolchain.toml` pinnt den Channel)
 - Node.js 20+ und `pnpm` (`corepack enable && corepack prepare pnpm@latest --activate`)
-- Linux: System-Pakete für Tauri 2 (`libgtk-3-dev`, `libwebkit2gtk-4.1-dev`, `libsoup-3.0-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev`)
-- Windows: WebView2 Runtime (auf Windows 11 vorinstalliert)
+- Linux: siehe [`docs/PLATFORMS.md`](docs/PLATFORMS.md) für die vollständige
+  Paket-Liste (GTK3, WebKit2GTK 4.1, Soup3, AppIndicator, ALSA, libxdo,
+  libclang, cmake)
+- Windows: WebView2 Runtime (auf Windows 11 vorinstalliert) + MSVC Build Tools
 
 ```bash
 pnpm install
 pnpm tauri dev
 ```
+
+## Phase-1-Test (manuell)
+
+Das ist der Definition-of-Done-Walkthrough für Phase 1 (CLAUDE.md §6.1):
+
+1. **App starten:** `pnpm tauri dev` — das Tray-Icon (lila V auf grauem
+   Kreis = Idle) erscheint. Im Hauptfenster siehst du die Tabs
+   *Einstellungen*, *Modi*, *Logs*.
+2. **Default-Modi prüfen:** Tab *Modi* zeigt 6 Einträge mit ihren Hotkeys.
+   `exakt` hat `CommandOrControl+Alt+D` und ist der einzige, der jetzt
+   schon end-to-end funktioniert.
+3. **Whisper-Modell laden:** Tab *Einstellungen*. Erstmals brauchst du das
+   Default-Modell unter
+   `app_data_dir/models/ggml-large-v3-turbo-q5_0.bin`. Phase 1 hat noch
+   keinen Download-Button — aktuell musst du es selbst von
+   <https://huggingface.co/ggerganov/whisper.cpp> herunterladen und im
+   Settings-Tab den Pfad setzen (oder direkt nach `app_data_dir/models/`
+   legen).
+4. **Diktat-Test:** Cursor in einem Textfeld (Browser, Notepad, beliebige
+   App), `Ctrl+Alt+D` drücken. Tray-Icon wird rot, kurzer Beep. Sprich.
+   `Ctrl+Alt+D` erneut → Beep, Icon wird gelb (Transcribing) → grün
+   (Injecting) → grau (Idle). Der transkribierte Text steht an der
+   Cursor-Position.
+5. **Andere Hotkeys:** `Ctrl+Alt+E` (E-Mail-Modus) → Notification "Modus
+   wird in einer späteren Phase implementiert." Korrekt.
+6. **Modi-Hot-Reload:** Editiere `app_config_dir/modes/exaktes_diktat.toml`
+   im Editor (z.B. ändere `name`). Speichern. Tab *Modi* aktualisiert
+   sich nach ~1 Sekunde.
+
+## Datenschutz
 
 ## Datenschutz
 
