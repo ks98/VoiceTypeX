@@ -21,6 +21,15 @@ export async function ipcSetWhisperModelPath(path: string): Promise<void> {
   return invoke("set_whisper_model_path", { path });
 }
 
+export async function ipcDownloadDefaultModel(): Promise<string> {
+  return invoke<string>("download_default_model");
+}
+
+export interface ModelDownloadProgress {
+  downloaded: number;
+  total: number | null;
+}
+
 export async function ipcGetModes(): Promise<Mode[]> {
   return invoke<Mode[]>("get_modes");
 }

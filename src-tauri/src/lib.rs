@@ -56,6 +56,7 @@ pub fn run() {
             ipc::settings::set_settings,
             ipc::settings::list_audio_devices,
             ipc::settings::set_whisper_model_path,
+            ipc::settings::download_default_model,
             ipc::modes::get_modes,
             ipc::modes::reload_modes,
             ipc::recording::start_recording,
