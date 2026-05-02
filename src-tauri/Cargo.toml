@@ -46,6 +46,9 @@ thiserror = "2.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
+# OS-Keychain (BYOK API-Keys, niemals im Klartext)
+keyring = "3"
+
 [features]
 # Tauri 2 erwartet ein "default"-Feature
 default = ["custom-protocol"]
