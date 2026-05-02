@@ -1,30 +1,37 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Settings-IPC.
-//!
-//! Phase 1.2: nur Stub-Signaturen. Phase 1.5 verdrahtet sie mit
-//! `tauri-plugin-store` und Frontend-Aufrufen.
 
+use crate::audio;
 use crate::core::config::Settings;
+use crate::core::AppContext;
+use std::sync::Arc;
 
-/// IPC-Fehler werden als String an das Frontend serialisiert (Tauri-Konvention).
 type IpcResult<T> = std::result::Result<T, String>;
 
 #[tauri::command]
-pub async fn get_settings() -> IpcResult<Settings> {
-    Ok(Settings::default())
+pub async fn get_settings(state: tauri::State<'_, Arc<AppContext>>) -> IpcResult<Settings> {
+    Ok(state.settings.read().clone())
 }
 
 #[tauri::command]
-pub async fn set_settings(_settings: Settings) -> IpcResult<()> {
-    Err("set_settings noch nicht implementiert (Phase 1.5)".into())
+pub async fn set_settings(
+    state: tauri::State<'_, Arc<AppContext>>,
+    settings: Settings,
+) -> IpcResult<()> {
+    *state.settings.write() = settings;
+    Ok(())
 }
 
 #[tauri::command]
 pub async fn list_audio_devices() -> IpcResult<Vec<String>> {
-    Err("list_audio_devices noch nicht implementiert (Phase 1.3)".into())
+    audio::list_input_devices().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub async fn set_whisper_model_path(_path: String) -> IpcResult<()> {
-    Err("set_whisper_model_path noch nicht implementiert (Phase 1.5)".into())
+pub async fn set_whisper_model_path(
+    state: tauri::State<'_, Arc<AppContext>>,
+    path: String,
+) -> IpcResult<()> {
+    state.settings.write().whisper_model_path = Some(path);
+    Ok(())
 }
