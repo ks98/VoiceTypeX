@@ -117,7 +117,14 @@ export default function ApiKeysSection(): JSX.Element {
                     {PROVIDER_LABELS[s.provider] ?? s.provider}
                   </div>
                   <div className="text-xs text-slate-500">
-                    {s.configured ? (
+                    {s.error ? (
+                      <span className="text-red-400" title={s.error}>
+                        ⚠ Keychain-Fehler:{" "}
+                        {s.error.length > 60
+                          ? s.error.slice(0, 60) + "…"
+                          : s.error}
+                      </span>
+                    ) : s.configured ? (
                       <span className="text-emerald-400">✓ gesetzt</span>
                     ) : (
                       <span className="text-slate-500">nicht gesetzt</span>

@@ -20,16 +20,28 @@ const PROVIDERS: &[&str] = &["xai", "openai", "anthropic", "groq", "deepgram"];
 pub struct ProviderStatus {
     pub provider: String,
     pub configured: bool,
+    /// Wenn das Keychain-Backend einen Fehler liefert (z.B. kein
+    /// secret-service-Daemon auf Linux), wird der Fehler hier exposed —
+    /// das Frontend kann dem User dann eine konkrete Diagnose zeigen,
+    /// statt stillschweigend "nicht gesetzt" anzuzeigen.
+    pub error: Option<String>,
 }
 
 #[tauri::command]
 pub async fn get_provider_status() -> IpcResult<Vec<ProviderStatus>> {
     let mut out = Vec::with_capacity(PROVIDERS.len());
     for &provider in PROVIDERS {
-        let configured = SecretStore::has(provider).unwrap_or(false);
+        let (configured, error) = match SecretStore::has(provider) {
+            Ok(b) => (b, None),
+            Err(e) => {
+                tracing::warn!(provider, error = %e, "Keychain-Backend-Fehler bei has()");
+                (false, Some(e.to_string()))
+            }
+        };
         out.push(ProviderStatus {
             provider: provider.to_string(),
             configured,
+            error,
         });
     }
     Ok(out)

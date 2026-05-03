@@ -75,6 +75,7 @@ export async function ipcStartRecording(modeId: string): Promise<void> {
 export interface ProviderStatus {
   provider: string;
   configured: boolean;
+  error: string | null;
 }
 
 export interface TestTranscriptionResult {
