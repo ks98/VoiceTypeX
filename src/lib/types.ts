@@ -31,6 +31,7 @@ export interface Settings {
   ollama_url: string;
   onboarding_done: boolean;
   whisper_n_threads: number | null;
+  ptt_mode: boolean;
 }
 
 export interface LogLine {

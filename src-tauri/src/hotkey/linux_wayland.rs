@@ -9,7 +9,7 @@
 //! **Vorschlag**.
 
 use crate::core::error::{Result, VoiceTypeError};
-use crate::hotkey::{HotkeyEvent, HotkeyManager};
+use crate::hotkey::{HotkeyEvent, HotkeyEventKind, HotkeyManager};
 use async_trait::async_trait;
 use tokio::sync::broadcast;
 
@@ -96,17 +96,53 @@ pub async fn run_global_shortcuts_session(
 
     tracing::info!(count = shortcuts.len(), "Wayland-Hotkeys registriert");
 
+    // Beide Streams parallel: Activated (Press) + Deactivated (Release).
+    // Activated kommt sofort beim Hotkey-Druck; Deactivated ist
+    // Compositor-abhaengig — KDE Plasma 5.27+ und GNOME 45+ liefern
+    // zuverlaessig, manche wlroots-Compositors weniger. Falls Deactivated
+    // ausbleibt, faellt der User-Pfad zurueck auf das Toggle-Verhalten,
+    // konfigurierbar via Settings.ptt_mode.
     let mut activations = proxy
         .receive_activated()
         .await
         .map_err(|e| VoiceTypeError::Hotkey(format!("receive_activated: {e}")))?;
+    let mut deactivations = proxy
+        .receive_deactivated()
+        .await
+        .map_err(|e| VoiceTypeError::Hotkey(format!("receive_deactivated: {e}")))?;
 
-    while let Some(event) = activations.next().await {
-        let shortcut_id = event.shortcut_id().to_string();
-        tracing::info!(shortcut_id = %shortcut_id, "Wayland-Hotkey ausgeloest");
-        let _ = sender.send(HotkeyEvent { id: shortcut_id });
+    loop {
+        tokio::select! {
+            event = activations.next() => match event {
+                Some(ev) => {
+                    let shortcut_id = ev.shortcut_id().to_string();
+                    tracing::info!(shortcut_id = %shortcut_id, "Wayland-Hotkey Pressed");
+                    let _ = sender.send(HotkeyEvent {
+                        id: shortcut_id,
+                        kind: HotkeyEventKind::Pressed,
+                    });
+                }
+                None => {
+                    tracing::warn!("Wayland-Hotkey-Activated-Stream beendet");
+                    break;
+                }
+            },
+            event = deactivations.next() => match event {
+                Some(ev) => {
+                    let shortcut_id = ev.shortcut_id().to_string();
+                    tracing::info!(shortcut_id = %shortcut_id, "Wayland-Hotkey Released");
+                    let _ = sender.send(HotkeyEvent {
+                        id: shortcut_id,
+                        kind: HotkeyEventKind::Released,
+                    });
+                }
+                None => {
+                    tracing::warn!("Wayland-Hotkey-Deactivated-Stream beendet");
+                    break;
+                }
+            },
+        }
     }
 
-    tracing::warn!("Wayland-Hotkey-Activated-Stream beendet");
     Ok(())
 }

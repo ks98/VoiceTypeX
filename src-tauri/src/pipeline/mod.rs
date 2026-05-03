@@ -20,11 +20,9 @@ use tauri::{AppHandle, Manager};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use tauri_plugin_notification::NotificationExt;
 
-/// Toggle-Logik: wenn das Backend Idle ist → Recording starten; wenn es
-/// Recording ist → stoppen und durch die Pipeline schicken.
-///
-/// Diese Funktion ist `async`, weil sie den Transcriber/Injector-Trait nutzt,
-/// die beide async-Methoden haben.
+/// Toggle-Logik (legacy): wird vom IPC-Pfad genutzt (UI-Trigger-Button).
+/// Hotkey-Pfad nutzt jetzt `handle_hotkey_pressed` / `handle_hotkey_released`,
+/// die das Push-to-Talk-Verhalten machen.
 pub async fn execute_mode(app: AppHandle, ctx: Arc<AppContext>, mode: Mode) -> Result<()> {
     let current = ctx.state_bus.current();
 
@@ -36,6 +34,50 @@ pub async fn execute_mode(app: AppHandle, ctx: Arc<AppContext>, mode: Mode) -> R
         tracing::warn!(state = %current.label(), "Mode-Trigger ignoriert (busy)");
         Ok(())
     }
+}
+
+/// Hotkey-Press-Handler: in PTT-Mode immer "Recording starten", in
+/// Toggle-Mode "execute_mode" (Toggle-Verhalten).
+pub async fn handle_hotkey_pressed(app: AppHandle, ctx: Arc<AppContext>, mode: Mode) -> Result<()> {
+    let ptt = ctx.settings.read().ptt_mode;
+    if !ptt {
+        // Toggle-Mode: Press toggelt zwischen Idle und Recording.
+        return execute_mode(app, ctx, mode).await;
+    }
+    // PTT-Mode: Press startet immer (idempotent, ignoriert wenn bereits busy).
+    let current = ctx.state_bus.current();
+    if !matches!(current, AppState::Idle) {
+        tracing::warn!(
+            state = %current.label(),
+            "PTT-Press ignoriert (nicht im Idle-State)"
+        );
+        return Ok(());
+    }
+    start_recording(&ctx, &mode).await
+}
+
+/// Hotkey-Release-Handler: in PTT-Mode "Recording stoppen + Pipeline".
+/// In Toggle-Mode No-Op (Release wird ignoriert).
+pub async fn handle_hotkey_released(
+    app: AppHandle,
+    ctx: Arc<AppContext>,
+    mode: Mode,
+) -> Result<()> {
+    let ptt = ctx.settings.read().ptt_mode;
+    if !ptt {
+        // Toggle-Mode: Release ist No-Op.
+        return Ok(());
+    }
+    // PTT-Mode: Release stoppt nur wenn aktuell Recording.
+    let current = ctx.state_bus.current();
+    if !matches!(current, AppState::Recording) {
+        tracing::debug!(
+            state = %current.label(),
+            "PTT-Release ignoriert (nicht Recording)"
+        );
+        return Ok(());
+    }
+    finish_recording_and_inject(&app, &ctx, &mode).await
 }
 
 async fn start_recording(ctx: &Arc<AppContext>, mode: &Mode) -> Result<()> {
@@ -253,8 +295,9 @@ async fn run_cloud_processing(mode: &Mode, transcript: &str) -> Result<String> {
     processor.process(transcript, system_prompt, opts).await
 }
 
-/// Registriere die Hotkeys aller geladenen Modi und verbinde sie mit
-/// `execute_mode`. Bei Hotkey-Release passiert nichts; Trigger ist Press.
+/// Registriere die Hotkeys aller geladenen Modi (X11/Windows-Pfad).
+/// Press → handle_hotkey_pressed, Release → handle_hotkey_released.
+/// PTT-vs-Toggle entscheidet sich erst in den Handlern via Settings.
 pub fn register_mode_hotkeys(app: &AppHandle, ctx: Arc<AppContext>) -> Result<()> {
     let modes = ctx.modes.current();
 
@@ -268,15 +311,26 @@ pub fn register_mode_hotkeys(app: &AppHandle, ctx: Arc<AppContext>) -> Result<()
             move |_app: &AppHandle,
                   _shortcut: &_,
                   event: tauri_plugin_global_shortcut::ShortcutEvent| {
-                if event.state() != ShortcutState::Pressed {
-                    return;
-                }
                 let app = app_for_handler.clone();
                 let ctx = Arc::clone(&ctx_for_handler);
                 let mode = mode_clone.clone();
+                let kind = event.state();
                 tauri::async_runtime::spawn(async move {
-                    if let Err(e) = execute_mode(app.clone(), ctx, mode.clone()).await {
-                        tracing::error!(mode = %mode.id, error = %e, "Pipeline fehlgeschlagen");
+                    let result = match kind {
+                        ShortcutState::Pressed => {
+                            handle_hotkey_pressed(app.clone(), ctx, mode.clone()).await
+                        }
+                        ShortcutState::Released => {
+                            handle_hotkey_released(app.clone(), ctx, mode.clone()).await
+                        }
+                    };
+                    if let Err(e) = result {
+                        tracing::error!(
+                            mode = %mode.id,
+                            kind = ?kind,
+                            error = %e,
+                            "Pipeline fehlgeschlagen"
+                        );
                         let _ = app
                             .notification()
                             .builder()
@@ -339,7 +393,7 @@ pub fn spawn_wayland_hotkey_session(app: AppHandle, ctx: Arc<AppContext>) {
         }
     });
 
-    // Task 2: Dispatcher
+    // Task 2: Dispatcher — leitet Pressed/Released an PTT-aware Handler weiter.
     let app_for_dispatch = app.clone();
     let ctx_for_dispatch = Arc::clone(&ctx);
     tauri::async_runtime::spawn(async move {
@@ -353,9 +407,23 @@ pub fn spawn_wayland_hotkey_session(app: AppHandle, ctx: Arc<AppContext>) {
                     };
                     let app = app_for_dispatch.clone();
                     let ctx = Arc::clone(&ctx_for_dispatch);
+                    let kind = event.kind;
                     tauri::async_runtime::spawn(async move {
-                        if let Err(e) = execute_mode(app, ctx, mode.clone()).await {
-                            tracing::error!(mode = %mode.id, error = %e, "Pipeline-Fehler");
+                        let result = match kind {
+                            crate::hotkey::HotkeyEventKind::Pressed => {
+                                handle_hotkey_pressed(app.clone(), ctx, mode.clone()).await
+                            }
+                            crate::hotkey::HotkeyEventKind::Released => {
+                                handle_hotkey_released(app.clone(), ctx, mode.clone()).await
+                            }
+                        };
+                        if let Err(e) = result {
+                            tracing::error!(
+                                mode = %mode.id,
+                                kind = ?kind,
+                                error = %e,
+                                "Pipeline-Fehler (Wayland-Hotkey)"
+                            );
                         }
                     });
                 }

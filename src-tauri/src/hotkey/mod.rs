@@ -17,9 +17,19 @@ pub mod linux_x11;
 #[cfg(target_os = "linux")]
 pub mod linux_wayland;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HotkeyEventKind {
+    /// Hotkey wurde gedrueckt (KeyDown).
+    Pressed,
+    /// Hotkey wurde losgelassen (KeyUp). Auf Wayland nicht von allen
+    /// Compositors zuverlaessig geliefert.
+    Released,
+}
+
 #[derive(Debug, Clone)]
 pub struct HotkeyEvent {
     pub id: String,
+    pub kind: HotkeyEventKind,
 }
 
 #[async_trait]

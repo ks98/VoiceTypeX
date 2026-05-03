@@ -49,6 +49,17 @@ pub struct Settings {
     /// z.B. "nur 4 Threads damit Browser fluessig bleibt".
     #[serde(default)]
     pub whisper_n_threads: Option<u32>,
+
+    /// Push-to-Talk: Hotkey halten zum Sprechen, loslassen stoppt.
+    /// Default `true` (moderne Diktat-Tool-Konvention). Bei Wayland-
+    /// Compositors die das Release-Signal unzuverlaessig liefern, kann
+    /// der User auf Toggle-Mode wechseln.
+    #[serde(default = "default_ptt_mode")]
+    pub ptt_mode: bool,
+}
+
+fn default_ptt_mode() -> bool {
+    true
 }
 
 fn default_whisper_slot() -> String {

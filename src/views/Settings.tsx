@@ -179,6 +179,20 @@ export default function Settings(): JSX.Element {
       </Field>
 
       <Field
+        label="Hotkey-Verhalten"
+        hint="Push-to-Talk: halte den Hotkey gedrueckt waehrend du sprichst, loslassen stoppt. Toggle: ein Druck startet, ein zweiter stoppt. Auf Wayland kann das Release-Signal compositorabhaengig unzuverlaessig sein — dann lieber Toggle."
+      >
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={settings.ptt_mode}
+            onChange={(e) => void update({ ptt_mode: e.target.checked })}
+          />
+          Push-to-Talk (gedrueckt halten zum Sprechen)
+        </label>
+      </Field>
+
+      <Field
         label="Whisper-Threads (lokales STT)"
         hint="Anzahl CPU-Threads fuer Whisper-Inferenz. Leer = automatisch (CPU-Cores, max 8). Niedrigere Werte schonen das System fuer parallele Arbeit, hoehere koennen schneller sein."
       >
