@@ -86,6 +86,12 @@ pub fn run() {
             let modes_dir = config_dir.join("modes");
             let model_dir = config_dir.join("models");
             std::fs::create_dir_all(&model_dir)?;
+            std::fs::create_dir_all(&config_dir)?;
+
+            // Backend-Detection fuer Secrets: keyring vs. file. Erkennt
+            // automatisch defekte oder konfliktreiche Linux-Keyring-Setups
+            // (z.B. gnome-keyring + kwallet gleichzeitig).
+            crate::secrets::init_backend(config_dir.clone());
 
             // 6 Default-Modi anlegen, falls modes/ leer
             bootstrap_defaults_if_empty(&modes_dir)
