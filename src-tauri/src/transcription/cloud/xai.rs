@@ -129,7 +129,13 @@ impl XaiTranscriber {
             tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
         >,
     > {
-        let mut url = format!("wss://api.x.ai/v1/stt?model={}", self.model);
+        // URL-Parameter exakt nach xAI-Doku (Stand April 2026):
+        //   sample_rate=16000  (wir liefern 16-kHz-PCM aus dem Recorder)
+        //   encoding=pcm       (s16le wird vom Server impliziert)
+        //   interim_results=true (sonst keine Live-Anzeige)
+        //   language=...        (optional, dt. Hinweis fuer Text-Formatting)
+        let mut url =
+            "wss://api.x.ai/v1/stt?sample_rate=16000&encoding=pcm&interim_results=true".to_string();
         if let Some(lang) = opts.language.as_deref() {
             url.push_str(&format!("&language={lang}"));
         }
@@ -154,16 +160,22 @@ impl XaiTranscriber {
 #[derive(Deserialize, Debug)]
 #[serde(tag = "type")]
 enum XaiStreamMessage {
-    #[serde(rename = "transcript", alias = "partial", alias = "delta")]
-    Transcript {
+    #[serde(rename = "transcript.created")]
+    Created,
+    #[serde(rename = "transcript.partial")]
+    Partial {
+        #[serde(default)]
         text: String,
         #[serde(default)]
         is_final: bool,
     },
-    #[serde(rename = "final", alias = "complete")]
-    Final { text: String },
-    #[serde(rename = "end")]
-    End,
+    #[serde(rename = "transcript.done")]
+    Done {
+        #[serde(default)]
+        text: String,
+        #[serde(default)]
+        duration: f64,
+    },
     #[serde(rename = "error")]
     Error {
         #[serde(default)]
@@ -173,8 +185,15 @@ enum XaiStreamMessage {
     Unknown,
 }
 
-/// Zentrale Streaming-Logic — separat von `transcribe_stream`-Trait-Methode,
-/// damit die Closure-Lifetimes klar bleiben.
+const AUDIO_DONE_FRAME: &str = r#"{"type":"audio.done"}"#;
+
+/// Zentrale Streaming-Logic. Protokoll exakt nach xAI-Spec (April 2026):
+/// 1) Server schickt zuerst `transcript.created` — vor diesem Event darf
+///    KEIN Binary-Audio rausgehen (sonst Reset). Bis dahin puffern wir
+///    eingehende Recorder-Chunks.
+/// 2) Audio als raw s16le binary frames.
+/// 3) Stream-Ende: Text-Frame `{"type":"audio.done"}` (NICHT Close-Frame).
+/// 4) Server beendet mit `transcript.done` und schliesst die Connection.
 async fn run_xai_streaming(
     mut ws: tokio_tungstenite::WebSocketStream<
         tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
@@ -184,49 +203,104 @@ async fn run_xai_streaming(
 ) {
     let started = std::time::Instant::now();
     let mut accumulated_final = String::new();
+    let mut server_ready = false;
+    let mut audio_buffer: Vec<Vec<f32>> = Vec::new();
+    let mut audio_done_sent = false;
+    let mut done_sent = false;
 
     loop {
         tokio::select! {
-            // Audio-Chunk vom Recorder → an xAI senden (PCM s16le binary)
             chunk = audio_rx.recv() => match chunk {
                 Some(samples) => {
-                    let bytes = pcm_f32_to_s16le(&samples);
-                    if let Err(e) = ws.send(Message::Binary(bytes)).await {
-                        let _ = event_tx.send(TranscriptionEvent::Error(
-                            format!("xAI WS send: {e}")
-                        )).await;
-                        break;
+                    if server_ready {
+                        let bytes = pcm_f32_to_s16le(&samples);
+                        if let Err(e) = ws.send(Message::Binary(bytes)).await {
+                            let _ = event_tx.send(TranscriptionEvent::Error(
+                                format!("xAI WS send: {e}")
+                            )).await;
+                            done_sent = true;
+                            break;
+                        }
+                    } else {
+                        // Server hat noch nicht `transcript.created` geschickt —
+                        // Audio puffern, sonst kickt der Server uns sofort.
+                        audio_buffer.push(samples);
                     }
                 }
                 None => {
-                    // Audio-Channel zu — User hat Hotkey losgelassen.
-                    // Sende close-Frame an xAI, dann lese final-events.
-                    let _ = ws.send(Message::Close(None)).await;
+                    // Recorder zu (Hotkey losgelassen). Falls Server noch
+                    // nicht ready: kurzes Timeout, dann harter Close.
+                    if server_ready && !audio_done_sent {
+                        if let Err(e) = ws.send(Message::Text(AUDIO_DONE_FRAME.into())).await {
+                            tracing::warn!(error = %e, "audio.done konnte nicht gesendet werden");
+                        }
+                        audio_done_sent = true;
+                    } else if !server_ready {
+                        // Notfall — Server hat sich nie gemeldet.
+                        let _ = ws.send(Message::Close(None)).await;
+                        let _ = event_tx.send(TranscriptionEvent::Error(
+                            "xAI WS: kein transcript.created erhalten".into()
+                        )).await;
+                        done_sent = true;
+                        break;
+                    }
                 }
             },
-            // WebSocket-Event vom Server
             msg = ws.next() => match msg {
                 Some(Ok(Message::Text(text))) => {
                     match serde_json::from_str::<XaiStreamMessage>(&text) {
-                        Ok(XaiStreamMessage::Transcript { text, is_final }) => {
-                            if is_final {
-                                accumulated_final.push_str(&text);
+                        Ok(XaiStreamMessage::Created) => {
+                            server_ready = true;
+                            // Gepufferte Chunks rausschicken — beibehaltene
+                            // Reihenfolge ist wichtig fuer Sprach-Kontext.
+                            let buffered = std::mem::take(&mut audio_buffer);
+                            for chunk in buffered {
+                                let bytes = pcm_f32_to_s16le(&chunk);
+                                if let Err(e) = ws.send(Message::Binary(bytes)).await {
+                                    let _ = event_tx.send(TranscriptionEvent::Error(
+                                        format!("xAI WS send (flush): {e}")
+                                    )).await;
+                                    done_sent = true;
+                                    break;
+                                }
+                            }
+                            if done_sent { break; }
+                        }
+                        Ok(XaiStreamMessage::Partial { text, is_final }) => {
+                            if is_final && !text.trim().is_empty() {
+                                if !accumulated_final.is_empty() {
+                                    accumulated_final.push(' ');
+                                }
+                                accumulated_final.push_str(text.trim());
                             }
                             let _ = event_tx.send(TranscriptionEvent::Partial {
                                 text,
                                 is_final,
                             }).await;
                         }
-                        Ok(XaiStreamMessage::Final { text }) => {
-                            if !text.is_empty() {
-                                accumulated_final.push_str(&text);
-                            }
+                        Ok(XaiStreamMessage::Done { text, duration }) => {
+                            let final_text = if text.trim().is_empty() {
+                                accumulated_final.trim().to_string()
+                            } else {
+                                text.trim().to_string()
+                            };
+                            let duration_ms = if duration > 0.0 {
+                                (duration * 1000.0) as u32
+                            } else {
+                                started.elapsed().as_millis() as u32
+                            };
+                            let _ = event_tx.send(TranscriptionEvent::Done {
+                                text: final_text,
+                                duration_ms,
+                            }).await;
+                            done_sent = true;
+                            break;
                         }
-                        Ok(XaiStreamMessage::End) => break,
                         Ok(XaiStreamMessage::Error { message }) => {
-                            let _ = event_tx.send(TranscriptionEvent::Error(
-                                message.unwrap_or_else(|| "xAI Streaming-Error".into()),
-                            )).await;
+                            let msg = message.unwrap_or_else(|| "xAI Streaming-Error".into());
+                            tracing::warn!(message = %msg, "xAI Streaming-Error-Event");
+                            let _ = event_tx.send(TranscriptionEvent::Error(msg)).await;
+                            done_sent = true;
                             break;
                         }
                         Ok(XaiStreamMessage::Unknown) => {
@@ -243,6 +317,7 @@ async fn run_xai_streaming(
                     let _ = event_tx.send(TranscriptionEvent::Error(
                         format!("xAI WS recv: {e}")
                     )).await;
+                    done_sent = true;
                     break;
                 }
                 None => break,
@@ -250,12 +325,14 @@ async fn run_xai_streaming(
         }
     }
 
-    let _ = event_tx
-        .send(TranscriptionEvent::Done {
-            text: accumulated_final.trim().to_string(),
-            duration_ms: started.elapsed().as_millis() as u32,
-        })
-        .await;
+    if !done_sent {
+        let _ = event_tx
+            .send(TranscriptionEvent::Done {
+                text: accumulated_final.trim().to_string(),
+                duration_ms: started.elapsed().as_millis() as u32,
+            })
+            .await;
+    }
 }
 
 fn pcm_f32_to_s16le(samples: &[f32]) -> Vec<u8> {
