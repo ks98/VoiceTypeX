@@ -133,16 +133,20 @@ impl XaiTranscriber {
         //   sample_rate=16000  (wir liefern 16-kHz-PCM aus dem Recorder)
         //   encoding=pcm       (s16le wird vom Server impliziert)
         //   interim_results=true (sonst keine Live-Anzeige)
-        //   endpointing=500    (Default 10 ms ist zu kurz: das Modell
+        //   endpointing=1000   (Default 10 ms ist zu kurz: das Modell
         //                       commit-tet interim finals bevor es genug
         //                       Sprachzeit fuer Sprach-Erkennung gesehen
         //                       hat, was bei deutschen Wortanfaengen oft
-        //                       zu englischen Erkennungen fuehrt. 500 ms
-        //                       ist ein guter Trade-off zwischen Latenz
-        //                       und Stabilitaet.)
-        //   language=...        (optional, dt. Hinweis fuer Text-Formatting,
-        //                       NICHT fuer Erkennung — das ist auto.)
-        let mut url = "wss://api.x.ai/v1/stt?sample_rate=16000&encoding=pcm&interim_results=true&endpointing=500".to_string();
+        //                       zu englischen Erkennungen fuehrt. xAI
+        //                       bietet KEINEN Mechanismus zur Sprach-
+        //                       Erzwingung (auto-detect ist hartcodiert,
+        //                       siehe docs.x.ai), endpointing ist die
+        //                       einzige Stellschraube. 1000 ms ist
+        //                       Trade-off zwischen Stabilitaet und
+        //                       gefuehlter Latenz.)
+        //   language=...        (optional, NUR Hinweis fuer Text-Formatting
+        //                       von Zahlen/Waehrungen, NICHT fuer Erkennung.)
+        let mut url = "wss://api.x.ai/v1/stt?sample_rate=16000&encoding=pcm&interim_results=true&endpointing=1000".to_string();
         if let Some(lang) = opts.language.as_deref() {
             url.push_str(&format!("&language={lang}"));
         }

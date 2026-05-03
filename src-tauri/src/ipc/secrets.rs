@@ -76,7 +76,7 @@ pub async fn test_provider_connection(provider: String) -> IpcResult<()> {
         .ok_or_else(|| format!("Kein API-Key fuer '{provider}' gesetzt"))?;
 
     match provider.as_str() {
-        "xai" => OpenAICompatibleClient::new("https://api.x.ai/v1", "grok-4", key)
+        "xai" => OpenAICompatibleClient::new("https://api.x.ai/v1", "grok-4-fast-non-reasoning", key)
             .test_connection()
             .await
             .map_err(|e| e.to_string()),

@@ -227,7 +227,7 @@ export default function ModeEditor({
               </Field>
               <Field
                 label="Modell-ID"
-                hint="z.B. grok-4, gpt-4o-mini, claude-sonnet-4-6"
+                hint="z.B. grok-4-fast-non-reasoning, gpt-4o-mini, claude-sonnet-4-6"
               >
                 <input
                   className="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm w-full font-mono"
