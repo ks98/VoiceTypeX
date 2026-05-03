@@ -23,6 +23,8 @@ use crate::core::modes::ModesRegistry;
 use crate::core::state::StateBus;
 use crate::core::AppContext;
 use crate::injection::{make_default_injector, TextInjector};
+#[cfg(target_os = "linux")]
+use crate::pipeline::spawn_wayland_hotkey_session;
 use crate::pipeline::{
     register_mode_hotkeys, spawn_tray_recording_pulse, spawn_tray_state_listener,
 };
@@ -124,19 +126,29 @@ pub fn run() {
             // Tray, Hotkeys, State-Listener
             tray::setup_tray(&app_handle).map_err(|e| format!("setup_tray: {e}"))?;
 
-            // Auf Wayland scheitert die Hotkey-Registrierung (XGrabKey nicht
-            // erlaubt). Skip statt Crash; Frontend zeigt Banner + UI-Trigger.
-            // Phase 5-full wird via xdg-desktop-portal.GlobalShortcuts
-            // ergaenzt.
+            // Hotkey-Registrierung dispatch je nach Display-Server:
+            //   - X11/Windows: tauri-plugin-global-shortcut (XGrabKey/RegisterHotKey)
+            //   - Wayland: xdg-desktop-portal.GlobalShortcuts via ashpd
+            //   - andere: Skip mit Warn-Log + UI-Trigger als Fallback
             let session = crate::core::session::detect_session();
-            if session.global_hotkeys_supported {
-                register_mode_hotkeys(&app_handle, Arc::clone(&ctx))
-                    .map_err(|e| format!("register_mode_hotkeys: {e}"))?;
-            } else {
-                tracing::warn!(
-                    display_server = %session.display_server,
-                    "Globale Hotkeys nicht unterstuetzt — UI-Trigger als Workaround"
-                );
+            match session.display_server.as_str() {
+                #[cfg(target_os = "linux")]
+                "wayland" => {
+                    spawn_wayland_hotkey_session(app_handle.clone(), Arc::clone(&ctx));
+                    tracing::info!(
+                        "Wayland-Hotkeys via xdg-portal angemeldet — Trigger-Buttons als Fallback bleiben verfuegbar"
+                    );
+                }
+                "x11" | "windows" => {
+                    register_mode_hotkeys(&app_handle, Arc::clone(&ctx))
+                        .map_err(|e| format!("register_mode_hotkeys: {e}"))?;
+                }
+                other => {
+                    tracing::warn!(
+                        display_server = %other,
+                        "Globale Hotkeys nicht unterstuetzt — UI-Trigger als Workaround"
+                    );
+                }
             }
 
             spawn_tray_state_listener(app_handle.clone());

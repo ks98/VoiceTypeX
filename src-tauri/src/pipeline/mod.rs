@@ -288,6 +288,80 @@ pub fn register_mode_hotkeys(app: &AppHandle, ctx: Arc<AppContext>) -> Result<()
     Ok(())
 }
 
+/// Wayland-Pfad: bind alle Modus-Hotkeys ueber das xdg-portal.GlobalShortcuts
+/// und spawnt einen Listener, der Activations auf `execute_mode` mappt.
+///
+/// Zwei Tasks werden gespawnt:
+/// 1) Session-Task: hält die Portal-Verbindung am Leben + sendet Events
+///    in den broadcast-Channel.
+/// 2) Dispatcher-Task: liest broadcast-Channel, ruft `execute_mode` mit
+///    dem entsprechenden Modus.
+#[cfg(target_os = "linux")]
+pub fn spawn_wayland_hotkey_session(app: AppHandle, ctx: Arc<AppContext>) {
+    use crate::hotkey::linux_wayland::{run_global_shortcuts_session, WaylandShortcutSpec};
+    use tokio::sync::broadcast;
+
+    let modes = ctx.modes.current();
+    let specs: Vec<WaylandShortcutSpec> = modes
+        .iter()
+        .map(|m| WaylandShortcutSpec {
+            id: m.id.clone(),
+            description: m.name.clone(),
+            preferred_trigger: m.hotkey.clone(),
+        })
+        .collect();
+
+    if specs.is_empty() {
+        tracing::warn!("Keine Modi geladen — kein Wayland-Hotkey-Bind");
+        return;
+    }
+
+    let (sender, mut receiver) = broadcast::channel(16);
+    let sender_clone = sender.clone();
+
+    // Task 1: Portal-Session
+    tauri::async_runtime::spawn(async move {
+        if let Err(e) = run_global_shortcuts_session(specs, sender_clone).await {
+            tracing::error!(error = %e, "Wayland-Hotkey-Session beendet mit Fehler");
+        }
+    });
+
+    // Task 2: Dispatcher
+    let app_for_dispatch = app.clone();
+    let ctx_for_dispatch = Arc::clone(&ctx);
+    tauri::async_runtime::spawn(async move {
+        loop {
+            match receiver.recv().await {
+                Ok(event) => {
+                    let mode = ctx_for_dispatch.modes.find_by_id(&event.id);
+                    let Some(mode) = mode else {
+                        tracing::warn!(id = %event.id, "Wayland-Hotkey-Event ohne passenden Modus");
+                        continue;
+                    };
+                    let app = app_for_dispatch.clone();
+                    let ctx = Arc::clone(&ctx_for_dispatch);
+                    tauri::async_runtime::spawn(async move {
+                        if let Err(e) = execute_mode(app, ctx, mode.clone()).await {
+                            tracing::error!(mode = %mode.id, error = %e, "Pipeline-Fehler");
+                        }
+                    });
+                }
+                Err(broadcast::error::RecvError::Closed) => {
+                    tracing::warn!("Wayland-Hotkey-Channel geschlossen");
+                    break;
+                }
+                Err(broadcast::error::RecvError::Lagged(n)) => {
+                    tracing::warn!(missed = n, "Wayland-Hotkey-Events verworfen (Lag)");
+                }
+            }
+        }
+    });
+
+    // Sender lebt im Session-Task; wir lassen die Variable hier im Scope
+    // sterben, weil receiver bereits den Kanal-Lifetime sichert.
+    drop(sender);
+}
+
 /// Spawnt einen Listener, der StateBus-Aenderungen in Tray-Icon-Updates
 /// uebersetzt.
 pub fn spawn_tray_state_listener(app: AppHandle) {

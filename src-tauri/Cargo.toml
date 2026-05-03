@@ -76,6 +76,11 @@ notify = "6"
 # Cross-Plattform-Keystroke-Injection (Paste-Shortcut + Direct-Keystroke-Modus)
 enigo = "0.3"
 
+# Wayland: xdg-desktop-portal (GlobalShortcuts + RemoteDesktop) via DBus.
+# Nur auf Linux gelinkt, weil sonst libdbus auf Windows/macOS Probleme macht.
+[target.'cfg(target_os = "linux")'.dependencies]
+ashpd = { version = "0.11", default-features = false, features = ["tokio"] }
+
 [features]
 # Tauri 2 erwartet ein "default"-Feature
 default = ["custom-protocol"]

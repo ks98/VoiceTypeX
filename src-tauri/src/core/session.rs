@@ -34,9 +34,11 @@ pub fn detect_session() -> SessionInfo {
             .filter(|v| !v.is_empty())
             .is_some();
         if wayland {
+            // Phase 5-full part 1: GlobalShortcuts via xdg-portal.
+            // Auto-paste (RemoteDesktop-Portal) folgt in part 2.
             return SessionInfo {
                 display_server: "wayland".into(),
-                global_hotkeys_supported: false,
+                global_hotkeys_supported: true,
                 auto_paste_supported: false,
             };
         }
