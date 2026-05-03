@@ -67,6 +67,15 @@ pub struct TranscribeOpts {
     pub n_threads: Option<u32>,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct StreamOpts {
+    pub language: Option<String>,
+    pub initial_prompt: Option<String>,
+}
+
+/// Boxed Stream-Type fuer Streaming-Events.
+pub type EventStream = futures_util::stream::BoxStream<'static, TranscriptionEvent>;
+
 #[async_trait]
 pub trait Transcriber: Send + Sync {
     fn name(&self) -> &str;
@@ -77,4 +86,19 @@ pub trait Transcriber: Send + Sync {
     /// per Konvention 16 kHz Mono PCM s16le als WAV-Container; jeder Provider
     /// dokumentiert Abweichungen.
     async fn transcribe_oneshot(&self, audio: &[u8], opts: TranscribeOpts) -> Result<String>;
+
+    /// Streaming-Variante: Audio-Chunks (16 kHz Mono Float) kommen kontinuierlich
+    /// ueber den Receiver, Text-Events werden waehrend der Aufnahme geliefert.
+    /// Default-Impl: nicht unterstuetzt — Provider mit echtem Streaming-API
+    /// (xAI WebSocket) ueberschreiben das.
+    async fn transcribe_stream(
+        &self,
+        _audio_rx: tokio::sync::mpsc::Receiver<Vec<f32>>,
+        _opts: StreamOpts,
+    ) -> Result<EventStream> {
+        Err(crate::core::error::VoiceTypeError::Transcription(format!(
+            "{}: Streaming nicht unterstuetzt (Default-Impl)",
+            self.name()
+        )))
+    }
 }

@@ -126,6 +126,7 @@ pub fn run() {
                 log_buffer: log_buffer.clone(),
                 model_dir,
                 modes_dir,
+                streaming_final_rx: Arc::new(Mutex::new(None)),
             });
 
             app.manage(Arc::clone(&ctx));

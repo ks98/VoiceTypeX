@@ -23,6 +23,26 @@
         "visible": true,
         "decorations": true,
         "transparent": false
+      },
+      {
+        "label": "overlay",
+        "title": "VoiceTypeX Live",
+        "url": "index.html?window=overlay",
+        "width": 520,
+        "height": 96,
+        "minWidth": 320,
+        "minHeight": 64,
+        "x": 24,
+        "y": 24,
+        "resizable": false,
+        "fullscreen": false,
+        "visible": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "focus": false
       }
     ],
     "security": {

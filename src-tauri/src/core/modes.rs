@@ -63,6 +63,25 @@ pub struct Mode {
     pub language: Option<String>,
     #[serde(default)]
     pub system_prompt: Option<String>,
+
+    /// Live-Streaming aktivieren (nur fuer Cloud-STT-Provider mit
+    /// WebSocket-Support). `None` = Provider-Default: xAI = true,
+    /// andere = false. `Some(true/false)` = expliziter Override.
+    #[serde(default)]
+    pub streaming: Option<bool>,
+}
+
+impl Mode {
+    /// Resolved Streaming-Default: xAI default true, andere default false.
+    pub fn uses_streaming(&self) -> bool {
+        if let Some(v) = self.streaming {
+            return v;
+        }
+        if self.transcription != TranscriptionTarget::Cloud {
+            return false;
+        }
+        matches!(self.cloud_stt_provider.as_deref(), Some("xai"))
+    }
 }
 
 impl Mode {

@@ -24,7 +24,8 @@ use std::io::Cursor;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
-use tokio::sync::oneshot;
+use std::time::Duration;
+use tokio::sync::{mpsc, oneshot};
 
 /// Ziel-Samplerate fuer Whisper.
 pub const WHISPER_SAMPLE_RATE: u32 = 16_000;
@@ -52,9 +53,30 @@ pub struct RecorderHandle {
 }
 
 impl RecorderHandle {
-    /// Starte die Aufnahme. Liefert sofort zurueck — Audio sammelt sich im
-    /// Hintergrund-Thread, bis `stop_and_finalize()` aufgerufen wird.
+    /// Starte die Aufnahme im One-Shot-Mode (Audio sammelt sich im Buffer,
+    /// `stop_and_finalize` liefert komplettes WAV).
     pub fn start(config: RecorderConfig) -> Result<Self> {
+        Self::start_inner(config, None)
+    }
+
+    /// Starte die Aufnahme im Streaming-Mode: zusaetzlich zum Buffer wird
+    /// alle `chunk_ms` Millisekunden ein 16-kHz-Mono-Float-Chunk via
+    /// mpsc-Channel emittiert. Der Buffer bleibt vorhanden — falls nach
+    /// dem Stream noch ein WAV-Snapshot gewollt ist, kann
+    /// `stop_and_finalize` weiter genutzt werden.
+    pub fn start_with_streaming(
+        config: RecorderConfig,
+        chunk_ms: u32,
+    ) -> Result<(Self, mpsc::Receiver<Vec<f32>>)> {
+        let (tx, rx) = mpsc::channel::<Vec<f32>>(64);
+        let handle = Self::start_inner(config, Some((tx, chunk_ms)))?;
+        Ok((handle, rx))
+    }
+
+    fn start_inner(
+        config: RecorderConfig,
+        streaming: Option<(mpsc::Sender<Vec<f32>>, u32)>,
+    ) -> Result<Self> {
         let samples: Arc<Mutex<Vec<f32>>> = Arc::new(Mutex::new(Vec::with_capacity(16_000 * 30)));
         let is_recording = Arc::new(AtomicBool::new(true));
         let (stop_tx, stop_rx) = oneshot::channel();
@@ -66,7 +88,14 @@ impl RecorderHandle {
         let worker = thread::Builder::new()
             .name("voicetypex-audio".into())
             .spawn(move || {
-                run_recorder_thread(config, samples_clone, is_recording_clone, stop_rx, meta_tx)
+                run_recorder_thread(
+                    config,
+                    samples_clone,
+                    is_recording_clone,
+                    stop_rx,
+                    meta_tx,
+                    streaming,
+                )
             })
             .map_err(|e| VoiceTypeError::Audio(format!("Worker-Thread-Spawn: {e}")))?;
 
@@ -146,6 +175,7 @@ fn run_recorder_thread(
     is_recording: Arc<AtomicBool>,
     stop_rx: oneshot::Receiver<()>,
     meta_tx: oneshot::Sender<StreamMeta>,
+    streaming: Option<(mpsc::Sender<Vec<f32>>, u32)>,
 ) -> Result<()> {
     let host = cpal::default_host();
     let device = match config.device_name {
@@ -168,6 +198,18 @@ fn run_recorder_thread(
     let _ = meta_tx.send(StreamMeta {
         sample_rate,
         channels,
+    });
+
+    // Streaming-Worker spawnen, falls Streaming-Mode aktiv. Der Worker
+    // liest periodisch den Tail des Sample-Buffers, mixed Stereo→Mono,
+    // resamplet linear auf 16 kHz und pusht in den mpsc-Channel.
+    let streaming_worker = streaming.map(|(tx, chunk_ms)| {
+        let samples = Arc::clone(&samples);
+        let recording = Arc::clone(&is_recording);
+        thread::Builder::new()
+            .name("voicetypex-streaming".into())
+            .spawn(move || streaming_chunk_loop(samples, recording, sample_rate, channels, tx, chunk_ms))
+            .ok()
     });
 
     let err_fn =
@@ -232,7 +274,72 @@ fn run_recorder_thread(
     // Blockiere bis Stop-Signal — Stream wird beim Drop gestoppt.
     let _ = stop_rx.blocking_recv();
     drop(stream);
+
+    // Streaming-Worker beenden (er schaut auf is_recording = false).
+    if let Some(Some(worker)) = streaming_worker {
+        let _ = worker.join();
+    }
     Ok(())
+}
+
+/// Streaming-Chunk-Schleife: laeuft im eigenen Thread, liest periodisch
+/// den Tail des Audio-Buffers, mixed Stereo→Mono und resamplet linear
+/// auf 16 kHz. Linear ist fuer Cloud-STT ausreichend (Server hat eigene
+/// robuste Decoder); fuer One-Shot bleiben wir bei rubato (hoehere
+/// Qualitaet fuer lokales Whisper).
+fn streaming_chunk_loop(
+    samples: Arc<Mutex<Vec<f32>>>,
+    is_recording: Arc<AtomicBool>,
+    source_rate: u32,
+    channels: u16,
+    chunk_tx: mpsc::Sender<Vec<f32>>,
+    chunk_ms: u32,
+) {
+    let interval = Duration::from_millis(chunk_ms as u64);
+    let mut last_pos: usize = 0;
+    while is_recording.load(Ordering::Relaxed) {
+        thread::sleep(interval);
+        let new_chunk = {
+            let buf = samples.lock();
+            if buf.len() <= last_pos {
+                continue;
+            }
+            let chunk = buf[last_pos..].to_vec();
+            last_pos = buf.len();
+            chunk
+        };
+        let mono = stereo_to_mono(&new_chunk, channels);
+        let resampled = resample_linear(&mono, source_rate, WHISPER_SAMPLE_RATE);
+        if resampled.is_empty() {
+            continue;
+        }
+        if chunk_tx.blocking_send(resampled).is_err() {
+            // Receiver wurde gedroppt (Streaming-Pipeline beendet)
+            break;
+        }
+    }
+}
+
+fn resample_linear(samples: &[f32], from_rate: u32, to_rate: u32) -> Vec<f32> {
+    if from_rate == to_rate || samples.is_empty() {
+        return samples.to_vec();
+    }
+    let ratio = from_rate as f64 / to_rate as f64;
+    let new_len = (samples.len() as f64 / ratio) as usize;
+    (0..new_len)
+        .map(|i| {
+            let src_pos = i as f64 * ratio;
+            let idx = src_pos as usize;
+            let frac = src_pos - idx as f64;
+            if idx + 1 < samples.len() {
+                (samples[idx] as f64 * (1.0 - frac) + samples[idx + 1] as f64 * frac) as f32
+            } else if idx < samples.len() {
+                samples[idx]
+            } else {
+                0.0
+            }
+        })
+        .collect()
 }
 
 /// Liefert die Liste verfuegbarer Eingabegeraete. Gibt nur Geraete zurueck,

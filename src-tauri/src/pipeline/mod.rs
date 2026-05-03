@@ -14,11 +14,17 @@ use crate::core::state::AppState;
 use crate::core::AppContext;
 use crate::injection::{InjectOptions, InjectionStrategy};
 use crate::processing::{make_cloud_processor, make_local_processor, ProcessOpts, Processor};
-use crate::transcription::{make_cloud_transcriber, TranscribeOpts, Transcriber};
+use crate::transcription::{
+    make_cloud_transcriber, StreamOpts, TranscribeOpts, Transcriber, TranscriptionEvent,
+    TranscriptionMode,
+};
+use futures_util::StreamExt;
 use std::sync::Arc;
-use tauri::{AppHandle, Manager};
+use std::time::Duration;
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use tauri_plugin_notification::NotificationExt;
+use tokio::sync::oneshot;
 
 /// Toggle-Logik (legacy): wird vom IPC-Pfad genutzt (UI-Trigger-Button).
 /// Hotkey-Pfad nutzt jetzt `handle_hotkey_pressed` / `handle_hotkey_released`,
@@ -37,14 +43,14 @@ pub async fn execute_mode(app: AppHandle, ctx: Arc<AppContext>, mode: Mode) -> R
 }
 
 /// Hotkey-Press-Handler: in PTT-Mode immer "Recording starten", in
-/// Toggle-Mode "execute_mode" (Toggle-Verhalten).
+/// Toggle-Mode "execute_mode" (Toggle-Verhalten). Bei Streaming-Modi
+/// (mode.uses_streaming()) wird die Streaming-Pipeline gestartet, sonst
+/// die One-Shot-Pipeline.
 pub async fn handle_hotkey_pressed(app: AppHandle, ctx: Arc<AppContext>, mode: Mode) -> Result<()> {
     let ptt = ctx.settings.read().ptt_mode;
     if !ptt {
-        // Toggle-Mode: Press toggelt zwischen Idle und Recording.
         return execute_mode(app, ctx, mode).await;
     }
-    // PTT-Mode: Press startet immer (idempotent, ignoriert wenn bereits busy).
     let current = ctx.state_bus.current();
     if !matches!(current, AppState::Idle) {
         tracing::warn!(
@@ -53,11 +59,15 @@ pub async fn handle_hotkey_pressed(app: AppHandle, ctx: Arc<AppContext>, mode: M
         );
         return Ok(());
     }
-    start_recording(&ctx, &mode).await
+    if mode.uses_streaming() {
+        start_streaming_recording(app, ctx, &mode).await
+    } else {
+        start_recording(&ctx, &mode).await
+    }
 }
 
-/// Hotkey-Release-Handler: in PTT-Mode "Recording stoppen + Pipeline".
-/// In Toggle-Mode No-Op (Release wird ignoriert).
+/// Hotkey-Release-Handler: schließt Recording. Streaming-vs-OneShot
+/// branch je nach mode.uses_streaming().
 pub async fn handle_hotkey_released(
     app: AppHandle,
     ctx: Arc<AppContext>,
@@ -65,10 +75,8 @@ pub async fn handle_hotkey_released(
 ) -> Result<()> {
     let ptt = ctx.settings.read().ptt_mode;
     if !ptt {
-        // Toggle-Mode: Release ist No-Op.
         return Ok(());
     }
-    // PTT-Mode: Release stoppt nur wenn aktuell Recording.
     let current = ctx.state_bus.current();
     if !matches!(current, AppState::Recording) {
         tracing::debug!(
@@ -77,7 +85,11 @@ pub async fn handle_hotkey_released(
         );
         return Ok(());
     }
-    finish_recording_and_inject(&app, &ctx, &mode).await
+    if mode.uses_streaming() {
+        finish_streaming_recording(&app, &ctx, &mode).await
+    } else {
+        finish_recording_and_inject(&app, &ctx, &mode).await
+    }
 }
 
 async fn start_recording(ctx: &Arc<AppContext>, mode: &Mode) -> Result<()> {
@@ -293,6 +305,224 @@ async fn run_cloud_processing(mode: &Mode, transcript: &str) -> Result<String> {
         ..Default::default()
     };
     processor.process(transcript, system_prompt, opts).await
+}
+
+/// Streaming-Variante von `start_recording`: oeffnet zusaetzlich zum
+/// cpal-Recorder einen WebSocket zum STT-Provider, leitet 16-kHz-Audio-
+/// Chunks live dorthin und emittiert empfangene Partial/Final-Texte als
+/// Tauri-Events (`stt://partial`, `stt://final`) ans Overlay-Fenster.
+/// Der finale Text wird via `oneshot` an `finish_streaming_recording`
+/// uebermittelt, damit dort dieselbe Inject-Logik wiederverwendbar ist.
+async fn start_streaming_recording(app: AppHandle, ctx: Arc<AppContext>, mode: &Mode) -> Result<()> {
+    if mode.transcription != TranscriptionTarget::Cloud {
+        return Err(VoiceTypeError::Mode(format!(
+            "Modus '{}': uses_streaming=true erfordert transcription=cloud",
+            mode.id
+        )));
+    }
+    let provider = mode
+        .cloud_stt_provider
+        .as_deref()
+        .ok_or_else(|| VoiceTypeError::Mode(format!("Modus '{}': kein cloud_stt_provider", mode.id)))?
+        .to_string();
+
+    let transcriber = make_cloud_transcriber(&provider).inspect_err(|e| {
+        let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
+        let _ = ctx.state_bus.transition(AppState::Idle);
+    })?;
+    if !transcriber.supports().contains(&TranscriptionMode::Streaming) {
+        return Err(VoiceTypeError::Transcription(format!(
+            "Provider '{provider}' unterstuetzt kein Streaming"
+        )));
+    }
+
+    ctx.state_bus.transition(AppState::Recording)?;
+
+    if let Err(e) = play_start_cue().await {
+        tracing::warn!(error = %e, "Start-Cue fehlgeschlagen (nicht fatal)");
+    }
+
+    // Streaming-Recorder: 250 ms Chunks → ~4 Updates/Sekunde, gut fuer
+    // den Live-Eindruck ohne den WebSocket zu fluten.
+    let (recorder, audio_rx) = RecorderHandle::start_with_streaming(RecorderConfig::default(), 250)
+        .inspect_err(|e| {
+            let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
+            let _ = ctx.state_bus.transition(AppState::Idle);
+        })?;
+
+    let opts = StreamOpts {
+        language: mode.language.clone(),
+        initial_prompt: None,
+    };
+    let event_stream = transcriber
+        .transcribe_stream(audio_rx, opts)
+        .await
+        .inspect_err(|e| {
+            let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
+            let _ = ctx.state_bus.transition(AppState::Idle);
+        })?;
+
+    *ctx.recorder_slot.lock() = Some(recorder);
+
+    // Event-Pump: WebSocket-Events → Tauri-Frontend-Events (Overlay).
+    // Finaler Text geht zusaetzlich in oneshot an finish_streaming_recording.
+    let (final_tx, final_rx) = oneshot::channel::<Result<String>>();
+    *ctx.streaming_final_rx.lock() = Some(final_rx);
+
+    let app_pump = app.clone();
+    let mode_pump = mode.clone();
+    tauri::async_runtime::spawn(async move {
+        let mut accumulated = String::new();
+        let mut stream = event_stream;
+        let mut final_tx_slot = Some(final_tx);
+        while let Some(ev) = stream.next().await {
+            match ev {
+                TranscriptionEvent::Partial { text, is_final } => {
+                    let payload = serde_json::json!({
+                        "mode_id": mode_pump.id,
+                        "text": text,
+                        "is_final": is_final,
+                    });
+                    let _ = app_pump.emit("stt://partial", payload);
+                    if is_final {
+                        if !accumulated.is_empty() {
+                            accumulated.push(' ');
+                        }
+                        accumulated.push_str(&text);
+                    }
+                }
+                TranscriptionEvent::Done { text, .. } => {
+                    let payload = serde_json::json!({
+                        "mode_id": mode_pump.id,
+                        "text": text.clone(),
+                    });
+                    let _ = app_pump.emit("stt://final", payload);
+                    if let Some(tx) = final_tx_slot.take() {
+                        let _ = tx.send(Ok(text));
+                    }
+                    break;
+                }
+                TranscriptionEvent::Error(msg) => {
+                    if let Some(tx) = final_tx_slot.take() {
+                        let _ = tx.send(Err(VoiceTypeError::Transcription(msg)));
+                    }
+                    break;
+                }
+            }
+        }
+        // Stream sauber beendet ohne Done — verwende Akkumulat als Fallback.
+        if let Some(tx) = final_tx_slot.take() {
+            let _ = tx.send(Ok(accumulated));
+        }
+    });
+
+    tracing::info!(mode = %mode.id, provider = %provider, "Streaming-Aufnahme gestartet");
+    Ok(())
+}
+
+/// Streaming-Pendant zu `finish_recording_and_inject`: stoppt den
+/// Recorder (was den mpsc-Audio-Channel und damit den WebSocket schliesst),
+/// wartet auf den finalen Text aus dem oneshot, und durchlaeuft dann
+/// Postprocessing + Inject.
+async fn finish_streaming_recording(
+    app: &AppHandle,
+    ctx: &Arc<AppContext>,
+    mode: &Mode,
+) -> Result<()> {
+    let recorder = ctx
+        .recorder_slot
+        .lock()
+        .take()
+        .ok_or_else(|| VoiceTypeError::Audio("Stop ohne aktiven Streaming-Recorder".into()))?;
+
+    ctx.state_bus.transition(AppState::Transcribing)?;
+
+    if let Err(e) = play_stop_cue().await {
+        tracing::warn!(error = %e, "Stop-Cue fehlgeschlagen (nicht fatal)");
+    }
+
+    // Recorder stoppen — wir verwerfen das WAV (Streaming ist Source of Truth).
+    let _ = recorder.stop_and_finalize().await;
+
+    let final_rx = ctx
+        .streaming_final_rx
+        .lock()
+        .take()
+        .ok_or_else(|| VoiceTypeError::Transcription("Kein Streaming-Final-Channel".into()))?;
+
+    // Timeout: maximal 10 s auf den finalen Text warten (sonst nehmen wir,
+    // was wir bisher haben — der xAI-Server hat manchmal Lag bei VAD-final).
+    let transcript = match tokio::time::timeout(Duration::from_secs(10), final_rx).await {
+        Ok(Ok(Ok(text))) => text,
+        Ok(Ok(Err(e))) => {
+            let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
+            let _ = ctx.state_bus.transition(AppState::Idle);
+            return Err(e);
+        }
+        Ok(Err(_)) => {
+            tracing::warn!("Streaming-Final-Channel geschlossen ohne Text");
+            String::new()
+        }
+        Err(_) => {
+            tracing::warn!("Streaming-Final-Timeout (10s) — fahre mit leerem Text fort");
+            String::new()
+        }
+    };
+
+    // Overlay zuruecksetzen
+    let _ = app.emit("stt://done", serde_json::json!({"mode_id": mode.id}));
+
+    let final_text = match mode.processing {
+        ProcessingTarget::None => transcript,
+        ProcessingTarget::Local => {
+            ctx.state_bus.transition(AppState::Postprocessing)?;
+            run_local_processing(ctx, mode, &transcript)
+                .await
+                .inspect_err(|e| {
+                    let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
+                    let _ = ctx.state_bus.transition(AppState::Idle);
+                })?
+        }
+        ProcessingTarget::Cloud => {
+            ctx.state_bus.transition(AppState::Postprocessing)?;
+            run_cloud_processing(mode, &transcript)
+                .await
+                .inspect_err(|e| {
+                    let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
+                    let _ = ctx.state_bus.transition(AppState::Idle);
+                })?
+        }
+    };
+
+    ctx.state_bus.transition(AppState::Injecting)?;
+
+    if final_text.trim().is_empty() {
+        tracing::warn!(mode = %mode.id, "Streaming-Output leer — kein Inject");
+        ctx.state_bus.transition(AppState::Idle)?;
+        return Ok(());
+    }
+
+    let injection_strategy = match mode.injection_method {
+        crate::core::modes::InjectionMethod::Clipboard => InjectionStrategy::Clipboard,
+        crate::core::modes::InjectionMethod::Keystrokes => InjectionStrategy::Keystrokes,
+    };
+
+    ctx.injector
+        .inject(
+            &final_text,
+            InjectOptions {
+                strategy: injection_strategy,
+            },
+        )
+        .await
+        .inspect_err(|e| {
+            let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
+            let _ = ctx.state_bus.transition(AppState::Idle);
+        })?;
+
+    ctx.state_bus.transition(AppState::Idle)?;
+    tracing::info!(mode = %mode.id, len = final_text.len(), "Streaming-Pipeline abgeschlossen");
+    Ok(())
 }
 
 /// Registriere die Hotkeys aller geladenen Modi (X11/Windows-Pfad).
