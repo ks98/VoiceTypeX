@@ -34,12 +34,25 @@ type FinalPayload = {
  *   2. `stt://partial` / `stt://final` — Streaming-Live-Text. Wird
  *      ergaenzend zum State-Label angezeigt, wenn Streaming aktiv ist.
  */
+/**
+ * Suppression-Fenster fuer interim-Updates am Anfang einer Aufnahme.
+ *
+ * Hintergrund: xAI's STT-Server faengt bei kurzen Audio-Snippets oft mit
+ * englischer Auto-Detect-Vermutung an und korrigiert auf Deutsch, sobald
+ * mehr Audio da ist. Der Final-Text ist dann korrekt, aber das initiale
+ * "Hello"-Phantom flackert ~1 s im Overlay. Loesung: in den ersten
+ * INTERIM_SUPPRESS_MS nach Recording-Start zeigen wir nur "Hoere zu …",
+ * keine interim-Updates. Bis dahin hat das Modell sich kalibriert.
+ */
+const INTERIM_SUPPRESS_MS = 1000;
+
 export default function Overlay() {
   const [phase, setPhase] = useState<StatePayload["state"]>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [finals, setFinals] = useState<string>("");
   const [interim, setInterim] = useState<string>("");
   const hideTimerRef = useRef<number | null>(null);
+  const recordingStartRef = useRef<number | null>(null);
 
   useEffect(() => {
     const unlistens: UnlistenFn[] = [];
@@ -74,6 +87,7 @@ export default function Overlay() {
         cancelHide();
         setFinals("");
         setInterim("");
+        recordingStartRef.current = Date.now();
         void showWindow();
       } else if (next === "idle" || next === "error") {
         // Kurzer Verbleib, damit der finale Text / Fehler noch wahrnehmbar ist.
@@ -96,10 +110,23 @@ export default function Overlay() {
 
     listen<PartialPayload>("stt://partial", (event) => {
       const { text, is_final } = event.payload;
+
+      // Suppression-Fenster: interim-Updates der ersten ~Sekunde
+      // verwerfen, weil xAI's auto-detect dort haeufig auf Englisch
+      // raet, bevor das Modell genug Audio fuer eine stabile Sprach-
+      // Entscheidung hat. Final-Tokens werden NICHT unterdrueckt —
+      // die akkumulieren wir weiter, weil der Server sie ohnehin erst
+      // nach kalibrierter Sprache ausgibt.
+      const startedAt = recordingStartRef.current;
+      const inSuppressionWindow =
+        !is_final &&
+        startedAt !== null &&
+        Date.now() - startedAt < INTERIM_SUPPRESS_MS;
+
       if (is_final) {
         setFinals((prev) => (prev ? prev + " " + text : text));
         setInterim("");
-      } else {
+      } else if (!inSuppressionWindow) {
         setInterim(text);
       }
     }).then((u) => unlistens.push(u));
