@@ -89,7 +89,7 @@ pub async fn run_test_transcription(
 
     tokio::time::sleep(Duration::from_secs(seconds as u64)).await;
 
-    let wav = match recorder.stop_and_finalize() {
+    let wav = match recorder.stop_and_finalize().await {
         Ok(w) => w,
         Err(e) => {
             let _ = state.state_bus.transition(AppState::Idle);

@@ -118,7 +118,7 @@ async fn finish_recording_and_inject(
         tracing::warn!(error = %e, "Stop-Cue fehlgeschlagen (nicht fatal)");
     }
 
-    let wav = recorder.stop_and_finalize().inspect_err(|e| {
+    let wav = recorder.stop_and_finalize().await.inspect_err(|e| {
         let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
         let _ = ctx.state_bus.transition(AppState::Idle);
     })?;

@@ -82,31 +82,47 @@ impl RecorderHandle {
 
     /// Stoppt die Aufnahme, wartet auf den Worker-Thread und liefert das
     /// fertige WAV-File (16 kHz Mono PCM s16le) als Byte-Buffer.
-    pub fn stop_and_finalize(mut self) -> Result<Vec<u8>> {
+    ///
+    /// Async-Konformitaet: drei blockierende Schritte (Worker-Join,
+    /// Sample-Lock, CPU-bound Resampling/Encoding) laufen in
+    /// `spawn_blocking`, damit die tokio-Runtime nicht panickt
+    /// ("Cannot block the current thread from within a runtime").
+    /// Das Meta-Channel wird hingegen mit `await` gelesen.
+    pub async fn stop_and_finalize(mut self) -> Result<Vec<u8>> {
         self.is_recording.store(false, Ordering::SeqCst);
         if let Some(tx) = self.stop_tx.take() {
             let _ = tx.send(());
         }
+
+        // Worker-Thread.join() ist blockierend → blocking-Thread-Pool.
         if let Some(handle) = self.worker.take() {
-            handle
-                .join()
+            tokio::task::spawn_blocking(move || handle.join())
+                .await
+                .map_err(|e| VoiceTypeError::Audio(format!("worker spawn_blocking: {e}")))?
                 .map_err(|_| VoiceTypeError::Audio("Worker-Thread panicked".into()))??;
         }
 
-        let meta = self.resolve_meta()?;
-        let raw_samples = std::mem::take(&mut *self.samples.lock());
-        if raw_samples.is_empty() {
-            return Err(VoiceTypeError::Audio(
-                "Keine Audio-Daten aufgenommen".into(),
-            ));
-        }
+        let meta = self.resolve_meta().await?;
+        let samples_arc = Arc::clone(&self.samples);
 
-        let mono = stereo_to_mono(&raw_samples, meta.channels);
-        let resampled = resample_to_16k(&mono, meta.sample_rate)?;
-        encode_wav_16k_mono(&resampled)
+        // Resampling + WAV-Encoding sind CPU-bound (~hundert ms bei 30 s
+        // Audio). Auf den blocking-Pool verlagern, damit der async-Worker frei bleibt.
+        tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
+            let raw_samples = std::mem::take(&mut *samples_arc.lock());
+            if raw_samples.is_empty() {
+                return Err(VoiceTypeError::Audio(
+                    "Keine Audio-Daten aufgenommen".into(),
+                ));
+            }
+            let mono = stereo_to_mono(&raw_samples, meta.channels);
+            let resampled = resample_to_16k(&mono, meta.sample_rate)?;
+            encode_wav_16k_mono(&resampled)
+        })
+        .await
+        .map_err(|e| VoiceTypeError::Audio(format!("encoding spawn_blocking: {e}")))?
     }
 
-    fn resolve_meta(&mut self) -> Result<StreamMeta> {
+    async fn resolve_meta(&mut self) -> Result<StreamMeta> {
         if let Some(meta) = self.meta {
             return Ok(meta);
         }
@@ -115,7 +131,7 @@ impl RecorderHandle {
             .take()
             .ok_or_else(|| VoiceTypeError::Audio("Meta bereits konsumiert".into()))?;
         let meta = rx
-            .blocking_recv()
+            .await
             .map_err(|_| VoiceTypeError::Audio("Worker meldete keine Stream-Meta".into()))?;
         self.meta = Some(meta);
         Ok(meta)
