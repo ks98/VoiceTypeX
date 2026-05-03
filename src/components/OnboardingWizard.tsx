@@ -4,9 +4,13 @@ import { listen } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import {
   ipcDownloadDefaultModel,
+  ipcGetHardwareReport,
+  ipcGetWhisperBackend,
   ipcSetProviderKey,
   ipcTestProviderConnection,
+  type HardwareReport,
   type ModelDownloadProgress,
+  type WhisperBackendInfo,
 } from "../lib/tauri";
 import { useSettingsStore } from "../store";
 
@@ -34,6 +38,9 @@ export default function OnboardingWizard({
     null | { kind: "saving" } | { kind: "ok" } | { kind: "error"; msg: string }
   >(null);
 
+  const [backend, setBackend] = useState<WhisperBackendInfo | null>(null);
+  const [hardware, setHardware] = useState<HardwareReport | null>(null);
+
   useEffect(() => {
     let unlisten: UnlistenFn | null = null;
     void listen<ModelDownloadProgress>("model-download-progress", (event) =>
@@ -41,6 +48,12 @@ export default function OnboardingWizard({
     ).then((fn) => {
       unlisten = fn;
     });
+    void ipcGetWhisperBackend()
+      .then(setBackend)
+      .catch(() => null);
+    void ipcGetHardwareReport()
+      .then(setHardware)
+      .catch(() => null);
     return () => {
       if (unlisten) unlisten();
     };
@@ -253,7 +266,28 @@ export default function OnboardingWizard({
 
           {step === 4 ? (
             <div className="flex flex-col gap-4">
-              <h3 className="text-lg font-medium text-slate-100">Fertig!</h3>
+              <h3 className="text-lg font-medium text-slate-100">
+                System-Check &amp; Fertig
+              </h3>
+              {backend ? (
+                <div className="rounded-md bg-slate-900 border border-slate-700 p-3 text-sm">
+                  <div className="text-slate-400 text-xs mb-1">
+                    Whisper-Backend dieser Variante
+                  </div>
+                  <div className="text-emerald-400 font-mono text-base">
+                    {backend.backend} (~{backend.expected_speedup.toFixed(1)}×)
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    {backend.description}
+                  </div>
+                </div>
+              ) : null}
+              {hardware && backend ? (
+                <HardwareRecommendation
+                  hardware={hardware}
+                  active={backend.backend}
+                />
+              ) : null}
               <p className="text-sm text-slate-300">
                 Du kannst jetzt diktieren. Drueck{" "}
                 <kbd className="px-2 py-0.5 rounded bg-slate-800 font-mono text-xs">
@@ -263,16 +297,15 @@ export default function OnboardingWizard({
               </p>
               <ul className="text-sm text-slate-400 list-disc pl-5 flex flex-col gap-1">
                 <li>
-                  Die Hotkeys aller Modi siehst du im Tab{" "}
+                  Hotkeys aller Modi: Tab{" "}
                   <strong className="text-slate-200">Modi</strong>.
                 </li>
                 <li>
-                  Eigene Modi kannst du im UI erstellen oder direkt als TOML in{" "}
-                  <code className="text-brand-500">app_config_dir/modes/</code>{" "}
-                  ablegen.
+                  Eigene Modi: UI oder TOML in{" "}
+                  <code className="text-brand-500">app_config_dir/modes/</code>.
                 </li>
                 <li>
-                  Diagnose-Logs im Tab{" "}
+                  Diagnose-Logs: Tab{" "}
                   <strong className="text-slate-200">Logs</strong>.
                 </li>
               </ul>
@@ -309,6 +342,54 @@ export default function OnboardingWizard({
             </button>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+interface HardwareRecommendationProps {
+  hardware: HardwareReport;
+  active: string;
+}
+
+function HardwareRecommendation({
+  hardware,
+  active,
+}: HardwareRecommendationProps): JSX.Element | null {
+  const { recommended_variant, recommended_speedup } = hardware;
+  if (recommended_variant === active) {
+    return (
+      <div className="rounded-md bg-emerald-900/20 border border-emerald-700/40 p-3 text-xs text-emerald-200">
+        ✓ Diese Variante ist optimal fuer deine Hardware. Kein Upgrade noetig.
+      </div>
+    );
+  }
+  const variantLabel: Record<string, string> = {
+    cpu: "CPU-only",
+    openblas: "OpenBLAS (CPU-BLAS)",
+    vulkan: "Vulkan (cross-platform GPU)",
+    cuda: "CUDA (NVIDIA-GPU)",
+    metal: "Metal (Apple Silicon)",
+    coreml: "CoreML (Apple Silicon)",
+  };
+  return (
+    <div className="rounded-md bg-amber-900/20 border border-amber-700/40 p-3 text-xs text-amber-200 flex flex-col gap-1.5">
+      <div>
+        <strong>Empfehlung:</strong> deine Hardware unterstuetzt{" "}
+        <span className="font-mono">{variantLabel[recommended_variant]}</span> —
+        eine separate Variante koennte hier ~{recommended_speedup.toFixed(1)}×
+        schneller transkribieren.
+      </div>
+      <div className="text-amber-300/70">
+        Detected: CPU {hardware.cpu_logical_cores} Cores
+        {hardware.has_vulkan ? ", Vulkan" : ""}
+        {hardware.has_nvidia_gpu ? ", NVIDIA-GPU" : ""}
+        {hardware.has_amd_gpu ? ", AMD-GPU" : ""}
+        {hardware.is_apple_silicon ? ", Apple-Silicon" : ""}.
+      </div>
+      <div className="text-slate-400">
+        Ab dem ersten offiziellen Release wird die {recommended_variant}-
+        Variante als separater Bundle-Download bereitstehen.
       </div>
     </div>
   );

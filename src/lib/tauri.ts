@@ -68,6 +68,38 @@ export async function ipcGetSessionInfo(): Promise<SessionInfo> {
   return invoke<SessionInfo>("get_session_info");
 }
 
+export interface WhisperBackendInfo {
+  backend: "cpu" | "openblas" | "vulkan" | "cuda" | "metal" | "coreml";
+  description: string;
+  expected_speedup: number;
+}
+
+export async function ipcGetWhisperBackend(): Promise<WhisperBackendInfo> {
+  return invoke<WhisperBackendInfo>("get_whisper_backend");
+}
+
+export interface HardwareReport {
+  os: "linux" | "windows" | "macos" | "unknown";
+  cpu_logical_cores: number;
+  has_openblas: boolean;
+  has_vulkan: boolean;
+  has_nvidia_gpu: boolean;
+  has_amd_gpu: boolean;
+  is_apple_silicon: boolean;
+  recommended_variant:
+    | "cpu"
+    | "openblas"
+    | "vulkan"
+    | "cuda"
+    | "metal"
+    | "coreml";
+  recommended_speedup: number;
+}
+
+export async function ipcGetHardwareReport(): Promise<HardwareReport> {
+  return invoke<HardwareReport>("get_hardware_report");
+}
+
 export async function ipcStartRecording(modeId: string): Promise<void> {
   return invoke("start_recording", { modeId });
 }

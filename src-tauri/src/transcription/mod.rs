@@ -10,6 +10,7 @@
 use crate::core::error::Result;
 use async_trait::async_trait;
 
+pub mod backend;
 pub mod cloud;
 pub mod local;
 pub mod model_downloader;

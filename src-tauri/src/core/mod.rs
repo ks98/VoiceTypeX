@@ -5,6 +5,7 @@ pub mod app_context;
 pub mod config;
 pub mod default_modes;
 pub mod error;
+pub mod hardware;
 pub mod log_buffer;
 pub mod modes;
 pub mod retry;

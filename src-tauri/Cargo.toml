@@ -84,9 +84,17 @@ enigo = "0.3"
 ashpd = { version = "0.11", default-features = false, features = ["tokio"] }
 
 [features]
-# Tauri 2 erwartet ein "default"-Feature
-default = ["custom-protocol"]
+# Default ist 'fast-cpu' (OpenBLAS) — universeller Speedup ohne GPU-Risiko.
+# libopenblas ist auf Linux praktisch ueberall installierbar; auf Windows
+# wird whisper.cpp's interner BLAS-Pfad genutzt. Optionale GPU-Features
+# sind separate Build-Varianten (CI produziert mehrere Bundles).
+default = ["custom-protocol", "fast-cpu"]
 custom-protocol = ["tauri/custom-protocol"]
+fast-cpu = ["whisper-rs/openblas"]
+gpu-vulkan = ["whisper-rs/vulkan"]
+gpu-cuda = ["whisper-rs/cuda"]
+gpu-metal = ["whisper-rs/metal"]
+gpu-coreml = ["whisper-rs/coreml"]
 
 [profile.dev]
 incremental = true

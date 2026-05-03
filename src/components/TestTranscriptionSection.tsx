@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  ipcGetWhisperBackend,
   ipcRunTestTranscription,
   type TestTranscriptionResult,
+  type WhisperBackendInfo,
 } from "../lib/tauri";
 
 const TEST_DURATION = 5;
@@ -12,6 +14,13 @@ export default function TestTranscriptionSection(): JSX.Element {
   const [result, setResult] = useState<TestTranscriptionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [backend, setBackend] = useState<WhisperBackendInfo | null>(null);
+
+  useEffect(() => {
+    void ipcGetWhisperBackend()
+      .then(setBackend)
+      .catch(() => null);
+  }, []);
 
   const onRun = async () => {
     setRunning(true);
@@ -47,6 +56,16 @@ export default function TestTranscriptionSection(): JSX.Element {
           den Real-Time-Factor (RTF). RTF &lt; 1 bedeutet schneller als
           Echtzeit.
         </p>
+        {backend ? (
+          <div className="mt-2 text-xs text-slate-400">
+            Aktives Backend:{" "}
+            <span className="text-emerald-400 font-mono">
+              {backend.backend}
+            </span>{" "}
+            (~{backend.expected_speedup.toFixed(1)}× ggü. CPU-Default).{" "}
+            <span className="text-slate-500">{backend.description}</span>
+          </div>
+        ) : null}
       </div>
       <div className="flex items-center gap-3">
         <button

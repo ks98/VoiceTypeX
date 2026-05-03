@@ -36,3 +36,13 @@ pub struct SessionInfo {
 pub async fn get_session_info() -> IpcResult<SessionInfo> {
     Ok(crate::core::session::detect_session())
 }
+
+#[tauri::command]
+pub async fn get_whisper_backend() -> IpcResult<crate::transcription::backend::WhisperBackendInfo> {
+    Ok(crate::transcription::backend::active_backend())
+}
+
+#[tauri::command]
+pub async fn get_hardware_report() -> IpcResult<crate::core::hardware::HardwareReport> {
+    Ok(crate::core::hardware::detect())
+}
