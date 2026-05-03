@@ -673,6 +673,34 @@ pub fn spawn_wayland_hotkey_session(app: AppHandle, ctx: Arc<AppContext>) {
     drop(sender);
 }
 
+/// Spawnt einen Listener, der jede State-Aenderung als Tauri-Event
+/// `app://state` ans Frontend emittiert. Payload: { state: "recording"
+/// | "transcribing" | ..., error?: string }. Das Overlay-Window
+/// abonniert das Event und zeigt sich entsprechend.
+pub fn spawn_state_event_emitter(app: AppHandle) {
+    let mut rx = {
+        let state = app.state::<Arc<AppContext>>();
+        state.state_bus.subscribe()
+    };
+
+    tauri::async_runtime::spawn(async move {
+        loop {
+            if rx.changed().await.is_err() {
+                break;
+            }
+            let state = rx.borrow().clone();
+            let payload = match &state {
+                AppState::Error(msg) => serde_json::json!({
+                    "state": "error",
+                    "error": msg,
+                }),
+                other => serde_json::json!({ "state": other.label() }),
+            };
+            let _ = app.emit("app://state", payload);
+        }
+    });
+}
+
 /// Spawnt einen Listener, der StateBus-Aenderungen in Tray-Icon-Updates
 /// uebersetzt.
 pub fn spawn_tray_state_listener(app: AppHandle) {

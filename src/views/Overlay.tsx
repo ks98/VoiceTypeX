@@ -4,6 +4,16 @@ import { listen } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
+type StatePayload = {
+  state:
+    | "idle"
+    | "recording"
+    | "transcribing"
+    | "postprocessing"
+    | "injecting"
+    | "error";
+  error?: string;
+};
 type PartialPayload = {
   mode_id: string;
   text: string;
@@ -13,22 +23,20 @@ type FinalPayload = {
   mode_id: string;
   text: string;
 };
-type DonePayload = {
-  mode_id: string;
-};
 
 /**
- * Live-Overlay-Fenster: empfaengt Streaming-STT-Events vom Backend
- * (`stt://partial`, `stt://final`, `stt://done`) und zeigt den
- * akkumulierten Text waehrend des Sprechens. Beim `done`-Event
- * versteckt sich das Fenster wieder.
+ * Live-Overlay-Fenster.
  *
- * Anzeigemodell:
- *   - "Final"-Segmente bleiben schwarz (akkumuliert).
- *   - Aktuelles "interim"-Segment wird grau angehaengt — verschwindet,
- *     sobald der Server es als final markiert (is_final=true).
+ * Zwei Datenquellen:
+ *   1. `app://state` — folgt der Pipeline-State-Machine und steuert
+ *      Sichtbarkeit + Status-Label ("Hoere zu …", "Verarbeite …", …).
+ *      Damit ist das Overlay auch im One-Shot-Pfad nuetzlich.
+ *   2. `stt://partial` / `stt://final` — Streaming-Live-Text. Wird
+ *      ergaenzend zum State-Label angezeigt, wenn Streaming aktiv ist.
  */
 export default function Overlay() {
+  const [phase, setPhase] = useState<StatePayload["state"]>("idle");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [finals, setFinals] = useState<string>("");
   const [interim, setInterim] = useState<string>("");
   const hideTimerRef = useRef<number | null>(null);
@@ -40,17 +48,16 @@ export default function Overlay() {
       try {
         await getCurrentWindow().show();
       } catch {
-        // Fenster bereits sichtbar oder nicht verfuegbar — beide harmlos.
+        // Bereits sichtbar / nicht verfuegbar — beides harmlos.
       }
     };
     const hideWindow = async () => {
       try {
         await getCurrentWindow().hide();
       } catch {
-        // Beim Shutdown kann das Fenster schon weg sein.
+        // Beim Shutdown evtl. weg.
       }
     };
-
     const cancelHide = () => {
       if (hideTimerRef.current !== null) {
         window.clearTimeout(hideTimerRef.current);
@@ -58,9 +65,36 @@ export default function Overlay() {
       }
     };
 
+    listen<StatePayload>("app://state", (event) => {
+      const next = event.payload.state;
+      setPhase(next);
+      setErrorMsg(event.payload.error ?? null);
+
+      if (next === "recording") {
+        cancelHide();
+        setFinals("");
+        setInterim("");
+        void showWindow();
+      } else if (next === "idle" || next === "error") {
+        // Kurzer Verbleib, damit der finale Text / Fehler noch wahrnehmbar ist.
+        cancelHide();
+        hideTimerRef.current = window.setTimeout(
+          () => {
+            setFinals("");
+            setInterim("");
+            void hideWindow();
+            hideTimerRef.current = null;
+          },
+          next === "error" ? 2500 : 800,
+        );
+      } else {
+        // transcribing / postprocessing / injecting → sichtbar bleiben
+        cancelHide();
+        void showWindow();
+      }
+    }).then((u) => unlistens.push(u));
+
     listen<PartialPayload>("stt://partial", (event) => {
-      cancelHide();
-      void showWindow();
       const { text, is_final } = event.payload;
       if (is_final) {
         setFinals((prev) => (prev ? prev + " " + text : text));
@@ -71,20 +105,8 @@ export default function Overlay() {
     }).then((u) => unlistens.push(u));
 
     listen<FinalPayload>("stt://final", (event) => {
-      cancelHide();
-      const { text } = event.payload;
-      setFinals(text);
+      setFinals(event.payload.text);
       setInterim("");
-    }).then((u) => unlistens.push(u));
-
-    listen<DonePayload>("stt://done", () => {
-      // Kurzer Verbleib, damit der finale Text noch wahrnehmbar ist.
-      hideTimerRef.current = window.setTimeout(() => {
-        setFinals("");
-        setInterim("");
-        void hideWindow();
-        hideTimerRef.current = null;
-      }, 800);
     }).then((u) => unlistens.push(u));
 
     return () => {
@@ -93,18 +115,38 @@ export default function Overlay() {
     };
   }, []);
 
-  const hasContent = finals.length > 0 || interim.length > 0;
+  const phaseLabel = (() => {
+    switch (phase) {
+      case "recording":
+        return "Höre zu …";
+      case "transcribing":
+        return "Transkribiere …";
+      case "postprocessing":
+        return "Verarbeite …";
+      case "injecting":
+        return "Füge ein …";
+      case "error":
+        return errorMsg ? `Fehler: ${errorMsg}` : "Fehler";
+      default:
+        return "";
+    }
+  })();
+
+  const dotColor = phase === "error" ? "bg-red-500" : "bg-red-500";
+  const dotAnim = phase === "recording" ? "animate-pulse" : "";
+
+  const liveText = finals || interim;
 
   return (
     <div className="h-screen w-screen overflow-hidden p-2 select-none">
       <div className="h-full w-full rounded-lg bg-black/75 backdrop-blur-md border border-white/10 shadow-2xl px-4 py-3 flex items-center">
-        <div className="flex items-center gap-3 w-full">
+        <div className="flex items-center gap-3 w-full min-w-0">
           <span
-            className="inline-block h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse shrink-0"
+            className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 ${dotColor} ${dotAnim}`}
             aria-hidden
           />
-          <p className="text-white text-sm leading-snug font-medium truncate-3-lines">
-            {hasContent ? (
+          <p className="text-white text-sm leading-snug font-medium overflow-hidden text-ellipsis whitespace-nowrap">
+            {liveText ? (
               <>
                 <span className="text-white">{finals}</span>
                 {interim && (
@@ -115,7 +157,7 @@ export default function Overlay() {
                 )}
               </>
             ) : (
-              <span className="text-white/60 italic">Hoere zu …</span>
+              <span className="text-white/80 italic">{phaseLabel}</span>
             )}
           </p>
         </div>
