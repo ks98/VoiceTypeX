@@ -11,6 +11,7 @@
 use crate::core::error::{Result, VoiceTypeError};
 use crate::hotkey::{HotkeyEvent, HotkeyEventKind, HotkeyManager};
 use async_trait::async_trait;
+use std::collections::HashMap;
 use tokio::sync::broadcast;
 
 /// Beschreibung einer App-Action, die als Wayland-Shortcut registriert wird.
@@ -111,11 +112,25 @@ pub async fn run_global_shortcuts_session(
         .await
         .map_err(|e| VoiceTypeError::Hotkey(format!("receive_deactivated: {e}")))?;
 
+    // Auto-Repeat-Dedup: KDE Plasma (und einige andere Compositors) liefern
+    // ueber `Activated` kontinuierliche Tastatur-Auto-Repeats waehrend die
+    // Taste gedrueckt bleibt — ~25/Sekunde. Ohne Dedup floodet das Log und
+    // verschleiert echte Pressed/Released-Zyklen. Wir tracken pro
+    // shortcut_id den aktuellen Zustand und reichen Pressed nur beim
+    // Uebergang Released->Pressed durch.
+    let mut pressed_state: HashMap<String, bool> = HashMap::new();
+
     loop {
         tokio::select! {
             event = activations.next() => match event {
                 Some(ev) => {
                     let shortcut_id = ev.shortcut_id().to_string();
+                    let was_pressed = pressed_state.get(&shortcut_id).copied().unwrap_or(false);
+                    if was_pressed {
+                        // Auto-Repeat — silent ignorieren.
+                        continue;
+                    }
+                    pressed_state.insert(shortcut_id.clone(), true);
                     tracing::info!(shortcut_id = %shortcut_id, "Wayland-Hotkey Pressed");
                     let _ = sender.send(HotkeyEvent {
                         id: shortcut_id,
@@ -130,6 +145,7 @@ pub async fn run_global_shortcuts_session(
             event = deactivations.next() => match event {
                 Some(ev) => {
                     let shortcut_id = ev.shortcut_id().to_string();
+                    pressed_state.insert(shortcut_id.clone(), false);
                     tracing::info!(shortcut_id = %shortcut_id, "Wayland-Hotkey Released");
                     let _ = sender.send(HotkeyEvent {
                         id: shortcut_id,
