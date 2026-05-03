@@ -133,9 +133,16 @@ impl XaiTranscriber {
         //   sample_rate=16000  (wir liefern 16-kHz-PCM aus dem Recorder)
         //   encoding=pcm       (s16le wird vom Server impliziert)
         //   interim_results=true (sonst keine Live-Anzeige)
-        //   language=...        (optional, dt. Hinweis fuer Text-Formatting)
-        let mut url =
-            "wss://api.x.ai/v1/stt?sample_rate=16000&encoding=pcm&interim_results=true".to_string();
+        //   endpointing=500    (Default 10 ms ist zu kurz: das Modell
+        //                       commit-tet interim finals bevor es genug
+        //                       Sprachzeit fuer Sprach-Erkennung gesehen
+        //                       hat, was bei deutschen Wortanfaengen oft
+        //                       zu englischen Erkennungen fuehrt. 500 ms
+        //                       ist ein guter Trade-off zwischen Latenz
+        //                       und Stabilitaet.)
+        //   language=...        (optional, dt. Hinweis fuer Text-Formatting,
+        //                       NICHT fuer Erkennung — das ist auto.)
+        let mut url = "wss://api.x.ai/v1/stt?sample_rate=16000&encoding=pcm&interim_results=true&endpointing=500".to_string();
         if let Some(lang) = opts.language.as_deref() {
             url.push_str(&format!("&language={lang}"));
         }
@@ -205,12 +212,16 @@ async fn run_xai_streaming(
     let mut accumulated_final = String::new();
     let mut server_ready = false;
     let mut audio_buffer: Vec<Vec<f32>> = Vec::new();
-    let mut audio_done_sent = false;
+    let mut audio_eof = false;
     let mut done_sent = false;
 
     loop {
         tokio::select! {
-            chunk = audio_rx.recv() => match chunk {
+            // Wichtig: `if !audio_eof`-Guard verhindert die Endlos-Loop,
+            // wenn der Recorder-Sender gedroppt wurde. Ohne Guard wuerde
+            // `recv()` jedes Mal sofort `None` liefern, weil tokio's mpsc
+            // nach einem ersten None permanent None bleibt.
+            chunk = audio_rx.recv(), if !audio_eof => match chunk {
                 Some(samples) => {
                     if server_ready {
                         let bytes = pcm_f32_to_s16le(&samples);
@@ -228,16 +239,16 @@ async fn run_xai_streaming(
                     }
                 }
                 None => {
-                    // Recorder zu (Hotkey losgelassen). Falls Server noch
-                    // nicht ready: kurzes Timeout, dann harter Close.
-                    if server_ready && !audio_done_sent {
+                    // Recorder zu (Hotkey losgelassen). Wir signalisieren
+                    // Stream-Ende und warten dann auf transcript.done vom
+                    // Server.
+                    audio_eof = true;
+                    if server_ready {
                         if let Err(e) = ws.send(Message::Text(AUDIO_DONE_FRAME.into())).await {
                             tracing::warn!(error = %e, "audio.done konnte nicht gesendet werden");
                         }
-                        audio_done_sent = true;
-                    } else if !server_ready {
+                    } else {
                         // Notfall — Server hat sich nie gemeldet.
-                        let _ = ws.send(Message::Close(None)).await;
                         let _ = event_tx.send(TranscriptionEvent::Error(
                             "xAI WS: kein transcript.created erhalten".into()
                         )).await;
@@ -324,6 +335,12 @@ async fn run_xai_streaming(
             },
         }
     }
+
+    // WebSocket sauber schliessen, falls der Server das nicht schon getan
+    // hat. Ohne expliziten Close kann die Verbindung als "halb-offen" im
+    // Hintergrund haengen, was beim naechsten Hotkey-Druck Stoerungen
+    // verursachen kann.
+    let _ = ws.close(None).await;
 
     if !done_sent {
         let _ = event_tx
