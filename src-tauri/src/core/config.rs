@@ -7,7 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
     /// Audio-Eingabegeraet, leer = OS-Default.
     #[serde(default)]
@@ -56,6 +56,28 @@ pub struct Settings {
     /// der User auf Toggle-Mode wechseln.
     #[serde(default = "default_ptt_mode")]
     pub ptt_mode: bool,
+}
+
+/// Manueller `Default`-Impl statt `#[derive(Default)]`: das Derive
+/// ignoriert die `#[serde(default = "...")]`-Annotationen und benutzt
+/// die Typ-Defaults (`bool` -> `false`, `String` -> `""`). Hier setzen
+/// wir die echten Anwendungs-Defaults, damit der erste Start (vor dem
+/// ersten Settings-Save) sinnvolle Werte hat — insbesondere
+/// `ptt_mode = true`.
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            audio_input_device: None,
+            whisper_model_path: None,
+            whisper_default_slot: default_whisper_slot(),
+            diagnostic_logging: false,
+            autostart: false,
+            ollama_url: default_ollama_url(),
+            onboarding_done: false,
+            whisper_n_threads: None,
+            ptt_mode: default_ptt_mode(),
+        }
+    }
 }
 
 fn default_ptt_mode() -> bool {
