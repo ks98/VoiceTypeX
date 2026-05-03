@@ -144,12 +144,16 @@ async fn finish_recording_and_inject(
         }
     };
 
+    // Settings-Read hier vor dem await — der RwLockReadGuard von parking_lot
+    // ist nicht Send und darf nicht ueber await-Punkte hinweg leben.
+    let n_threads = ctx.settings.read().whisper_n_threads;
     let transcript = transcriber
         .transcribe_oneshot(
             &wav,
             TranscribeOpts {
                 language: mode.language.clone(),
                 initial_prompt: None,
+                n_threads,
             },
         )
         .await

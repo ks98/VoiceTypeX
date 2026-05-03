@@ -80,9 +80,17 @@ impl Transcriber for LocalTranscriber {
 
         let language = opts.language.clone();
         let initial_prompt = opts.initial_prompt.clone();
+        let n_threads_override = opts.n_threads;
 
         tokio::task::spawn_blocking(move || -> Result<String> {
-            run_whisper_blocking(&ctx, &model_path, &samples, language, initial_prompt)
+            run_whisper_blocking(
+                &ctx,
+                &model_path,
+                &samples,
+                language,
+                initial_prompt,
+                n_threads_override,
+            )
         })
         .await
         .map_err(|e| VoiceTypeError::Transcription(format!("spawn_blocking: {e}")))?
@@ -95,6 +103,7 @@ fn run_whisper_blocking(
     samples: &[f32],
     language: Option<String>,
     initial_prompt: Option<String>,
+    n_threads_override: Option<u32>,
 ) -> Result<String> {
     let guard = ctx.read();
     let context = guard.as_ref().ok_or_else(|| {
@@ -114,15 +123,21 @@ fn run_whisper_blocking(
     params.set_print_realtime(false);
     params.set_print_timestamps(false);
 
-    // n_threads explizit setzen — whisper-rs Default ist 4, zu wenig auf
-    // modernen 8+ Core-CPUs. available_parallelism() liefert logical cores;
-    // ueber 8 lohnt sich kaum (Memory-Bandwidth-Limit). Konservativ cappen.
-    let n_threads = std::thread::available_parallelism()
-        .map(|n| n.get())
-        .unwrap_or(4)
-        .min(8);
+    // n_threads: User-Override aus Settings hat Vorrang. Sonst Auto-Detect
+    // via available_parallelism (logical cores), gedeckelt bei 8 wegen
+    // Memory-Bandwidth diminishing returns.
+    let n_threads = n_threads_override.map(|n| n as usize).unwrap_or_else(|| {
+        std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(4)
+            .min(8)
+    });
     params.set_n_threads(n_threads as i32);
-    tracing::info!(n_threads, "Whisper n_threads gesetzt");
+    tracing::info!(
+        n_threads,
+        from_setting = n_threads_override.is_some(),
+        "Whisper n_threads gesetzt"
+    );
 
     if let Some(lang) = language.as_deref() {
         params.set_language(Some(lang));

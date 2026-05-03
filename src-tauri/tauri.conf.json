@@ -42,6 +42,15 @@
     "category": "Productivity",
     "shortDescription": "Diktiere — VoiceTypeX schreibt es.",
     "longDescription": "VoiceTypeX ist ein Diktier-Tool, das Audio per Hotkey aufnimmt, lokal oder via Cloud transkribiert und den Text an der aktuellen Cursor-Position einfuegt. Konfigurierbare Modi steuern Transkription, LLM-Nachbearbeitung und Einfuege-Methode. BYOK-Cloud (xAI, OpenAI, Anthropic, Groq, Deepgram); lokal via whisper.cpp und Ollama.",
-    "resources": ["../assets/cue_start.wav", "../assets/cue_stop.wav"]
+    "resources": ["../assets/cue_start.wav", "../assets/cue_stop.wav"],
+    "linux": {
+      "deb": {
+        "depends": [
+          "libopenblas0",
+          "libasound2",
+          "libxdo3"
+        ]
+      }
+    }
   }
 }

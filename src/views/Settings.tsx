@@ -179,6 +179,31 @@ export default function Settings(): JSX.Element {
       </Field>
 
       <Field
+        label="Whisper-Threads (lokales STT)"
+        hint="Anzahl CPU-Threads fuer Whisper-Inferenz. Leer = automatisch (CPU-Cores, max 8). Niedrigere Werte schonen das System fuer parallele Arbeit, hoehere koennen schneller sein."
+      >
+        <input
+          type="number"
+          min={1}
+          max={32}
+          className="bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm w-32"
+          placeholder="auto"
+          value={settings.whisper_n_threads ?? ""}
+          onChange={(e) => {
+            const v = e.target.value.trim();
+            if (v === "") {
+              void update({ whisper_n_threads: null });
+            } else {
+              const n = parseInt(v, 10);
+              if (!Number.isNaN(n) && n >= 1 && n <= 32) {
+                void update({ whisper_n_threads: n });
+              }
+            }
+          }}
+        />
+      </Field>
+
+      <Field
         label="Ollama-Endpunkt"
         hint="Lokales LLM. Standardport von Ollama ist 11434."
       >

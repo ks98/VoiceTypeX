@@ -30,6 +30,7 @@ export interface Settings {
   autostart: boolean;
   ollama_url: string;
   onboarding_done: boolean;
+  whisper_n_threads: number | null;
 }
 
 export interface LogLine {

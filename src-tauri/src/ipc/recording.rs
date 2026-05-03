@@ -103,6 +103,7 @@ pub async fn run_test_transcription(
         .map_err(|e| e.to_string())?;
 
     let start = Instant::now();
+    let n_threads = state.settings.read().whisper_n_threads;
     let result = state
         .transcriber
         .transcribe_oneshot(
@@ -110,6 +111,7 @@ pub async fn run_test_transcription(
             TranscribeOpts {
                 language: Some("de".to_string()),
                 initial_prompt: None,
+                n_threads,
             },
         )
         .await;

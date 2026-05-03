@@ -42,6 +42,13 @@ pub struct Settings {
     /// erscheint.
     #[serde(default)]
     pub onboarding_done: bool,
+
+    /// Anzahl Threads fuer Whisper-Inferenz. `None` = Auto-Detect via
+    /// `available_parallelism()` (deckelt bei 8 — diminishing returns
+    /// wegen Memory-Bandwidth). User kann ueberschreiben in Settings-UI,
+    /// z.B. "nur 4 Threads damit Browser fluessig bleibt".
+    #[serde(default)]
+    pub whisper_n_threads: Option<u32>,
 }
 
 fn default_whisper_slot() -> String {

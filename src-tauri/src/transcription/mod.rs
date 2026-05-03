@@ -62,6 +62,9 @@ pub enum TranscriptionEvent {
 pub struct TranscribeOpts {
     pub language: Option<String>,
     pub initial_prompt: Option<String>,
+    /// Override fuer Whisper-Thread-Anzahl. `None` = Auto-Detect.
+    /// Nur fuer LocalTranscriber relevant; Cloud-Transcriber ignorieren es.
+    pub n_threads: Option<u32>,
 }
 
 #[async_trait]
