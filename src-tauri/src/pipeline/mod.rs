@@ -106,6 +106,15 @@ async fn finish_recording_and_inject(
     ctx: &Arc<AppContext>,
     mode: &Mode,
 ) -> Result<()> {
+    tracing::info!(
+        mode_id = %mode.id,
+        transcription = ?mode.transcription,
+        processing = ?mode.processing,
+        cloud_stt = ?mode.cloud_stt_provider,
+        cloud_llm = ?mode.cloud_llm_provider,
+        "Pipeline-Start (Modus-Eigenschaften)"
+    );
+
     let recorder = ctx
         .recorder_slot
         .lock()

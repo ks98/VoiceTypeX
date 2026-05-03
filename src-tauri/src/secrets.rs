@@ -26,11 +26,11 @@ impl SecretStore {
         })?;
         match entry.get_password() {
             Ok(p) => {
-                tracing::debug!(provider, len = p.len(), "secret get: gefunden");
+                tracing::info!(provider, len = p.len(), "secret get: gefunden");
                 Ok(Some(p))
             }
             Err(keyring::Error::NoEntry) => {
-                tracing::debug!(provider, "secret get: NoEntry (nicht gesetzt)");
+                tracing::info!(provider, "secret get: NoEntry (nicht gesetzt)");
                 Ok(None)
             }
             Err(e) => {
