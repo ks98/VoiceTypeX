@@ -1,16 +1,26 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Clipboard-Fallback: aktuellen Inhalt sichern → neuen Text setzen → Paste-
-//! Shortcut senden → 200 ms warten → vorherigen Inhalt wiederherstellen.
+//! Clipboard-Fallback mit Session-Awareness.
 //!
-//! Paste-Shortcut wird via `enigo` simuliert: Cmd+V auf macOS, Ctrl+V sonst.
-//! Restore laeuft als detached `tokio::spawn` — wir warten nicht darauf,
-//! damit der Hauptpfad nicht blockiert.
+//! Auf Plattformen, wo Auto-Paste funktioniert (X11, Windows):
+//!   1. Aktuellen Clipboard-Inhalt sichern
+//!   2. Neuen Text setzen
+//!   3. Paste-Shortcut senden (Ctrl+V / Cmd+V via enigo)
+//!   4. Nach 200 ms vorherigen Inhalt wiederherstellen
+//!
+//! Auf Wayland (oder anderen "auto_paste_supported = false"):
+//!   - Setze nur den neuen Text
+//!   - **Kein** Paste-Shortcut (enigo's XTest-Pfad scheitert silent)
+//!   - **Kein** Restore (würde den Text nach 200 ms überschreiben, bevor
+//!     der User ihn manuell pasten kann)
+//!   - Stattdessen Notification "Drücke Ctrl+V in der Ziel-App"
 
 use crate::core::error::{Result, VoiceTypeError};
+use crate::core::session::detect_session;
 use crate::injection::{InjectOptions, InjectionStrategy, InjectorCapabilities, TextInjector};
 use async_trait::async_trait;
 use std::time::Duration;
 use tauri_plugin_clipboard_manager::ClipboardExt;
+use tauri_plugin_notification::NotificationExt;
 
 const RESTORE_DELAY_MS: u64 = 200;
 
@@ -46,13 +56,37 @@ impl TextInjector for ClipboardFallbackInjector {
             );
         }
 
+        let session = detect_session();
         let clipboard = self.app_handle.clipboard();
-        let saved = clipboard.read_text().ok();
+
+        // Reihenfolge wichtig: erst original-Inhalt sichern, dann neuen setzen.
+        let saved = if session.auto_paste_supported {
+            clipboard.read_text().ok()
+        } else {
+            // Auf Wayland kein Restore sinnvoll, daher kein Save noetig.
+            None
+        };
 
         clipboard
             .write_text(text.to_string())
             .map_err(|e| VoiceTypeError::Injection(format!("clipboard write: {e}")))?;
 
+        if !session.auto_paste_supported {
+            tracing::info!(
+                display_server = %session.display_server,
+                "Clipboard gesetzt — Auto-Paste nicht verfuegbar, User muss Ctrl+V druecken"
+            );
+            let _ = self
+                .app_handle
+                .notification()
+                .builder()
+                .title("VoiceTypeX")
+                .body("Text in der Zwischenablage. Druecke Ctrl+V in der Ziel-App.")
+                .show();
+            return Ok(());
+        }
+
+        // X11 / Windows: vollstaendiger Save → Set → Paste → Restore-Pfad.
         send_paste_shortcut().await?;
 
         if let Some(prev) = saved {

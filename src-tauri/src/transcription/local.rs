@@ -113,6 +113,17 @@ fn run_whisper_blocking(
     params.set_print_progress(false);
     params.set_print_realtime(false);
     params.set_print_timestamps(false);
+
+    // n_threads explizit setzen — whisper-rs Default ist 4, zu wenig auf
+    // modernen 8+ Core-CPUs. available_parallelism() liefert logical cores;
+    // ueber 8 lohnt sich kaum (Memory-Bandwidth-Limit). Konservativ cappen.
+    let n_threads = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4)
+        .min(8);
+    params.set_n_threads(n_threads as i32);
+    tracing::info!(n_threads, "Whisper n_threads gesetzt");
+
     if let Some(lang) = language.as_deref() {
         params.set_language(Some(lang));
     }
