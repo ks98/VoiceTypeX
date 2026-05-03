@@ -6,6 +6,7 @@
 //! - Response ist `content: [{type: "text", text: ...}]`-Array
 
 use crate::core::error::{Result, VoiceTypeError};
+use crate::core::retry::with_retry;
 use crate::processing::{ProcessOpts, Processor};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -88,44 +89,47 @@ impl Processor for AnthropicProcessor {
             temperature: opts.temperature,
         };
 
-        let response = self
-            .client
-            .post(&url)
-            .header("x-api-key", &self.api_key)
-            .header("anthropic-version", API_VERSION)
-            .json(&req)
-            .send()
-            .await
-            .map_err(|e| VoiceTypeError::Processing(format!("HTTP {url}: {e}")))?;
+        with_retry(|| async {
+            let response = self
+                .client
+                .post(&url)
+                .header("x-api-key", &self.api_key)
+                .header("anthropic-version", API_VERSION)
+                .json(&req)
+                .send()
+                .await
+                .map_err(|e| VoiceTypeError::Processing(format!("HTTP {url}: {e}")))?;
 
-        let status = response.status();
-        if !status.is_success() {
-            let body = response.text().await.unwrap_or_default();
-            return Err(VoiceTypeError::Processing(format!(
-                "Anthropic HTTP {status}: {body}"
-            )));
-        }
+            let status = response.status();
+            if !status.is_success() {
+                let body = response.text().await.unwrap_or_default();
+                return Err(VoiceTypeError::Processing(format!(
+                    "Anthropic HTTP {status}: {body}"
+                )));
+            }
 
-        let parsed: MessagesResponse = response
-            .json()
-            .await
-            .map_err(|e| VoiceTypeError::Processing(format!("Anthropic-JSON-Parse: {e}")))?;
+            let parsed: MessagesResponse = response
+                .json()
+                .await
+                .map_err(|e| VoiceTypeError::Processing(format!("Anthropic-JSON-Parse: {e}")))?;
 
-        let text = parsed
-            .content
-            .into_iter()
-            .map(|block| match block {
-                ContentBlock::Text { text } => text,
-            })
-            .collect::<Vec<_>>()
-            .join("");
+            let text = parsed
+                .content
+                .into_iter()
+                .map(|block| match block {
+                    ContentBlock::Text { text } => text,
+                })
+                .collect::<Vec<_>>()
+                .join("");
 
-        if text.is_empty() {
-            return Err(VoiceTypeError::Processing(
-                "Anthropic-Antwort enthielt keinen Text-Block".into(),
-            ));
-        }
-        Ok(text)
+            if text.is_empty() {
+                return Err(VoiceTypeError::Processing(
+                    "Anthropic-Antwort enthielt keinen Text-Block".into(),
+                ));
+            }
+            Ok(text)
+        })
+        .await
     }
 }
 

@@ -4,6 +4,7 @@
 //! `words[]` mit Word-Level-Timestamps. Phase 1 nutzt nur `text`.
 
 use crate::core::error::{Result, VoiceTypeError};
+use crate::core::retry::with_retry;
 use crate::transcription::{TranscribeOpts, Transcriber, TranscriptionMode};
 use async_trait::async_trait;
 use serde::Deserialize;
@@ -45,43 +46,47 @@ impl Transcriber for XaiTranscriber {
     async fn transcribe_oneshot(&self, audio: &[u8], opts: TranscribeOpts) -> Result<String> {
         let url = format!("{}/stt", self.base_url.trim_end_matches('/'));
 
-        // Wichtig (CLAUDE.md §2): `file` muss laut xAI das LETZTE Field sein.
-        let part = reqwest::multipart::Part::bytes(audio.to_vec())
-            .file_name("audio.wav")
-            .mime_str("audio/wav")
-            .map_err(|e| VoiceTypeError::Transcription(format!("multipart-Part: {e}")))?;
+        with_retry(|| async {
+            // Wichtig (CLAUDE.md §2): `file` muss laut xAI das LETZTE Field
+            // sein. multipart::Form ist nicht Clone — pro Versuch neu bauen.
+            let part = reqwest::multipart::Part::bytes(audio.to_vec())
+                .file_name("audio.wav")
+                .mime_str("audio/wav")
+                .map_err(|e| VoiceTypeError::Transcription(format!("multipart-Part: {e}")))?;
 
-        let mut form = reqwest::multipart::Form::new().text("model", self.model.clone());
-        if let Some(lang) = opts.language.as_deref() {
-            form = form.text("language", lang.to_string());
-        }
-        if let Some(prompt) = opts.initial_prompt.as_deref() {
-            form = form.text("initial_prompt", prompt.to_string());
-        }
-        let form = form.part("file", part);
+            let mut form = reqwest::multipart::Form::new().text("model", self.model.clone());
+            if let Some(lang) = opts.language.as_deref() {
+                form = form.text("language", lang.to_string());
+            }
+            if let Some(prompt) = opts.initial_prompt.as_deref() {
+                form = form.text("initial_prompt", prompt.to_string());
+            }
+            let form = form.part("file", part);
 
-        let response = self
-            .client
-            .post(&url)
-            .bearer_auth(&self.api_key)
-            .multipart(form)
-            .send()
-            .await
-            .map_err(|e| VoiceTypeError::Transcription(format!("HTTP {url}: {e}")))?;
+            let response = self
+                .client
+                .post(&url)
+                .bearer_auth(&self.api_key)
+                .multipart(form)
+                .send()
+                .await
+                .map_err(|e| VoiceTypeError::Transcription(format!("HTTP {url}: {e}")))?;
 
-        let status = response.status();
-        if !status.is_success() {
-            let body = response.text().await.unwrap_or_default();
-            return Err(VoiceTypeError::Transcription(format!(
-                "xAI STT HTTP {status}: {body}"
-            )));
-        }
+            let status = response.status();
+            if !status.is_success() {
+                let body = response.text().await.unwrap_or_default();
+                return Err(VoiceTypeError::Transcription(format!(
+                    "xAI STT HTTP {status}: {body}"
+                )));
+            }
 
-        let parsed: SttResponse = response
-            .json()
-            .await
-            .map_err(|e| VoiceTypeError::Transcription(format!("xAI-STT-JSON-Parse: {e}")))?;
-        Ok(parsed.text.trim().to_string())
+            let parsed: SttResponse = response
+                .json()
+                .await
+                .map_err(|e| VoiceTypeError::Transcription(format!("xAI-STT-JSON-Parse: {e}")))?;
+            Ok(parsed.text.trim().to_string())
+        })
+        .await
     }
 }
 

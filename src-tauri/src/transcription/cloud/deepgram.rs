@@ -8,6 +8,7 @@
 //! Response (json): results.channels[0].alternatives[0].transcript
 
 use crate::core::error::{Result, VoiceTypeError};
+use crate::core::retry::with_retry;
 use crate::transcription::{TranscribeOpts, Transcriber, TranscriptionMode};
 use async_trait::async_trait;
 use serde::Deserialize;
@@ -72,36 +73,39 @@ impl Transcriber for DeepgramTranscriber {
             query.push(("language", lang.to_string()));
         }
 
-        let response = self
-            .client
-            .post(&url)
-            .query(&query)
-            .header("Authorization", format!("Token {}", self.api_key))
-            .header("Content-Type", "audio/wav")
-            .body(audio.to_vec())
-            .send()
-            .await
-            .map_err(|e| VoiceTypeError::Transcription(format!("HTTP {url}: {e}")))?;
+        with_retry(|| async {
+            let response = self
+                .client
+                .post(&url)
+                .query(&query)
+                .header("Authorization", format!("Token {}", self.api_key))
+                .header("Content-Type", "audio/wav")
+                .body(audio.to_vec())
+                .send()
+                .await
+                .map_err(|e| VoiceTypeError::Transcription(format!("HTTP {url}: {e}")))?;
 
-        let status = response.status();
-        if !status.is_success() {
-            let body = response.text().await.unwrap_or_default();
-            return Err(VoiceTypeError::Transcription(format!(
-                "Deepgram HTTP {status}: {body}"
-            )));
-        }
+            let status = response.status();
+            if !status.is_success() {
+                let body = response.text().await.unwrap_or_default();
+                return Err(VoiceTypeError::Transcription(format!(
+                    "Deepgram HTTP {status}: {body}"
+                )));
+            }
 
-        let parsed: DeepgramResponse = response
-            .json()
-            .await
-            .map_err(|e| VoiceTypeError::Transcription(format!("Deepgram-JSON-Parse: {e}")))?;
-        let transcript = parsed
-            .results
-            .and_then(|r| r.channels.into_iter().next())
-            .and_then(|c| c.alternatives.into_iter().next())
-            .map(|a| a.transcript)
-            .unwrap_or_default();
-        Ok(transcript.trim().to_string())
+            let parsed: DeepgramResponse = response
+                .json()
+                .await
+                .map_err(|e| VoiceTypeError::Transcription(format!("Deepgram-JSON-Parse: {e}")))?;
+            let transcript = parsed
+                .results
+                .and_then(|r| r.channels.into_iter().next())
+                .and_then(|c| c.alternatives.into_iter().next())
+                .map(|a| a.transcript)
+                .unwrap_or_default();
+            Ok(transcript.trim().to_string())
+        })
+        .await
     }
 }
 
