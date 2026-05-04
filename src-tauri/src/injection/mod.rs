@@ -28,6 +28,9 @@ pub mod linux_x11;
 #[cfg(target_os = "linux")]
 pub mod linux_wayland;
 
+#[cfg(target_os = "linux")]
+pub mod libei_worker;
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct InjectorCapabilities {
     pub supports_clipboard: bool,
