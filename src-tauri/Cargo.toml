@@ -69,10 +69,6 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 sha2 = "0.10"
 futures-util = "0.3"
 
-# WebSocket-Client fuer Cloud-Streaming-STT (xAI)
-tokio-tungstenite = { version = "0.24", default-features = false, features = ["rustls-tls-native-roots", "connect"] }
-tokio-stream = "0.1"
-
 # Atomare Primitiven
 parking_lot = "0.12"
 

@@ -9,11 +9,9 @@
 
 use crate::core::error::{Result, VoiceTypeError};
 use crate::core::retry::with_retry;
-use crate::transcription::{TranscribeOpts, Transcriber, TranscriptionMode};
+use crate::transcription::{TranscribeOpts, Transcriber};
 use async_trait::async_trait;
 use serde::Deserialize;
-
-const SUPPORTED: &[TranscriptionMode] = &[TranscriptionMode::OneShot];
 
 pub struct DeepgramTranscriber {
     api_key: String,
@@ -57,10 +55,6 @@ impl DeepgramTranscriber {
 impl Transcriber for DeepgramTranscriber {
     fn name(&self) -> &str {
         "deepgram"
-    }
-
-    fn supports(&self) -> &'static [TranscriptionMode] {
-        SUPPORTED
     }
 
     async fn transcribe_oneshot(&self, audio: &[u8], opts: TranscribeOpts) -> Result<String> {

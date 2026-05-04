@@ -16,10 +16,10 @@ Rust, TypeScript, Systems Programming und Cross-Platform-Desktop-Apps. Konkret:
   brauchen das nicht.
 - **Root-Cause vor Symptom.** Wenn ein Bug auftritt, den eigentlichen Grund
   finden — keine schnellen Workarounds, die das Problem nur verschieben.
-  Beispiel aus unserer Historie: der WebSocket-Endless-Loop war ein
-  `tokio::select!`-Pattern-Bug (kein `if !eof`-Guard), nicht ein Timing-Problem.
-  Hätten wir nur "mehr Timeout einbauen" gemacht, wäre der Bug latent
-  geblieben.
+  Beispiel: ein `tokio::select!` mit `mpsc_rx.recv()` ohne `if !eof`-Guard
+  läuft nach Sender-Drop in eine Endless-Loop, weil `recv()` permanent
+  `None` zurückliefert und der Branch dauerhaft gewinnt. „Mehr Timeout
+  einbauen" wäre Symptom-Therapie; der Fix ist der Guard.
 - **YAGNI rigoros.** Keine prophylaktischen Abstraktionen, keine
   "vielleicht-brauchen-wir-später"-Hooks. Drei ähnliche Zeilen sind besser
   als ein verfrühtes Trait.
@@ -86,13 +86,12 @@ Hotkey **gedrückt** → Recording (Tray pulsiert rot, Overlay zeigt
 | Styling | TailwindCSS + shadcn/ui |
 | Frontend-State | Zustand |
 | Async-Runtime | tokio |
-| Audio | cpal + hound (WAV) + rubato (Sinc-Resampling für One-Shot) + linear (Streaming) |
+| Audio | cpal + hound (WAV) + rubato (Sinc-Resampling) |
 | Lokales STT | whisper-rs mit Cargo-Feature-Backends (`fast-cpu`/OpenBLAS = Default; `gpu-vulkan`/`gpu-cuda`/`gpu-metal`/`gpu-coreml` opt-in) |
 | Lokales LLM | Ollama via HTTP |
-| Cloud-STT | xAI (One-Shot + WebSocket-Streaming), OpenAI Whisper, Groq Whisper, Deepgram |
+| Cloud-STT | xAI (One-Shot REST), OpenAI Whisper, Groq Whisper, Deepgram |
 | Cloud-LLM | xAI Grok (Default `grok-4-fast-non-reasoning`), OpenAI GPT, Anthropic Claude |
 | HTTP-Client | reqwest (rustls-tls) |
-| WebSocket | tokio-tungstenite (rustls) |
 | Config | TOML (`serde` + `toml`) |
 | Logging | tracing + tracing-subscriber + Ringbuffer für UI |
 | Secrets | File (`~/.config/.../secrets.json`, chmod 0600) als Source of Truth, OS-Keychain best-effort Mirror |
@@ -133,9 +132,9 @@ Linux-Detection: `WAYLAND_DISPLAY` vs. `DISPLAY` zur Laufzeit.
 Felder: `id`, `name`, `hotkey`, `transcription` (`local`/`cloud`),
 `processing` (`none`/`local`/`cloud`), `cloud_stt_provider`,
 `cloud_llm_provider`, `cloud_llm_model`, `language`, `system_prompt`,
-`injection_method`, `streaming` (opt-in/out, sonst Provider-Default).
-Repo-Defaults unter `modes/` werden beim ersten Start nach
-`~/.config/.../modes/` kopiert und via `notify` heiß nachgeladen.
+`injection_method`. Repo-Defaults unter `modes/` werden beim ersten
+Start nach `~/.config/.../modes/` kopiert und via `notify` heiß
+nachgeladen.
 
 ### 4.4 BYOK + Secrets
 Pro Provider ein Eintrag (Ausnahme: xAI = ein Eintrag für STT + LLM, weil
@@ -154,22 +153,70 @@ Save → Set → Paste → Restore (X11/Windows). Auf Wayland: nur Set + Notific
 **LLM:** alle OpenAI-Chat-Completions-kompatiblen Provider teilen einen
 `OpenAICompatibleClient` (Base-URL + Default-Model). Anthropic ist eigenständig
 (Messages-API).
-**STT:** kein gemeinsamer Wrapper — xAI hat eigenes API (multipart + WS);
+**STT:** kein gemeinsamer Wrapper — xAI hat eigenes API (multipart);
 OpenAI und Groq sind Whisper-kompatibel; Deepgram eigenständig. Keine
 künstliche Gemeinsamkeit konstruieren, die real nicht existiert.
 
-### 4.7 Streaming-Architektur
-- **Recorder** hat zwei Modi:
-  - `start()` — One-Shot, `stop_and_finalize()` liefert WAV.
-  - `start_with_streaming(chunk_ms)` — zweiter Worker-Thread liest
-    Buffer-Tail, mixt Stereo→Mono, resamplet linear auf 16 kHz, pusht in
-    `mpsc<Vec<f32>>`.
-- **Transcriber-Trait:** `transcribe_oneshot` (Pflicht) + `transcribe_stream`
-  (Default-Impl: not supported).
-- **Pipeline-Branch** via `Mode::uses_streaming()` (xAI default true; andere
-  default false bis ihr Streaming-API auch implementiert ist).
-- **Frontend-Events:** `app://state` (Phase) + `stt://partial`/`stt://final`/
-  `stt://done` (Live-Text). Overlay-Window abonniert beide.
+### 4.7 Pipeline-Events ans Frontend
+StateBus-Übergänge werden als Tauri-Event `app://state` ans Frontend
+emittiert (Payload: `{state: "recording"|"transcribing"|...}`). Das
+Overlay-Window abonniert das Event und rendert phasengerechte Status-
+Texte (siehe §4.8). Damit hängt das Overlay an genau einer kanonischen
+Datenquelle — neue Auslöse-Pfade (Hotkey, UI-Button, IPC) ändern den
+State, das Overlay folgt automatisch.
+
+### 4.8 Live-Overlay-Window
+Zweites Tauri-Window (`label: "overlay"`, transparent, `alwaysOnTop`,
+`skipTaskbar`, ohne Decorations), oben links 24 px vom Rand entfernt,
+520 × 96 px. Zeigt während einer Aufnahme einen pulsierenden roten Punkt
+und einen Phase-Text (*„Höre zu …"* / *„Transkribiere …"* / *„Verarbeite …"*
+/ *„Füge ein …"*). Verschwindet 800 ms nach Idle. Window-Routing
+zwischen Haupt-Fenster und Overlay über URL-Query-Parameter
+(`?window=overlay`) in `src/main.tsx`.
+
+### 4.9 Wayland Auto-Paste via libei
+Auf Wayland kann eine App ohne Compositor-Hilfe keine Tastendrücke
+synthetisieren — `xdotool`/XTest sind X11-only, das ist Sicherheitsmodell,
+kein Bug. Lösung: `xdg-desktop-portal.RemoteDesktop` + libei.
+
+**Stack:** `ashpd 0.11` für Portal-Session, `reis 0.6.1` (gepinnt — API
+vor 1.0) für das EI-Protokoll, `xkbcommon` für Layout-bewusstes
+Keysym→Keycode-Mapping. Vorbild für die Implementierung ist
+[lan-mouse](https://github.com/feschber/lan-mouse).
+
+**Pflicht-Disziplinen aus der EI-Spec** (libinput/libei `protocol.xml`),
+ohne die Tastendrücke silent verworfen werden:
+
+1. **`start_emulating` exklusiv im `ei_device::Resumed`-Handler** rufen,
+   nicht direkt nach `Device::Done`. Spec wörtlich: *„client bug to
+   request emulation on a device that is not resumed; the EIS
+   implementation may silently discard such events."*
+2. **`sequence`-Counter strikt monoton** über die App-Lebensdauer.
+3. **`device.frame(serial, time)`-`time` strikt monoton** (Mikrosekunden).
+   Wir leiten aus `Instant::now()` ab — Rust's `Instant` ist
+   spec-monoton.
+4. **Persistente Session statt pro-Strg+V neu öffnen** (Stop-Cycles
+   sind erlaubt, aber bei `persist_mode != Permanent` würde jeder Inject
+   einen Permission-Dialog auslösen).
+5. **`Paused`-Event setzt `emulation_active` zurück** — beim nächsten
+   `Resumed` muss erneut `start_emulating` mit incrementiertem `sequence`
+   aufgerufen werden.
+
+**Architektur:** `WaylandLibeiInjector` im Tauri-Hauptthread (tokio),
+Worker-Thread (sync, manuelle Poll-Loop mit `set_nonblocking(true)` auf
+dem EIS-FD) für den EI-Protokoll-Handshake. Brücke ist ein
+`std::sync::mpsc::Sender<KeyCommand>` aus tokio in den Worker; Setup-
+Status via `tokio::oneshot` zurück. **Composite-Strategie:** Clipboard
+für den Text-Transport, libei nur für den `Ctrl+V`-Keystroke.
+
+**Compositor-Matrix** (Mai 2026, in Praxis verifiziert): KDE Plasma 6.1+
+und GNOME 46+/47 funktionieren über das Portal; Hyprland und Sway/wlroots
+brauchen einen `wtype`-Sub-Prozess-Fallback (siehe §11). Mindestversionen:
+`xdg-desktop-portal ≥ 1.18`, `libei ≥ 1.0`.
+
+**Failure-UX:** Wenn der User den Permission-Dialog ablehnt oder die
+Session aus anderen Gründen scheitert, fällt der Injector silent auf
+Clipboard + Notification *„Drücke Strg+V"* zurück. Kein harter Fehler.
 
 ---
 
@@ -179,35 +226,19 @@ künstliche Gemeinsamkeit konstruieren, die real nicht existiert.
 > mit WebFetch verifizieren — nicht auf diese Tabelle als Zukunfts-Garantie
 > verlassen.
 
-### 5.1 xAI STT One-Shot
+### 5.1 xAI STT
 `POST https://api.x.ai/v1/stt`, multipart/form-data mit `file` als **letztem**
 Feld, Auth via Bearer-Header. Response: `{text, language, duration, words[]}`.
+Wir nutzen nur `text`. xAI's `language`-Parameter ist nur Text-Formatting
+(Zahlen/Währungen), keine Sprach-Erzwingung — die Erkennung ist auto-detect.
 
-### 5.2 xAI STT Streaming (WebSocket)
-URL: `wss://api.x.ai/v1/stt?sample_rate=16000&encoding=pcm&interim_results=true&endpointing=5000[&language=de]`.
-Auth via Bearer-Header.
-
-**Drei Pflicht-Disziplinen:**
-1. Erst auf `transcript.created` warten, dann Binary-Audio senden (s16le
-   16 kHz mono). Vor `transcript.created` Audio puffern, sonst kickt der
-   Server (TCP-Reset ohne Closing-Handshake).
-2. Stream-Ende: Text-Frame `{"type":"audio.done"}` (NICHT WS-Close-Frame).
-3. Server-Events: `transcript.created` / `transcript.partial` (mit `is_final`,
-   `speech_final`) / `transcript.done` / `error`.
-
-xAI's `language`-Parameter ist **nur Text-Formatting**, nicht
-Sprach-Erzwingung. Auto-Detect ist hartcodiert. Bei kurzen deutschen Anlauten
-kann der Server initial Englisch raten und sich später korrigieren.
-Workaround: UI-Suppression-Window von 1000 ms für interim-Updates im Overlay
-+ maximales `endpointing=5000`.
-
-### 5.3 xAI Grok (Cloud-LLM)
+### 5.2 xAI Grok (Cloud-LLM)
 OpenAI-Chat-Completions-kompatibel. **Default-Model `grok-4-fast-non-reasoning`**
 für Postprocessing (kein Reasoning-Overhead, 2 M Context, ~6 × günstiger als
 `grok-4`). `grok-4` nur opt-in pro Modus, wenn echtes Multi-Step-Reasoning
 gebraucht wird.
 
-### 5.4 OpenAI / Anthropic / Groq / Deepgram
+### 5.3 OpenAI / Anthropic / Groq / Deepgram
 Standard-APIs. Implementierungen unter `src-tauri/src/processing/cloud/` und
 `src-tauri/src/transcription/cloud/`.
 
@@ -218,14 +249,14 @@ Standard-APIs. Implementierungen unter `src-tauri/src/processing/cloud/` und
 Sechs Modi werden beim ersten Start aus dem Repo-Verzeichnis `modes/` nach
 `~/.config/.../modes/` kopiert:
 
-| Modus | Hotkey | STT | LLM-Postproc | Streaming |
-|---|---|---|---|---|
-| Exaktes Diktat | `Ctrl+Alt+D` | Lokal | — | nein |
-| Korrigierendes Diktat | `Ctrl+Alt+K` | Lokal | Lokal (Ollama) | nein |
-| Förmliche E-Mail | `Ctrl+Alt+E` | xAI | xAI Grok-fast | ja |
-| Slack/Teams | `Ctrl+Alt+S` | xAI | xAI Grok-fast | ja |
-| GitHub-Issue | `Ctrl+Alt+G` | xAI | xAI Grok-fast | ja |
-| Claude-Code-Anweisung | `Ctrl+Alt+C` | xAI | xAI Grok-fast | ja |
+| Modus | Hotkey | STT | LLM-Postproc |
+|---|---|---|---|
+| Exaktes Diktat | `Ctrl+Alt+D` | Lokal | — |
+| Korrigierendes Diktat | `Ctrl+Alt+K` | Lokal | Lokal (Ollama) |
+| Förmliche E-Mail | `Ctrl+Alt+E` | xAI | xAI Grok-fast |
+| Slack/Teams | `Ctrl+Alt+S` | xAI | xAI Grok-fast |
+| GitHub-Issue | `Ctrl+Alt+G` | xAI | xAI Grok-fast |
+| Claude-Code-Anweisung | `Ctrl+Alt+C` | xAI | xAI Grok-fast |
 
 User können eigene Modi via TOML hinzufügen — keine Code-Änderung nötig.
 
@@ -236,7 +267,7 @@ User können eigene Modi via TOML hinzufügen — keine Code-Änderung nötig.
 | Plattform | Hotkey | Audio | Transkription | Auto-Paste | Tray |
 |---|---|---|---|---|---|
 | Linux X11 | ✅ tauri-plugin-global-shortcut | ✅ | ✅ | ✅ enigo (XTest) | ✅ |
-| Linux Wayland | ✅ xdg-portal | ✅ | ✅ | ⏳ manuell (Phase 5 T2: libei) | ✅ |
+| Linux Wayland | ✅ xdg-portal | ✅ | ✅ | ✅ libei (KDE Plasma 6.1+, GNOME 46+); Hyprland/Sway noch offen | ✅ |
 | Windows | ✅ | ✅ | ✅ | ✅ enigo (SendInput) | ✅ (Maintainer-Verifikation offen) |
 | macOS | ⏳ Phase 6 | ⏳ | ⏳ | ⏳ | ⏳ |
 
@@ -258,9 +289,6 @@ User können eigene Modi via TOML hinzufügen — keine Code-Änderung nötig.
 - **Niemals** `tokio::select! { x = mpsc_rx.recv() }` ohne `if !eof`-Guard
   nach Sender-Drop (führt zu Endless-Loop, weil `recv()` nach Sender-Drop
   permanent `None` liefert und der Branch immer wieder gewinnt).
-- **Niemals** xAI-WS-Protokoll-Schritte auslassen (siehe §5.2): Audio vor
-  `transcript.created` → Server-Reset; Close-Frame statt `{"type":"audio.done"}`
-  → kein finaler Text vom Server.
 - **Niemals** `#[derive(Default)]` als Ersatz für serde-`#[serde(default = "...")]`
   benutzen — die beiden Mechanismen sehen einander nicht. Wenn ein Feld einen
   echten Anwendungs-Default braucht, manueller `impl Default`.
@@ -296,96 +324,18 @@ blind hinzufügen.
 
 ## 11. Roadmap
 
-### Phase 5 Teil 2 — Wayland Auto-Paste via libei (in Arbeit)
+### Wayland Auto-Paste — Folge-Verbesserungen
+Phase 5 Teil 2 (libei-Auto-Paste auf Wayland) ist umgesetzt für KDE
+Plasma 6 / GNOME 46+ — Architektur und Pflicht-Disziplinen siehe §4.9.
+Offen sind zwei Folge-Stücke:
 
-`xdg-desktop-portal.RemoteDesktop` + libei für Tastendruck-Injection (Strg+V)
-auf Wayland. Aktuell muss der User auf Wayland Strg+V manuell drücken —
-diese Phase eliminiert das.
-
-**Stack-Entscheidungen (verifiziert via WebFetch auf docs.rs/freedesktop.org,
-Mai 2026):**
-
-- **Crate-Wahl:** `ashpd 0.11` (für Portal-Session) + `reis 0.6` (für das
-  EI-Protokoll). Vorbild ist [lan-mouse](https://github.com/feschber/lan-mouse),
-  die einzige öffentlich gepflegte Rust-Codebase mit produktivem libei-Pfad.
-  `enigo`'s experimenteller libei-Support ist explizit nicht zu nutzen
-  (laut eigener Doku buggy).
-- **Composite-Strategie:** Clipboard für Text-Transport + libei nur für den
-  `Ctrl+V`-Keystroke. Per-Character-Typing wäre Live-Inject — eigene
-  optionale Aufgabe (siehe weiter unten).
-- **Session-Lifecycle:** Lazy beim ersten Hotkey-Press, dann gehalten für
-  die App-Lebensdauer in `WaylandLibeiInjector` mit
-  `Arc<tokio::Mutex<Option<Session>>>`. Nicht eager beim App-Start
-  (Permission-Dialog ohne Kontext) und nicht pro Inject (Latenz +
-  wiederholte Dialoge bei `persist_mode != 2`).
-- **Permission-Persistenz:** `persist_mode=2` + `restore_token` in
-  `~/.config/.../wayland_session.json` (chmod 0600, kein Secret im Sinne
-  von Keychain — das Token referenziert nur eine Compositor-seitige
-  Erlaubnis). Beim App-Start vorhandenen Token in `select_devices` durchreichen.
-- **`auto_paste_supported`-Semantik:** Dynamisch via Setter, nach
-  Injector-Initialisierung. Frontend liest den dynamischen Wert via IPC.
-  Statisch env-basiert wäre nicht mehr ehrlich, sobald libei zur Laufzeit
-  greifen kann.
-- **Failure-UX:** Wenn der User den Permission-Dialog ablehnt oder der
-  Compositor libei nicht unterstützt → silent fallback auf Status-quo
-  (Clipboard + Notification). Harter Fehler wäre frustrierend.
-
-**Compositor-Matrix (Mai 2026, in Praxis verifiziert):**
-
-| Compositor | Pfad | Status |
-|---|---|---|
-| KDE Plasma 6.1+ | ashpd + reis | ✅ funktioniert (xdg-desktop-portal-kde MR !223 + KWin MR !5496 gemerged) |
-| GNOME 46+/47 | ashpd + reis | ✅ funktioniert (Mutter MR !2628 gemerged) |
-| Hyprland | `wtype`-Sub-Prozess als Fallback | xdg-desktop-portal-hyprland Issue #252 noch offen |
-| Sway / wlroots | `wtype`-Sub-Prozess als Fallback | wlroots-Maintainer haben sich gegen Portal-Ansatz positioniert |
-
-Mindestversionen: xdg-desktop-portal ≥ 1.18, libei ≥ 1.0, Compositor wie oben.
-
-**Iterations-Plan (revidiert nach Recherche von `reis 0.6.1` und dem
-`type-text.rs`-Beispiel — der EI-Handshake ist mehrstufig genug, dass
-5.2.B in drei Sub-Iterationen zerlegt wird):**
-
-1. **5.2.A** ✅ — `WaylandLibeiInjector`-Skeleton + ashpd-Portal-Session
-   lazy beim ersten Hotkey. Permission-Dialog erscheint, App stürzt nicht
-   ab. *Noch ohne Keystroke.*
-2. **5.2.B.1** — `reis` + `xkbcommon` als Dependencies, `connect_to_eis()`
-   nach erfolgreicher Session, EIS-File-Descriptor bekommen + loggen.
-   Noch kein Handshake.
-3. **5.2.B.2** — reis-Backend in eigenem Worker-Thread (calloop in
-   `spawn_blocking`, weil reis' Beispiel calloop nutzt und der EI-Handshake
-   eine sync Event-Schleife braucht), EI-Handshake durchlaufen, Seat- und
-   Device-Discovery, Keyboard-Device-Bind. mpsc-Command-Channel.
-   Verifikation: Logs zeigen "Keyboard-Device ready".
-4. **5.2.B.3** — Strg+V via `xkbcommon`-Keycode-Lookup senden + Notification
-   weglassen, wenn libei aktiv. **Auto-Paste funktioniert.**
-5. **5.2.C** — `restore_token` persistieren in `~/.config/.../wayland_session.json`
-   + Reconnect-Pattern bei Compositor-Restart + dynamisches `auto_paste_supported`.
-6. **5.2.D** — Compositor-Detection + `wtype`-Fallback für Hyprland/Sway +
-   Settings-UI-Status + Onboarding-Permission-Schritt.
-
-**Wichtige Lessons aus der reis-Recherche:**
-
-- Das `type-text.rs`-Beispiel von reis nutzt `calloop` (sync Event-Loop),
-  nicht tokio. Wir kombinieren das: tokio für die App, reis-Loop in
-  `spawn_blocking` mit mpsc-Brücke.
-- reis' `tokio`-Feature ist verfügbar; bei API-Reibung auf calloop
-  zurückfallen. Pin auf `=0.6.1` (vor 1.0).
-- Per-Inject-Session ist nicht akzeptabel, weil ohne `restore_token` jeder
-  Inject einen Permission-Dialog auslösen würde — also persistente Session
-  ab 5.2.B.2.
-- `xkbcommon` ist Pflicht für Layout-bewusstes Keysym→Keycode-Mapping
-  (Strg+V ist auf US- vs. DE-Layout unterschiedlich kodiert).
-
-**Risiken:**
-
-- `reis 0.6` ist nicht 1.0 — API-Bruch zur 1.0 möglich. Pin auf konkrete
-  Minor; Upgrade als eigene Aufgabe einplanen.
-- `restore_token` nicht überall zuverlässig persistent (xdg-desktop-portal
-  Issue #1371 für Screencast-Variante, analoge Vorsicht für RemoteDesktop) —
-  defensiv coden: bei Token-Reject neuer Permission-Dialog ohne Crash.
-- KWin Bug mit wiederholten Permission-Prompts (lan-mouse Issue #74) —
-  Reproduzierbarkeit auf VoiceTypeX-Kontext nicht verifiziert; bei Auftreten
-  Compositor-Bug, nicht VoiceTypeX-Bug.
+- **`restore_token` persistieren** in `~/.config/.../wayland_session.json`
+  (chmod 0600), damit der Permission-Dialog nicht nach jedem App-Restart
+  erneut auftaucht. Aktuell wird der Token vom Server entgegengenommen,
+  aber nicht auf Disk gespeichert.
+- **`wtype`-Fallback** für Hyprland und Sway/wlroots (Compositors ohne
+  RemoteDesktop-Portal-Support). Detection via D-Bus-Introspection auf
+  `ConnectToEIS`; bei Nicht-Verfügbarkeit Sub-Prozess-Aufruf von `wtype`.
 
 ### Phase 6 — macOS + Distribution-Hardening
 - macOS-Implementierungen (CGEvent für Inject, NSStatusItem für Tray).
@@ -393,10 +343,6 @@ Mindestversionen: xdg-desktop-portal ≥ 1.18, libei ≥ 1.0, Compositor wie obe
 - Auto-Update via tauri-plugin-updater mit signierten Manifesten.
 
 ### Optional / nice-to-have
-- **Hybrid-Modus:** xAI-Streaming für Live-Anzeige, finaler Text via lokalem
-  whisper-large-v3-turbo mit erzwungenem `language=de` (löst das xAI-Sprach-Limit).
-- **Postprocessing-Streaming:** LLM-Tokens werden inkrementell injected statt
-  erst am Ende (eliminiert Wartezeit nach Loslassen).
 - **Live-Inject-Modus** für Exaktes-Diktat (Wörter werden während des
   Sprechens getippt; nur X11/Windows + `processing = none` +
   `injection_method = keystrokes`).
@@ -405,6 +351,7 @@ Mindestversionen: xdg-desktop-portal ≥ 1.18, libei ≥ 1.0, Compositor wie obe
   einsetzen (Read in `setup`, Write-on-Update).
 
 ### Bekannte Limitierungen ohne geplanten Fix
-- xAI hat keine Sprach-Erzwingung im STT-API. Workaround:
-  UI-Suppression-Window + maximales `endpointing`. Echte Lösung wäre der
-  Hybrid-Modus oben.
+- xAI's STT-API hat keine Sprach-Erzwingung — die Erkennung ist
+  hartcodiert auto-detect. Bei kurzen, sprachneutralen Diktaten kann das
+  Modell daneben raten. Workaround wäre Fallback auf lokales whisper-rs
+  mit erzwungenem `language=de`; aktuell akzeptieren wir das Limit.

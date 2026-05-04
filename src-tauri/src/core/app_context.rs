@@ -25,9 +25,4 @@ pub struct AppContext {
     pub log_buffer: LogRingBuffer,
     pub model_dir: PathBuf,
     pub modes_dir: PathBuf,
-    /// Bei aktiver Streaming-Aufnahme haelt diesen oneshot-Receiver, der
-    /// den finalen Text liefert, sobald der Stream beendet ist. Wird in
-    /// handle_hotkey_released konsumiert.
-    pub streaming_final_rx:
-        Arc<Mutex<Option<tokio::sync::oneshot::Receiver<crate::core::error::Result<String>>>>>,
 }

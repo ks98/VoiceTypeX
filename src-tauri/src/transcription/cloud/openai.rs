@@ -4,10 +4,8 @@
 
 use crate::core::error::Result;
 use crate::transcription::cloud::whisper_compatible::WhisperCompatibleClient;
-use crate::transcription::{TranscribeOpts, Transcriber, TranscriptionMode};
+use crate::transcription::{TranscribeOpts, Transcriber};
 use async_trait::async_trait;
-
-const SUPPORTED: &[TranscriptionMode] = &[TranscriptionMode::OneShot];
 
 pub struct OpenAITranscriber {
     inner: WhisperCompatibleClient,
@@ -25,10 +23,6 @@ impl OpenAITranscriber {
 impl Transcriber for OpenAITranscriber {
     fn name(&self) -> &str {
         "openai"
-    }
-
-    fn supports(&self) -> &'static [TranscriptionMode] {
-        SUPPORTED
     }
 
     async fn transcribe_oneshot(&self, audio: &[u8], opts: TranscribeOpts) -> Result<String> {

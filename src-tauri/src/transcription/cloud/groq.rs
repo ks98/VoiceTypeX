@@ -5,10 +5,8 @@
 
 use crate::core::error::Result;
 use crate::transcription::cloud::whisper_compatible::WhisperCompatibleClient;
-use crate::transcription::{TranscribeOpts, Transcriber, TranscriptionMode};
+use crate::transcription::{TranscribeOpts, Transcriber};
 use async_trait::async_trait;
-
-const SUPPORTED: &[TranscriptionMode] = &[TranscriptionMode::OneShot];
 
 pub struct GroqTranscriber {
     inner: WhisperCompatibleClient,
@@ -30,10 +28,6 @@ impl GroqTranscriber {
 impl Transcriber for GroqTranscriber {
     fn name(&self) -> &str {
         "groq"
-    }
-
-    fn supports(&self) -> &'static [TranscriptionMode] {
-        SUPPORTED
     }
 
     async fn transcribe_oneshot(&self, audio: &[u8], opts: TranscribeOpts) -> Result<String> {

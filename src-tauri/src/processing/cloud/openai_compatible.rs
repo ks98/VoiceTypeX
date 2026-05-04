@@ -31,8 +31,7 @@ impl OpenAICompatibleClient {
             base_url: base_url.into(),
             default_model: default_model.into(),
             api_key,
-            // 60s Timeout deckt fast alle Chat-Completion-Anfragen ab; bei
-            // Streaming-Migration in Phase 4 wird das angepasst.
+            // 60 s Timeout deckt fast alle Chat-Completion-Anfragen ab.
             client: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(60))
                 .build()

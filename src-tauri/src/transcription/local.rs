@@ -12,14 +12,12 @@
 //!   dekodieren mit hound, konvertieren zu f32 [-1, 1].
 
 use crate::core::error::{Result, VoiceTypeError};
-use crate::transcription::{TranscribeOpts, Transcriber, TranscriptionMode};
+use crate::transcription::{TranscribeOpts, Transcriber};
 use async_trait::async_trait;
 use parking_lot::RwLock;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
-
-const SUPPORTED: &[TranscriptionMode] = &[TranscriptionMode::OneShot];
 
 pub struct LocalTranscriber {
     model_path: PathBuf,
@@ -64,10 +62,6 @@ impl LocalTranscriber {
 impl Transcriber for LocalTranscriber {
     fn name(&self) -> &str {
         "local-whisper"
-    }
-
-    fn supports(&self) -> &'static [TranscriptionMode] {
-        SUPPORTED
     }
 
     async fn transcribe_oneshot(&self, audio: &[u8], opts: TranscribeOpts) -> Result<String> {
