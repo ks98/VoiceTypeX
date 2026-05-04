@@ -341,17 +341,40 @@ Mai 2026):**
 
 Mindestversionen: xdg-desktop-portal ≥ 1.18, libei ≥ 1.0, Compositor wie oben.
 
-**Iterations-Plan:**
+**Iterations-Plan (revidiert nach Recherche von `reis 0.6.1` und dem
+`type-text.rs`-Beispiel — der EI-Handshake ist mehrstufig genug, dass
+5.2.B in drei Sub-Iterationen zerlegt wird):**
 
-1. **5.2.A** — `reis` als Dependency + `WaylandLibeiInjector`-Skeleton +
-   ashpd-Portal-Session lazy beim ersten Hotkey. Permission-Dialog erscheint,
-   App stürzt nicht ab. *Noch ohne Keystroke.*
-2. **5.2.B** — reis-EIS-Handshake + `Ctrl+V`-Keystroke + Composite-Branch im
-   Clipboard-Injector. Auto-Paste auf KDE Plasma 6 / GNOME 46+ funktioniert.
-3. **5.2.C** — `restore_token` persistieren + Reconnect-Pattern bei
-   Compositor-Restart + dynamisches `auto_paste_supported`.
-4. **5.2.D** — Compositor-Detection + `wtype`-Fallback für Hyprland/Sway +
+1. **5.2.A** ✅ — `WaylandLibeiInjector`-Skeleton + ashpd-Portal-Session
+   lazy beim ersten Hotkey. Permission-Dialog erscheint, App stürzt nicht
+   ab. *Noch ohne Keystroke.*
+2. **5.2.B.1** — `reis` + `xkbcommon` als Dependencies, `connect_to_eis()`
+   nach erfolgreicher Session, EIS-File-Descriptor bekommen + loggen.
+   Noch kein Handshake.
+3. **5.2.B.2** — reis-Backend in eigenem Worker-Thread (calloop in
+   `spawn_blocking`, weil reis' Beispiel calloop nutzt und der EI-Handshake
+   eine sync Event-Schleife braucht), EI-Handshake durchlaufen, Seat- und
+   Device-Discovery, Keyboard-Device-Bind. mpsc-Command-Channel.
+   Verifikation: Logs zeigen "Keyboard-Device ready".
+4. **5.2.B.3** — Strg+V via `xkbcommon`-Keycode-Lookup senden + Notification
+   weglassen, wenn libei aktiv. **Auto-Paste funktioniert.**
+5. **5.2.C** — `restore_token` persistieren in `~/.config/.../wayland_session.json`
+   + Reconnect-Pattern bei Compositor-Restart + dynamisches `auto_paste_supported`.
+6. **5.2.D** — Compositor-Detection + `wtype`-Fallback für Hyprland/Sway +
    Settings-UI-Status + Onboarding-Permission-Schritt.
+
+**Wichtige Lessons aus der reis-Recherche:**
+
+- Das `type-text.rs`-Beispiel von reis nutzt `calloop` (sync Event-Loop),
+  nicht tokio. Wir kombinieren das: tokio für die App, reis-Loop in
+  `spawn_blocking` mit mpsc-Brücke.
+- reis' `tokio`-Feature ist verfügbar; bei API-Reibung auf calloop
+  zurückfallen. Pin auf `=0.6.1` (vor 1.0).
+- Per-Inject-Session ist nicht akzeptabel, weil ohne `restore_token` jeder
+  Inject einen Permission-Dialog auslösen würde — also persistente Session
+  ab 5.2.B.2.
+- `xkbcommon` ist Pflicht für Layout-bewusstes Keysym→Keycode-Mapping
+  (Strg+V ist auf US- vs. DE-Layout unterschiedlich kodiert).
 
 **Risiken:**
 

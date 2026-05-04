@@ -71,10 +71,14 @@ impl WaylandLibeiInjector {
         }
 
         match build_remote_desktop_session().await {
-            Ok(restore_token) => {
+            Ok((restore_token, _eis_fd)) => {
+                // _eis_fd wird in 5.2.B.2 an den reis-Worker-Thread
+                // uebergeben — aktuell wird er hier gedroppt, was die
+                // Pipe wieder schliesst. Funktional egal in 5.2.B.1, weil
+                // wir noch nicht tippen.
                 tracing::info!(
                     has_token = restore_token.is_some(),
-                    "RemoteDesktop-Session erfolgreich aufgebaut"
+                    "RemoteDesktop-Session erfolgreich aufgebaut + EIS-FD bezogen"
                 );
                 *guard = SessionState::Active;
                 SessionOutcome::JustActivated
@@ -157,14 +161,20 @@ impl TextInjector for WaylandLibeiInjector {
 /// Baut eine `xdg-desktop-portal.RemoteDesktop`-Session auf:
 ///   1. `RemoteDesktop::new()` → Proxy fuer das Portal.
 ///   2. `create_session()` → Session-Handle.
-///   3. `select_devices(KEYBOARD, persist_mode=Permanent)` → fragt
-///      Tastatur-Permission an, mit Wunsch auf permanenten Token.
+///   3. `select_devices(KEYBOARD, persist_mode=ExplicitlyRevoked)` → fragt
+///      Tastatur-Permission an, mit Wunsch auf permanenten Token (= bis
+///      User die Erlaubnis aktiv widerruft).
 ///   4. `start(...)` → Compositor zeigt Permission-Dialog (wenn nicht
 ///      schon via restore_token genehmigt). Returnet `restore_token`.
+///   5. `connect_to_eis(&session)` → liefert den EIS-File-Descriptor, mit
+///      dem in 5.2.B.2 das `reis::ei::Context` aufgebaut wird.
 ///
-/// Returnet den `restore_token`, falls der Compositor einen liefert.
-/// In 5.2.C wird der Token persistiert; aktuell nur im Memory.
-async fn build_remote_desktop_session() -> std::result::Result<Option<String>, String> {
+/// Returnet die ueberfluessigen Bits, die in spaeteren Sub-Iterationen
+/// weiterverarbeitet werden:
+///   - `restore_token` (5.2.C: persistieren)
+///   - `eis_fd` (5.2.B.2: an reis-Worker-Thread uebergeben)
+async fn build_remote_desktop_session(
+) -> std::result::Result<(Option<String>, std::os::fd::OwnedFd), String> {
     use ashpd::desktop::remote_desktop::{DeviceType, RemoteDesktop};
     use ashpd::desktop::PersistMode;
 
@@ -191,6 +201,19 @@ async fn build_remote_desktop_session() -> std::result::Result<Option<String>, S
         .map_err(|e| format!("start: {e}"))?
         .response()
         .map_err(|e| format!("start response: {e}"))?;
+    let restore_token = response.restore_token().map(|s| s.to_string());
 
-    Ok(response.restore_token().map(|s| s.to_string()))
+    // EIS-File-Descriptor anfordern. Nach diesem Aufruf hat der Compositor
+    // dem Client einen Pipe geoeffnet, ueber den das EI-Protokoll laeuft.
+    // In 5.2.B.2 verbinden wir reis damit und fuehren den Handshake durch.
+    let eis_fd = proxy
+        .connect_to_eis(&session)
+        .await
+        .map_err(|e| format!("connect_to_eis: {e}"))?;
+    tracing::info!(
+        eis_fd_raw = ?std::os::fd::AsRawFd::as_raw_fd(&eis_fd),
+        "RemoteDesktop EIS-File-Descriptor erhalten"
+    );
+
+    Ok((restore_token, eis_fd))
 }
