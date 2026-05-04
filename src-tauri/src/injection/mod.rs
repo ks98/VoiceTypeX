@@ -52,9 +52,20 @@ pub trait TextInjector: Send + Sync {
     async fn inject(&self, text: &str, opts: InjectOptions) -> Result<()>;
 }
 
-/// Liefert den Default-Injector. Phase 1: immer Clipboard-Fallback.
-/// `app_handle` wird fuer den Zugriff auf `tauri-plugin-clipboard-manager` benoetigt.
+/// Liefert den Default-Injector. Plattform-Routing:
+///   - Linux + Wayland → `WaylandLibeiInjector` (Composite: Clipboard + libei
+///     in 5.2.B; vorerst Session-Aufbau + Notification wie bisher).
+///   - sonst → `ClipboardFallbackInjector` (X11/Windows mit Auto-Paste,
+///     macOS Stub).
+///
+/// `app_handle` wird fuer Clipboard, Notifications und Tauri-State benoetigt.
 pub fn make_default_injector(app_handle: tauri::AppHandle) -> Box<dyn TextInjector> {
+    #[cfg(target_os = "linux")]
+    {
+        if crate::core::session::is_wayland() {
+            return Box::new(linux_wayland::WaylandLibeiInjector::new(app_handle));
+        }
+    }
     Box::new(clipboard_fallback::ClipboardFallbackInjector::new(
         app_handle,
     ))
