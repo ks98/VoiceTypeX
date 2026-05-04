@@ -92,11 +92,16 @@ struct WorkerState {
     /// landet es hier. Bis dahin koennen wir nicht tippen.
     active_keyboard: Option<(ei::Device, ei::Keyboard)>,
     /// Erst nach `Resumed`-Event darf der Server tatsaechlich Tipps
-    /// akzeptieren. Vorbild type-text.rs wartet nicht explizit darauf,
-    /// weil dort synchron im Device::Done-Handler getippt wird (da ist
-    /// Resumed synchron in der Event-Sequenz vorgekommen). Wir tippen
-    /// asynchron spaeter — also explizite Pflicht.
+    /// akzeptieren (Spec libei protocol.xml: "client bug to request
+    /// emulation on a device that is not resumed. The EIS implementation
+    /// may silently discard such events").
     keyboard_resumed: bool,
+    /// `start_emulating` wurde aufgerufen und kein `stop_emulating` /
+    /// kein `Paused` ist seitdem dazwischen gekommen. Nach lan-mouse-
+    /// Pattern: einmalig im `Resumed`-Handler aufrufen, dann persistent
+    /// halten — pro Strg+V nur noch keys + frame, kein neues
+    /// start_emulating.
+    emulation_active: bool,
     ready_tx: Option<oneshot::Sender<bool>>,
     pending_ctrl_v: bool,
     running: bool,
@@ -214,12 +219,28 @@ impl WorkerState {
                         tracing::info!(serial, "libei: Device resumed — sender darf tippen");
                         self.last_serial = serial;
                         self.keyboard_resumed = true;
+                        // start_emulating einmalig nach lan-mouse-Pattern:
+                        // pro Resumed genau einmal, dann persistent. Wenn
+                        // ein Paused-Event kommt, setzen wir das zurueck
+                        // und der naechste Resumed startet eine neue
+                        // Emulations-Sequenz mit incrementiertem
+                        // sequence-Counter (Spec: monoton).
+                        if !self.emulation_active {
+                            if let Some((dev, _)) = &self.active_keyboard {
+                                let seq = self.sequence;
+                                self.sequence = self.sequence.wrapping_add(1);
+                                tracing::info!(sequence = seq, serial, "libei: start_emulating");
+                                dev.start_emulating(seq, serial);
+                                self.emulation_active = true;
+                            }
+                        }
                         self.try_signal_ready();
                     }
                     ei::device::Event::Paused { serial } => {
                         tracing::warn!(serial, "libei: Device paused — sender darf nicht mehr tippen");
                         self.last_serial = serial;
                         self.keyboard_resumed = false;
+                        self.emulation_active = false;
                     }
                     _ => {}
                 }
@@ -259,7 +280,10 @@ impl WorkerState {
         }
     }
 
-    /// Sendet die Ctrl+V-Sequenz. Nur aufrufen, wenn `is_ready()` true ist.
+    /// Sendet die Ctrl+V-Sequenz. Nur aufrufen, wenn `is_ready()` true
+    /// ist (Keyboard + Keymap + Resumed + Emulation aktiv via Resumed-
+    /// Handler). KEIN start_emulating/stop_emulating hier — die
+    /// Emulations-Session ist persistent ab erstem Resumed.
     fn send_ctrl_v(&mut self) {
         let Some((device, keyboard)) = &self.active_keyboard else {
             tracing::warn!("libei: send_ctrl_v ohne aktives Keyboard");
@@ -269,6 +293,10 @@ impl WorkerState {
             tracing::warn!("libei: send_ctrl_v ohne Keymap");
             return;
         };
+        if !self.emulation_active {
+            tracing::warn!("libei: send_ctrl_v ohne aktive Emulation (kein Resumed?)");
+            return;
+        }
 
         let Some(ctrl_keycode) = find_keycode(keymap, xkb::Keysym::Control_L) else {
             tracing::warn!("libei: Control_L nicht im Keymap gefunden");
@@ -279,27 +307,25 @@ impl WorkerState {
             return;
         };
 
-        let sequence = self.sequence;
-        self.sequence = self.sequence.wrapping_add(1);
         let serial = self.last_serial;
-        let time = current_time_ns();
+        let time_us = monotonic_time_us();
 
         tracing::info!(
-            sequence,
             serial,
+            time_us,
             ctrl_keycode,
             v_keycode,
-            "libei: sende Ctrl+V"
+            "libei: sende Ctrl+V (frame in persistenter Emulations-Session)"
         );
 
-        device.start_emulating(sequence, serial);
+        // EI-Konvention: keycode minus 8 (XKB-Keycodes sind +8 zu Linux-
+        // Keycodes). Spec verlangt evdev-Keycodes (KEY_LEFTCTRL=29,
+        // KEY_V=47).
         keyboard.key(ctrl_keycode - 8, ei::keyboard::KeyState::Press);
         keyboard.key(v_keycode - 8, ei::keyboard::KeyState::Press);
         keyboard.key(v_keycode - 8, ei::keyboard::KeyState::Released);
         keyboard.key(ctrl_keycode - 8, ei::keyboard::KeyState::Released);
-        device.frame(serial, time);
-        device.stop_emulating(serial);
-        tracing::debug!("libei: Ctrl+V-Sequenz fertig (start_emulating + 4 keys + frame + stop_emulating)");
+        device.frame(serial, time_us);
     }
 }
 
@@ -318,14 +344,19 @@ fn find_keycode(keymap: &xkb::Keymap, target: xkb::Keysym) -> Option<u32> {
     None
 }
 
-/// Zeitstempel in Nanosekunden seit Boot. EI's `frame()` braucht eine
-/// Zeitangabe; der genaue Wert ist fuer Wayland-Compositors nicht
-/// inhaltlich relevant, aber er muss monoton steigen.
-fn current_time_ns() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos() as u64)
-        .unwrap_or(0)
+/// Monotone Mikrosekunden seit Worker-Start. EI-Spec verlangt
+/// CLOCK_MONOTONIC in Mikrosekunden fuer `frame(serial, time)`. Strikte
+/// Monotonie ist die einzige Eigenschaft, die in der Praxis bei allen
+/// Compositor-Implementierungen konsequent geprueft wird; nicht-monotone
+/// Frames werden u.U. verworfen.
+///
+/// `Instant::now()` ist in Rust per Spec monoton — perfekt geeignet.
+fn monotonic_time_us() -> u64 {
+    use std::sync::OnceLock;
+    use std::time::Instant;
+    static START: OnceLock<Instant> = OnceLock::new();
+    let start = START.get_or_init(Instant::now);
+    start.elapsed().as_micros() as u64
 }
 
 /// Worker-Hauptschleife. Laeuft, bis `KeyCommand::Shutdown` empfangen wird
@@ -365,6 +396,7 @@ pub fn run_libei_worker(
         keymap: None,
         active_keyboard: None,
         keyboard_resumed: false,
+        emulation_active: false,
         ready_tx: Some(ready_tx),
         pending_ctrl_v: false,
         running: true,
