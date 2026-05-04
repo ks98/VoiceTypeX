@@ -296,10 +296,73 @@ blind hinzufügen.
 
 ## 11. Roadmap
 
-### Phase 5 Teil 2 — Wayland Auto-Paste via libei
+### Phase 5 Teil 2 — Wayland Auto-Paste via libei (in Arbeit)
+
 `xdg-desktop-portal.RemoteDesktop` + libei für Tastendruck-Injection (Strg+V)
-auf Wayland. Compositor-Kompatibilität dokumentieren (KDE Plasma 6,
-GNOME 46+, Hyprland, Sway).
+auf Wayland. Aktuell muss der User auf Wayland Strg+V manuell drücken —
+diese Phase eliminiert das.
+
+**Stack-Entscheidungen (verifiziert via WebFetch auf docs.rs/freedesktop.org,
+Mai 2026):**
+
+- **Crate-Wahl:** `ashpd 0.11` (für Portal-Session) + `reis 0.6` (für das
+  EI-Protokoll). Vorbild ist [lan-mouse](https://github.com/feschber/lan-mouse),
+  die einzige öffentlich gepflegte Rust-Codebase mit produktivem libei-Pfad.
+  `enigo`'s experimenteller libei-Support ist explizit nicht zu nutzen
+  (laut eigener Doku buggy).
+- **Composite-Strategie:** Clipboard für Text-Transport + libei nur für den
+  `Ctrl+V`-Keystroke. Per-Character-Typing wäre Live-Inject — eigene
+  optionale Aufgabe (siehe weiter unten).
+- **Session-Lifecycle:** Lazy beim ersten Hotkey-Press, dann gehalten für
+  die App-Lebensdauer in `WaylandLibeiInjector` mit
+  `Arc<tokio::Mutex<Option<Session>>>`. Nicht eager beim App-Start
+  (Permission-Dialog ohne Kontext) und nicht pro Inject (Latenz +
+  wiederholte Dialoge bei `persist_mode != 2`).
+- **Permission-Persistenz:** `persist_mode=2` + `restore_token` in
+  `~/.config/.../wayland_session.json` (chmod 0600, kein Secret im Sinne
+  von Keychain — das Token referenziert nur eine Compositor-seitige
+  Erlaubnis). Beim App-Start vorhandenen Token in `select_devices` durchreichen.
+- **`auto_paste_supported`-Semantik:** Dynamisch via Setter, nach
+  Injector-Initialisierung. Frontend liest den dynamischen Wert via IPC.
+  Statisch env-basiert wäre nicht mehr ehrlich, sobald libei zur Laufzeit
+  greifen kann.
+- **Failure-UX:** Wenn der User den Permission-Dialog ablehnt oder der
+  Compositor libei nicht unterstützt → silent fallback auf Status-quo
+  (Clipboard + Notification). Harter Fehler wäre frustrierend.
+
+**Compositor-Matrix (Mai 2026, in Praxis verifiziert):**
+
+| Compositor | Pfad | Status |
+|---|---|---|
+| KDE Plasma 6.1+ | ashpd + reis | ✅ funktioniert (xdg-desktop-portal-kde MR !223 + KWin MR !5496 gemerged) |
+| GNOME 46+/47 | ashpd + reis | ✅ funktioniert (Mutter MR !2628 gemerged) |
+| Hyprland | `wtype`-Sub-Prozess als Fallback | xdg-desktop-portal-hyprland Issue #252 noch offen |
+| Sway / wlroots | `wtype`-Sub-Prozess als Fallback | wlroots-Maintainer haben sich gegen Portal-Ansatz positioniert |
+
+Mindestversionen: xdg-desktop-portal ≥ 1.18, libei ≥ 1.0, Compositor wie oben.
+
+**Iterations-Plan:**
+
+1. **5.2.A** — `reis` als Dependency + `WaylandLibeiInjector`-Skeleton +
+   ashpd-Portal-Session lazy beim ersten Hotkey. Permission-Dialog erscheint,
+   App stürzt nicht ab. *Noch ohne Keystroke.*
+2. **5.2.B** — reis-EIS-Handshake + `Ctrl+V`-Keystroke + Composite-Branch im
+   Clipboard-Injector. Auto-Paste auf KDE Plasma 6 / GNOME 46+ funktioniert.
+3. **5.2.C** — `restore_token` persistieren + Reconnect-Pattern bei
+   Compositor-Restart + dynamisches `auto_paste_supported`.
+4. **5.2.D** — Compositor-Detection + `wtype`-Fallback für Hyprland/Sway +
+   Settings-UI-Status + Onboarding-Permission-Schritt.
+
+**Risiken:**
+
+- `reis 0.6` ist nicht 1.0 — API-Bruch zur 1.0 möglich. Pin auf konkrete
+  Minor; Upgrade als eigene Aufgabe einplanen.
+- `restore_token` nicht überall zuverlässig persistent (xdg-desktop-portal
+  Issue #1371 für Screencast-Variante, analoge Vorsicht für RemoteDesktop) —
+  defensiv coden: bei Token-Reject neuer Permission-Dialog ohne Crash.
+- KWin Bug mit wiederholten Permission-Prompts (lan-mouse Issue #74) —
+  Reproduzierbarkeit auf VoiceTypeX-Kontext nicht verifiziert; bei Auftreten
+  Compositor-Bug, nicht VoiceTypeX-Bug.
 
 ### Phase 6 — macOS + Distribution-Hardening
 - macOS-Implementierungen (CGEvent für Inject, NSStatusItem für Tray).
