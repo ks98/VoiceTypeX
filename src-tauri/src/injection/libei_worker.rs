@@ -91,6 +91,12 @@ struct WorkerState {
     /// Sobald wir ein keyboard-Device haben, das `Done` gemeldet hat,
     /// landet es hier. Bis dahin koennen wir nicht tippen.
     active_keyboard: Option<(ei::Device, ei::Keyboard)>,
+    /// Erst nach `Resumed`-Event darf der Server tatsaechlich Tipps
+    /// akzeptieren. Vorbild type-text.rs wartet nicht explizit darauf,
+    /// weil dort synchron im Device::Done-Handler getippt wird (da ist
+    /// Resumed synchron in der Event-Sequenz vorgekommen). Wir tippen
+    /// asynchron spaeter — also explizite Pflicht.
+    keyboard_resumed: bool,
     ready_tx: Option<oneshot::Sender<bool>>,
     pending_ctrl_v: bool,
     running: bool,
@@ -98,15 +104,29 @@ struct WorkerState {
 
 impl WorkerState {
     fn is_ready(&self) -> bool {
-        self.active_keyboard.is_some() && self.keymap.is_some()
+        self.active_keyboard.is_some() && self.keymap.is_some() && self.keyboard_resumed
+    }
+
+    fn try_signal_ready(&mut self) {
+        if self.is_ready() {
+            if let Some(tx) = self.ready_tx.take() {
+                tracing::info!(
+                    "libei: alle Vorbedingungen erfuellt (keyboard + keymap + resumed) — Auto-Paste bereit"
+                );
+                let _ = tx.send(true);
+            }
+        }
     }
 
     /// Antwort auf den initialen Handshake- und Discovery-Eventstrom des
     /// Servers. Siehe `type-text.rs` fuer die Referenzimplementierung.
+    /// Diagnose-Logging an jedem Schritt, weil das Setup mehrstufig ist
+    /// und ohne Logs nicht nachvollziehbar.
     fn handle_request(&mut self, request: ei::Event) {
         match request {
             ei::Event::Handshake(handshake, request) => match request {
-                ei::handshake::Event::HandshakeVersion { version: _ } => {
+                ei::handshake::Event::HandshakeVersion { version } => {
+                    tracing::info!(server_version = version, "libei: Handshake gestartet");
                     handshake.handshake_version(1);
                     handshake.name("voicetypex");
                     handshake.context_type(ei::handshake::ContextType::Sender);
@@ -119,15 +139,18 @@ impl WorkerState {
                     connection: _,
                     serial,
                 } => {
+                    tracing::info!(serial, "libei: Connection etabliert");
                     self.last_serial = serial;
                 }
                 _ => {}
             },
             ei::Event::Connection(_connection, request) => match request {
                 ei::connection::Event::Seat { seat } => {
+                    tracing::debug!("libei: Seat-Objekt empfangen");
                     self.seats.insert(seat, SeatData::default());
                 }
                 ei::connection::Event::Ping { ping } => {
+                    tracing::trace!("libei: Ping → Pong");
                     ping.done(0);
                 }
                 _ => {}
@@ -138,14 +161,22 @@ impl WorkerState {
                 };
                 match request {
                     ei::seat::Event::Capability { mask, interface } => {
+                        tracing::debug!(interface = %interface, mask, "libei: Seat-Capability");
                         data.capabilities.insert(interface, mask);
                     }
                     ei::seat::Event::Done => {
                         if let Some(mask) = data.capabilities.get("ei_keyboard") {
+                            tracing::info!(mask = mask, "libei: Seat done — bind keyboard");
                             seat.bind(*mask);
+                        } else {
+                            tracing::warn!(
+                                caps = ?data.capabilities.keys().collect::<Vec<_>>(),
+                                "libei: Seat done OHNE ei_keyboard-Capability — Auto-Paste nicht moeglich"
+                            );
                         }
                     }
                     ei::seat::Event::Device { device } => {
+                        tracing::debug!("libei: Device-Objekt empfangen");
                         self.devices.insert(device, DeviceData::default());
                     }
                     _ => {}
@@ -157,23 +188,38 @@ impl WorkerState {
                 };
                 match request {
                     ei::device::Event::Interface { object } => {
-                        data.interfaces
-                            .insert(object.interface().to_owned(), object);
+                        let iface = object.interface().to_owned();
+                        tracing::debug!(interface = %iface, "libei: Device-Interface");
+                        data.interfaces.insert(iface, object);
                     }
                     ei::device::Event::Done => {
+                        let interfaces: Vec<&String> = data.interfaces.keys().collect();
+                        tracing::info!(
+                            ?interfaces,
+                            "libei: Device done"
+                        );
                         if let Some(keyboard) = data.interface::<ei::Keyboard>() {
                             tracing::info!(
-                                "libei-Keyboard-Device ready — Auto-Paste verfuegbar"
+                                "libei: Keyboard-Interface gefunden — warte auf Resumed-Event"
                             );
                             self.active_keyboard = Some((device, keyboard));
-                            // Ready-Signal an tokio-Seite (nur einmal).
-                            if let Some(tx) = self.ready_tx.take() {
-                                let _ = tx.send(true);
-                            }
+                            self.try_signal_ready();
+                        } else {
+                            tracing::warn!(
+                                "libei: Device done OHNE ei_keyboard-Interface — Auto-Paste nicht moeglich"
+                            );
                         }
                     }
                     ei::device::Event::Resumed { serial } => {
+                        tracing::info!(serial, "libei: Device resumed — sender darf tippen");
                         self.last_serial = serial;
+                        self.keyboard_resumed = true;
+                        self.try_signal_ready();
+                    }
+                    ei::device::Event::Paused { serial } => {
+                        tracing::warn!(serial, "libei: Device paused — sender darf nicht mehr tippen");
+                        self.last_serial = serial;
+                        self.keyboard_resumed = false;
                     }
                     _ => {}
                 }
@@ -216,9 +262,11 @@ impl WorkerState {
     /// Sendet die Ctrl+V-Sequenz. Nur aufrufen, wenn `is_ready()` true ist.
     fn send_ctrl_v(&mut self) {
         let Some((device, keyboard)) = &self.active_keyboard else {
+            tracing::warn!("libei: send_ctrl_v ohne aktives Keyboard");
             return;
         };
         let Some(keymap) = &self.keymap else {
+            tracing::warn!("libei: send_ctrl_v ohne Keymap");
             return;
         };
 
@@ -231,17 +279,27 @@ impl WorkerState {
             return;
         };
 
-        device.start_emulating(self.sequence, self.last_serial);
+        let sequence = self.sequence;
         self.sequence = self.sequence.wrapping_add(1);
+        let serial = self.last_serial;
+        let time = current_time_ns();
 
-        // EI-Konvention: keycode minus 8 (XKB-Keycodes sind +8 zu Linux-Keycodes).
+        tracing::info!(
+            sequence,
+            serial,
+            ctrl_keycode,
+            v_keycode,
+            "libei: sende Ctrl+V"
+        );
+
+        device.start_emulating(sequence, serial);
         keyboard.key(ctrl_keycode - 8, ei::keyboard::KeyState::Press);
         keyboard.key(v_keycode - 8, ei::keyboard::KeyState::Press);
         keyboard.key(v_keycode - 8, ei::keyboard::KeyState::Released);
         keyboard.key(ctrl_keycode - 8, ei::keyboard::KeyState::Released);
-        device.frame(self.last_serial, current_time_ns());
-        // KEIN stop_emulating — wir wollen die Session fuer weitere Strg+Vs
-        // offen halten.
+        device.frame(serial, time);
+        device.stop_emulating(serial);
+        tracing::debug!("libei: Ctrl+V-Sequenz fertig (start_emulating + 4 keys + frame + stop_emulating)");
     }
 }
 
@@ -306,6 +364,7 @@ pub fn run_libei_worker(
         last_serial: u32::MAX,
         keymap: None,
         active_keyboard: None,
+        keyboard_resumed: false,
         ready_tx: Some(ready_tx),
         pending_ctrl_v: false,
         running: true,
@@ -350,9 +409,18 @@ pub fn run_libei_worker(
         }
 
         // 3. Pending Ctrl+V ausfuehren, wenn alles bereit ist
-        if state.pending_ctrl_v && state.is_ready() {
-            state.send_ctrl_v();
-            state.pending_ctrl_v = false;
+        if state.pending_ctrl_v {
+            if state.is_ready() {
+                state.send_ctrl_v();
+                state.pending_ctrl_v = false;
+            } else {
+                tracing::trace!(
+                    has_keyboard = state.active_keyboard.is_some(),
+                    has_keymap = state.keymap.is_some(),
+                    resumed = state.keyboard_resumed,
+                    "libei: Ctrl+V pending, aber Vorbedingungen noch nicht erfuellt"
+                );
+            }
         }
 
         // 4. Setup-Timeout: wenn nach 5 s noch kein Keyboard ready ist,
