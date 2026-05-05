@@ -284,6 +284,15 @@ impl WorkerState {
     /// ist (Keyboard + Keymap + Resumed + Emulation aktiv via Resumed-
     /// Handler). KEIN start_emulating/stop_emulating hier — die
     /// Emulations-Session ist persistent ab erstem Resumed.
+    ///
+    /// **Spec-Pflicht:** Pro `ei_device.frame` darf eine Taste nur EIN
+    /// `key`-Event haben (Press ODER Release, nicht beides). protocol.xml
+    /// sagt: *"It is a client bug to send more than one key request for
+    /// the same key within the same ei_device.frame and the EIS
+    /// implementation may ignore either or all key state changes."*
+    /// KWin folgt dieser Regel strikt und verwirft alle vier Events
+    /// silent, wenn sie in einen Frame gepackt werden.
+    /// Daher zwei Frames: Press-Buendel und Release-Buendel.
     fn send_ctrl_v(&mut self) {
         let Some((device, keyboard)) = &self.active_keyboard else {
             tracing::warn!("libei: send_ctrl_v ohne aktives Keyboard");
@@ -308,24 +317,35 @@ impl WorkerState {
         };
 
         let serial = self.last_serial;
-        let time_us = monotonic_time_us();
-
-        tracing::info!(
-            serial,
-            time_us,
-            ctrl_keycode,
-            v_keycode,
-            "libei: sende Ctrl+V (frame in persistenter Emulations-Session)"
-        );
-
         // EI-Konvention: keycode minus 8 (XKB-Keycodes sind +8 zu Linux-
         // Keycodes). Spec verlangt evdev-Keycodes (KEY_LEFTCTRL=29,
         // KEY_V=47).
-        keyboard.key(ctrl_keycode - 8, ei::keyboard::KeyState::Press);
-        keyboard.key(v_keycode - 8, ei::keyboard::KeyState::Press);
-        keyboard.key(v_keycode - 8, ei::keyboard::KeyState::Released);
-        keyboard.key(ctrl_keycode - 8, ei::keyboard::KeyState::Released);
-        device.frame(serial, time_us);
+        let ctrl_evdev = ctrl_keycode - 8;
+        let v_evdev = v_keycode - 8;
+
+        // Frame 1: Press-Buendel (CTRL down + V down).
+        let time_press = monotonic_time_us();
+        keyboard.key(ctrl_evdev, ei::keyboard::KeyState::Press);
+        keyboard.key(v_evdev, ei::keyboard::KeyState::Press);
+        device.frame(serial, time_press);
+
+        // Frame 2: Release-Buendel (V up + CTRL up). Strikt monotone Zeit
+        // gegenueber Frame 1 — `max(time_press+1, now)` deckt den Fall ab,
+        // dass `SystemTime::now()` zwischen den Aufrufen nicht weitergelaufen
+        // ist (Resolution-Limit auf manchen Systemen).
+        let time_release = monotonic_time_us().max(time_press + 1);
+        keyboard.key(v_evdev, ei::keyboard::KeyState::Released);
+        keyboard.key(ctrl_evdev, ei::keyboard::KeyState::Released);
+        device.frame(serial, time_release);
+
+        tracing::info!(
+            serial,
+            time_press,
+            time_release,
+            ctrl_evdev,
+            v_evdev,
+            "libei: Ctrl+V gesendet (2 Frames: Press + Release)"
+        );
     }
 }
 
