@@ -323,28 +323,38 @@ impl WorkerState {
         let ctrl_evdev = ctrl_keycode - 8;
         let v_evdev = v_keycode - 8;
 
-        // Frame 1: Press-Buendel (CTRL down + V down).
-        let time_press = monotonic_time_us();
+        // Vier Frames, einer pro Key-Transition. Jeder `device.frame` ist
+        // ein "logical hardware event" (libei-Spec); zwei State-Aenderungen
+        // im selben Frame koennten als "gleichzeitig" interpretiert werden,
+        // statt als "erst Ctrl runter, dann V drauf". Vier Frames spiegeln
+        // die echte Tastatur-Sequenz und sind das Pattern, das lan-mouse
+        // produktiv nutzt.
+        //
+        // Strikt monotone Zeit gegenueber dem Vorgaenger-Frame — `max(t+1, now)`
+        // deckt den Fall ab, dass `Instant::now()` zwischen den Aufrufen
+        // nicht weitergelaufen ist (Resolution-Limit auf manchen Systemen).
+        let mut t = monotonic_time_us();
         keyboard.key(ctrl_evdev, ei::keyboard::KeyState::Press);
-        keyboard.key(v_evdev, ei::keyboard::KeyState::Press);
-        device.frame(serial, time_press);
+        device.frame(serial, t);
 
-        // Frame 2: Release-Buendel (V up + CTRL up). Strikt monotone Zeit
-        // gegenueber Frame 1 — `max(time_press+1, now)` deckt den Fall ab,
-        // dass `SystemTime::now()` zwischen den Aufrufen nicht weitergelaufen
-        // ist (Resolution-Limit auf manchen Systemen).
-        let time_release = monotonic_time_us().max(time_press + 1);
+        t = monotonic_time_us().max(t + 1);
+        keyboard.key(v_evdev, ei::keyboard::KeyState::Press);
+        device.frame(serial, t);
+
+        t = monotonic_time_us().max(t + 1);
         keyboard.key(v_evdev, ei::keyboard::KeyState::Released);
+        device.frame(serial, t);
+
+        t = monotonic_time_us().max(t + 1);
         keyboard.key(ctrl_evdev, ei::keyboard::KeyState::Released);
-        device.frame(serial, time_release);
+        device.frame(serial, t);
 
         tracing::info!(
             serial,
-            time_press,
-            time_release,
             ctrl_evdev,
             v_evdev,
-            "libei: Ctrl+V gesendet (2 Frames: Press + Release)"
+            last_time_us = t,
+            "libei: Ctrl+V gesendet (4 Frames: Ctrl-Press, V-Press, V-Release, Ctrl-Release)"
         );
     }
 }
@@ -364,22 +374,21 @@ fn find_keycode(keymap: &xkb::Keymap, target: xkb::Keysym) -> Option<u32> {
     None
 }
 
-/// Mikrosekunden seit UNIX_EPOCH fuer `frame(serial, time)`.
-/// EI-Spec sagt CLOCK_MONOTONIC, aber die EIS-Implementierungen (KWin,
-/// Mutter) sind in der Praxis tolerant — einzige Pflicht-Eigenschaft ist
-/// strikte Monotonie. lan-mouse nutzt genau dieses Pattern und es
-/// funktioniert auf KDE/GNOME.
-///
-/// Wichtig gegen den vorherigen `Instant`-basierten Versuch: dort lieferte
-/// der allererste `frame()` `time=0` (Init und elapsed() im selben Tick),
-/// und manche Compositoren verwerfen `time=0` als "Frame in der
-/// Vergangenheit". UNIX_EPOCH-Mikrosekunden sind seit 2026 immer
-/// 1.7 × 10^15 — keine Nullen.
+/// Anker fuer CLOCK_MONOTONIC-Mikrosekunden. Wird beim Worker-Start
+/// initialisiert (siehe `run_libei_worker`), damit der erste `elapsed()`
+/// in `monotonic_time_us` nie 0 ist (Handshake + Discovery laufen davor,
+/// das sind viele Millisekunden).
+static MONOTONIC_ANCHOR: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+
+/// CLOCK_MONOTONIC-Mikrosekunden fuer `frame(serial, time)`. EI-Spec
+/// verlangt monotonic — Rust's `Instant` ist auf Linux per Plattform-
+/// Garantie `CLOCK_MONOTONIC`. Compositoren (insbesondere KWin)
+/// vergleichen `time` gegen ihre eigene MONOTONIC-Uhr; wenn der Wert
+/// stark in der Vergangenheit oder Zukunft liegt (z.B. UNIX_EPOCH),
+/// kann das zu silent dropped Frames fuehren. Vorbild: lan-mouse.
 fn monotonic_time_us() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_micros() as u64)
-        .unwrap_or(1)
+    let anchor = MONOTONIC_ANCHOR.get_or_init(std::time::Instant::now);
+    anchor.elapsed().as_micros() as u64
 }
 
 /// Worker-Hauptschleife. Laeuft, bis `KeyCommand::Shutdown` empfangen wird
@@ -389,6 +398,12 @@ pub fn run_libei_worker(
     cmd_rx: mpsc::Receiver<KeyCommand>,
     ready_tx: oneshot::Sender<bool>,
 ) {
+    // CLOCK_MONOTONIC-Anker fruehzeitig initialisieren, damit beim ersten
+    // `frame()`-Aufruf `elapsed()` schon einige hundert Millisekunden
+    // (Handshake + Discovery) zurueckliefert — nicht 0, was manche
+    // Compositoren als ungueltig verwerfen wuerden.
+    let _ = monotonic_time_us();
+
     let stream = UnixStream::from(fd);
     if let Err(e) = stream.set_nonblocking(true) {
         tracing::error!(error = %e, "libei: set_nonblocking fehlgeschlagen");
