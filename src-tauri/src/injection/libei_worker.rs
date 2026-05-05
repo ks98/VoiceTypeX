@@ -344,19 +344,22 @@ fn find_keycode(keymap: &xkb::Keymap, target: xkb::Keysym) -> Option<u32> {
     None
 }
 
-/// Monotone Mikrosekunden seit Worker-Start. EI-Spec verlangt
-/// CLOCK_MONOTONIC in Mikrosekunden fuer `frame(serial, time)`. Strikte
-/// Monotonie ist die einzige Eigenschaft, die in der Praxis bei allen
-/// Compositor-Implementierungen konsequent geprueft wird; nicht-monotone
-/// Frames werden u.U. verworfen.
+/// Mikrosekunden seit UNIX_EPOCH fuer `frame(serial, time)`.
+/// EI-Spec sagt CLOCK_MONOTONIC, aber die EIS-Implementierungen (KWin,
+/// Mutter) sind in der Praxis tolerant — einzige Pflicht-Eigenschaft ist
+/// strikte Monotonie. lan-mouse nutzt genau dieses Pattern und es
+/// funktioniert auf KDE/GNOME.
 ///
-/// `Instant::now()` ist in Rust per Spec monoton — perfekt geeignet.
+/// Wichtig gegen den vorherigen `Instant`-basierten Versuch: dort lieferte
+/// der allererste `frame()` `time=0` (Init und elapsed() im selben Tick),
+/// und manche Compositoren verwerfen `time=0` als "Frame in der
+/// Vergangenheit". UNIX_EPOCH-Mikrosekunden sind seit 2026 immer
+/// 1.7 × 10^15 — keine Nullen.
 fn monotonic_time_us() -> u64 {
-    use std::sync::OnceLock;
-    use std::time::Instant;
-    static START: OnceLock<Instant> = OnceLock::new();
-    let start = START.get_or_init(Instant::now);
-    start.elapsed().as_micros() as u64
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_micros() as u64)
+        .unwrap_or(1)
 }
 
 /// Worker-Hauptschleife. Laeuft, bis `KeyCommand::Shutdown` empfangen wird

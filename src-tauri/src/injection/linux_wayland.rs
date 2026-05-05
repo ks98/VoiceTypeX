@@ -160,6 +160,15 @@ impl TextInjector for WaylandLibeiInjector {
         // Schritt 2: libei-Session sicherstellen + Strg+V senden.
         match self.ensure_session().await {
             Some(cmd_tx) => {
+                // Wayland-Eigenheit: `wl_data_device.set_selection` wird
+                // erst beim naechsten Compositor-Roundtrip wirksam
+                // (~10–30 ms). Ohne Pause hier wuerde Strg+V den alten
+                // Clipboard-Inhalt einfuegen, weil der Compositor unsere
+                // neue Selection noch nicht "hat". 60 ms ist konservativ
+                // genug fuer alle getesteten Compositors, ohne spuerbare
+                // UX-Verzoegerung.
+                tokio::time::sleep(Duration::from_millis(60)).await;
+
                 if let Err(e) = cmd_tx.send(KeyCommand::CtrlV) {
                     tracing::warn!(error = %e, "libei-Cmd-Channel zu — Fallback auf Notification");
                     self.notify_manual_paste();
