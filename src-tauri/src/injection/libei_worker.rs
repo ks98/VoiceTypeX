@@ -285,15 +285,18 @@ impl WorkerState {
     /// Handler). KEIN start_emulating/stop_emulating hier — die
     /// Emulations-Session ist persistent ab erstem Resumed.
     ///
-    /// **Spec-Pflicht:** Pro `ei_device.frame` darf eine Taste nur EIN
-    /// `key`-Event haben (Press ODER Release, nicht beides). protocol.xml
-    /// sagt: *"It is a client bug to send more than one key request for
-    /// the same key within the same ei_device.frame and the EIS
-    /// implementation may ignore either or all key state changes."*
-    /// KWin folgt dieser Regel strikt und verwirft alle vier Events
-    /// silent, wenn sie in einen Frame gepackt werden.
-    /// Daher zwei Frames: Press-Buendel und Release-Buendel.
-    fn send_ctrl_v(&mut self) {
+    /// **Wichtig:** wir geben `context` mit, um nach JEDEM Frame zu
+    /// flushen. Ohne flush sammelt reis alle vier `device.frame`-
+    /// Records im TX-Buffer und schickt sie als Buendel beim naechsten
+    /// Loop-Tick — KWin sieht sie dann zeitlich nahezu simultan im
+    /// Wire-Stream, egal wie schoen die `time_us`-Stempel auseinander
+    /// liegen. Mit per-Frame-flush + 1 ms Sleep simulieren wir den
+    /// Tastatur-Scan-Rhythmus (ca. 1 kHz).
+    ///
+    /// Vier Frames, einer pro Key-Transition. Jeder `device.frame` ist
+    /// ein "logical hardware event" (libei-Spec); das Pattern entspricht
+    /// dem, was lan-mouse produktiv nutzt.
+    fn send_ctrl_v(&mut self, context: &ei::Context) {
         let Some((device, keyboard)) = &self.active_keyboard else {
             tracing::warn!("libei: send_ctrl_v ohne aktives Keyboard");
             return;
@@ -323,38 +326,32 @@ impl WorkerState {
         let ctrl_evdev = ctrl_keycode - 8;
         let v_evdev = v_keycode - 8;
 
-        // Vier Frames, einer pro Key-Transition. Jeder `device.frame` ist
-        // ein "logical hardware event" (libei-Spec); zwei State-Aenderungen
-        // im selben Frame koennten als "gleichzeitig" interpretiert werden,
-        // statt als "erst Ctrl runter, dann V drauf". Vier Frames spiegeln
-        // die echte Tastatur-Sequenz und sind das Pattern, das lan-mouse
-        // produktiv nutzt.
-        //
-        // Strikt monotone Zeit gegenueber dem Vorgaenger-Frame — `max(t+1, now)`
-        // deckt den Fall ab, dass `Instant::now()` zwischen den Aufrufen
-        // nicht weitergelaufen ist (Resolution-Limit auf manchen Systemen).
-        let mut t = monotonic_time_us();
-        keyboard.key(ctrl_evdev, ei::keyboard::KeyState::Press);
-        device.frame(serial, t);
+        // Helfer: Frame schreiben + sofort flushen + kurz schlafen
+        // (Tastatur-Scan-Rhythmus simulieren).
+        let mut last_t = 0u64;
+        let send_frame =
+            |key: u32, state: ei::keyboard::KeyState, prev_t: u64| -> u64 {
+                let t = monotonic_time_us().max(prev_t + 1);
+                keyboard.key(key, state);
+                device.frame(serial, t);
+                if let Err(e) = context.flush() {
+                    tracing::warn!(error = %e, "libei: flush fehlgeschlagen waehrend Ctrl+V");
+                }
+                std::thread::sleep(std::time::Duration::from_millis(1));
+                t
+            };
 
-        t = monotonic_time_us().max(t + 1);
-        keyboard.key(v_evdev, ei::keyboard::KeyState::Press);
-        device.frame(serial, t);
-
-        t = monotonic_time_us().max(t + 1);
-        keyboard.key(v_evdev, ei::keyboard::KeyState::Released);
-        device.frame(serial, t);
-
-        t = monotonic_time_us().max(t + 1);
-        keyboard.key(ctrl_evdev, ei::keyboard::KeyState::Released);
-        device.frame(serial, t);
+        last_t = send_frame(ctrl_evdev, ei::keyboard::KeyState::Press, last_t);
+        last_t = send_frame(v_evdev, ei::keyboard::KeyState::Press, last_t);
+        last_t = send_frame(v_evdev, ei::keyboard::KeyState::Released, last_t);
+        last_t = send_frame(ctrl_evdev, ei::keyboard::KeyState::Released, last_t);
 
         tracing::info!(
             serial,
             ctrl_evdev,
             v_evdev,
-            last_time_us = t,
-            "libei: Ctrl+V gesendet (4 Frames: Ctrl-Press, V-Press, V-Release, Ctrl-Release)"
+            last_time_us = last_t,
+            "libei: Ctrl+V gesendet (4 Frames mit per-Frame-flush + 1 ms Pause)"
         );
     }
 }
@@ -481,7 +478,7 @@ pub fn run_libei_worker(
         // 3. Pending Ctrl+V ausfuehren, wenn alles bereit ist
         if state.pending_ctrl_v {
             if state.is_ready() {
-                state.send_ctrl_v();
+                state.send_ctrl_v(&context);
                 state.pending_ctrl_v = false;
             } else {
                 tracing::trace!(
