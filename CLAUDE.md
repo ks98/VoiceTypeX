@@ -167,20 +167,35 @@ State, das Overlay folgt automatisch.
 
 ### 4.8 Live-Overlay-Window
 Zweites Tauri-Window (`label: "overlay"`, transparent, `alwaysOnTop`,
-`skipTaskbar`, ohne Decorations), oben links 24 px vom Rand entfernt,
-520 × 96 px. Zeigt während einer Aufnahme einen pulsierenden roten Punkt
-und einen Phase-Text (*„Höre zu …"* / *„Transkribiere …"* / *„Verarbeite …"*
-/ *„Füge ein …"*). Verschwindet 800 ms nach Idle. Window-Routing
+`skipTaskbar`, ohne Decorations, `focus: false`), oben links 24 px vom
+Rand entfernt, 520 × 96 px. Zeigt während einer Aufnahme einen
+pulsierenden roten Punkt und einen Phase-Text (*„Höre zu …"* /
+*„Transkribiere …"* / *„Verarbeite …"* / *„Füge ein …"*). Window-Routing
 zwischen Haupt-Fenster und Overlay über URL-Query-Parameter
 (`?window=overlay`) in `src/main.tsx`.
 
+**Pflicht-Disziplinen für Wayland-Fokus-Neutralität:**
+
+1. Das Overlay-Window ist **dauerhaft sichtbar** (`visible: true` in
+   tauri.conf). Ein `getCurrentWindow().show()` auf KDE Plasma 6 klaut
+   den Tastatur-Fokus, **auch** wenn `focus: false` in der Window-Config
+   steht — der Compositor respektiert den Hint nicht zuverlässig in
+   Kombination mit `alwaysOnTop`. Statt show/hide togglen wir nur die
+   CSS-Opacity zwischen 0 und 1.
+2. `set_ignore_cursor_events(true)` wird im Setup-Hook für das Overlay
+   aufgerufen — damit Klicks *durch* das (auch transparent gerenderte)
+   Window zur darunter liegenden App durchgehen. Ohne diesen Aufruf
+   würde das dauerhaft sichtbare Window oben links Klicks abfangen.
+3. Render mit `pointer-events-none` als zusätzliche Sicherheit.
+
 **Hauptfenster startet versteckt** (`visible: false`). Erreichbar über
 Tray-Linksklick oder „Einstellungen öffnen". X-Knopf versteckt nur,
-beendet nicht — User kann es jederzeit wiederbringen. Der Grund: bei
-sichtbarem Hauptfenster fokussiert KDE Plasma's xdg-portal beim Trigger
-des globalen Shortcuts automatisch das App-Fenster und klaut damit den
-User-Fokus auf der Ziel-App; libei-Strg+V landet dann im VoiceTypeX-
-Hauptfenster statt in der Ziel-App. Versteckt = nichts zu fokussieren.
+beendet nicht — User kann es jederzeit wiederbringen. Der Grund:
+analog zum Overlay-Fokus-Klau-Problem würde bei sichtbarem Hauptfenster
+KDE Plasma's xdg-portal beim Trigger des globalen Shortcuts das
+App-Fenster fokussieren und damit den User-Fokus auf der Ziel-App
+klauen; libei-Strg+V landet dann im VoiceTypeX-Hauptfenster statt in
+der Ziel-App. Versteckt = nichts zu fokussieren.
 
 ### 4.9 Wayland Auto-Paste via libei
 Auf Wayland kann eine App ohne Compositor-Hilfe keine Tastendrücke
@@ -300,6 +315,12 @@ User können eigene Modi via TOML hinzufügen — keine Code-Änderung nötig.
 - **Niemals** `#[derive(Default)]` als Ersatz für serde-`#[serde(default = "...")]`
   benutzen — die beiden Mechanismen sehen einander nicht. Wenn ein Feld einen
   echten Anwendungs-Default braucht, manueller `impl Default`.
+- **Niemals** auf Wayland (KDE Plasma) ein `alwaysOnTop`-Window per
+  `show()` / `hide()` togglen, wenn die App parallel libei zum Tippen
+  nutzt — der Compositor klaut beim `show()` den Tastatur-Fokus und
+  libei-Events landen im falschen Fenster. Stattdessen: Window
+  dauerhaft sichtbar lassen, Sichtbarkeit per CSS-Opacity steuern, plus
+  `set_ignore_cursor_events(true)` (siehe §4.8).
 
 ---
 

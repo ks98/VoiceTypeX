@@ -149,6 +149,22 @@ pub fn run() {
                 });
             }
 
+            // Overlay-Window: Cursor-Events durchlassen, damit Klicks
+            // *durch* das transparente Overlay zur darunter liegenden App
+            // gehen. Das Overlay ist bewusst dauerhaft sichtbar (kein
+            // show/hide-Toggle mehr) und steuert seine Visibility nur
+            // ueber CSS-Opacity — sonst klaut das show() den Tastatur-
+            // Fokus auf KDE Plasma 6 und libei-Strg+V landet im Overlay
+            // statt in der Ziel-App.
+            if let Some(overlay_window) = app.get_webview_window("overlay") {
+                if let Err(e) = overlay_window.set_ignore_cursor_events(true) {
+                    tracing::warn!(
+                        error = %e,
+                        "Overlay: set_ignore_cursor_events fehlgeschlagen — Klicks landen evtl. im Overlay statt der Ziel-App"
+                    );
+                }
+            }
+
             // Hotkey-Registrierung dispatch je nach Display-Server:
             //   - X11/Windows: tauri-plugin-global-shortcut (XGrabKey/RegisterHotKey)
             //   - Wayland: xdg-desktop-portal.GlobalShortcuts via ashpd

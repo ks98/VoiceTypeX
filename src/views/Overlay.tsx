@@ -2,7 +2,6 @@
 import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 
 type StatePayload = {
   state:
@@ -16,14 +15,18 @@ type StatePayload = {
 };
 
 /**
- * Live-Overlay-Fenster. Folgt der Pipeline-State-Machine via
- * `app://state` und zeigt phasengerechte Status-Texte:
- *   recording      -> "Hoere zu …"  (roter Punkt pulsiert)
- *   transcribing   -> "Transkribiere …"
- *   postprocessing -> "Verarbeite …"
- *   injecting      -> "Fuege ein …"
- *   idle           -> Fade-out nach 800 ms
- *   error          -> Fehlertext, 2.5 s sichtbar
+ * Live-Overlay-Fenster.
+ *
+ * **Wichtige Architektur-Entscheidung:** Das Overlay-Fenster ist
+ * dauerhaft sichtbar (`visible: true` in tauri.conf.json), wir togglen
+ * NUR die CSS-Opacity zwischen 0 und 1. Grund: ein `getCurrentWindow().show()`
+ * auf Wayland (KDE Plasma) klaut den Tastatur-Fokus, auch wenn `focus: false`
+ * in der Window-Config steht. Damit landeten libei-Strg+V-Events im
+ * Overlay statt in der Ziel-App. Per Opacity wird kein Window-Aktivierungs-
+ * Event erzeugt, der Fokus bleibt bei der Ziel-App.
+ *
+ * Damit der dauerhaft sichtbare Window nicht Klicks abfängt: in `lib.rs`
+ * wird `set_ignore_cursor_events(true)` aufgerufen.
  */
 export default function Overlay() {
   const [phase, setPhase] = useState<StatePayload["state"]>("idle");
@@ -33,20 +36,6 @@ export default function Overlay() {
   useEffect(() => {
     const unlistens: UnlistenFn[] = [];
 
-    const showWindow = async () => {
-      try {
-        await getCurrentWindow().show();
-      } catch {
-        // Bereits sichtbar / nicht verfuegbar — beides harmlos.
-      }
-    };
-    const hideWindow = async () => {
-      try {
-        await getCurrentWindow().hide();
-      } catch {
-        // Beim Shutdown evtl. weg.
-      }
-    };
     const cancelHide = () => {
       if (hideTimerRef.current !== null) {
         window.clearTimeout(hideTimerRef.current);
@@ -56,29 +45,28 @@ export default function Overlay() {
 
     listen<StatePayload>("app://state", (event) => {
       const next = event.payload.state;
-      setPhase(next);
       setErrorMsg(event.payload.error ?? null);
-
-      // DIAGNOSE-MODUS: Overlay-Show temporaer deaktiviert, weil
-      // Verdacht besteht, dass das Overlay-Window beim show() den
-      // Fokus klaut und libei-Strg+V damit ins Overlay statt in die
-      // Ziel-App tippt. Wenn Auto-Paste mit deaktiviertem Overlay
-      // funktioniert, ist Overlay der Schuldige und wir bauen einen
-      // richtigen Fokus-neutralen Show-Pfad.
-      const OVERLAY_SHOW_DISABLED_FOR_DIAGNOSIS = true;
+      cancelHide();
 
       if (next === "idle" || next === "error") {
-        cancelHide();
+        // Phase-Wert bleibt kurz auf dem alten Wert stehen, damit der
+        // letzte Status (z.B. Fehlertext) beim Fade-out noch lesbar ist.
+        // Erst nach dem Timeout wechseln wir auf 'idle' — damit wird die
+        // Opacity 0 und das Overlay verschwindet visuell.
         hideTimerRef.current = window.setTimeout(
           () => {
-            void hideWindow();
+            setPhase("idle");
             hideTimerRef.current = null;
           },
           next === "error" ? 2500 : 800,
         );
-      } else if (!OVERLAY_SHOW_DISABLED_FOR_DIAGNOSIS) {
-        cancelHide();
-        void showWindow();
+        // Bei error trotzdem den Fehler-Phase setzen, damit der Text
+        // sichtbar wird waehrend des 2.5s-Timeouts.
+        if (next === "error") {
+          setPhase("error");
+        }
+      } else {
+        setPhase(next);
       }
     }).then((u) => unlistens.push(u));
 
@@ -105,10 +93,15 @@ export default function Overlay() {
     }
   })();
 
+  const isVisible = phase !== "idle";
   const dotAnim = phase === "recording" ? "animate-pulse" : "";
 
   return (
-    <div className="h-screen w-screen overflow-hidden p-2 select-none">
+    <div
+      className={`h-screen w-screen overflow-hidden p-2 select-none pointer-events-none transition-opacity duration-200 ${
+        isVisible ? "opacity-100" : "opacity-0"
+      }`}
+    >
       <div className="h-full w-full rounded-lg bg-black/75 backdrop-blur-md border border-white/10 shadow-2xl px-4 py-3 flex items-center">
         <div className="flex items-center gap-3 w-full min-w-0">
           <span
