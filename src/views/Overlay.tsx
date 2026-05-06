@@ -96,11 +96,20 @@ export default function Overlay() {
   const isVisible = phase !== "idle";
   const dotAnim = phase === "recording" ? "animate-pulse" : "";
 
+  // **Wayland-Compositor-Optimierung umgehen:** statt `opacity: 0` als
+  // idle-State setzen wir `0.001`. KWin (und vermutlich andere Wayland-
+  // Compositors) optimieren ein komplett-unsichtbares + nicht-interaktives
+  // Window weg und rendern es nicht — beim spaeteren `opacity: 1` ist der
+  // Frame dann nicht aktiv. Mit `0.001` weiss der Compositor: "da ist
+  // Inhalt, rendern", visuell ist das aber zu 99.9 % unsichtbar (auf
+  // einem schwarzen Hintergrund mit 75 % Deckkraft entspricht das Alpha
+  // ~0,0075 auf einem ohnehin transparenten Pixel).
+  const opacity = isVisible ? 1 : 0.001;
+
   return (
     <div
-      className={`h-screen w-screen overflow-hidden p-2 select-none pointer-events-none transition-opacity duration-200 ${
-        isVisible ? "opacity-100" : "opacity-0"
-      }`}
+      className="h-screen w-screen overflow-hidden p-2 select-none pointer-events-none transition-opacity duration-200"
+      style={{ opacity }}
     >
       <div className="h-full w-full rounded-lg bg-black/75 backdrop-blur-md border border-white/10 shadow-2xl px-4 py-3 flex items-center">
         <div className="flex items-center gap-3 w-full min-w-0">
