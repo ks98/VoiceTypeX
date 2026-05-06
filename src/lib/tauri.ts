@@ -100,6 +100,19 @@ export async function ipcGetHardwareReport(): Promise<HardwareReport> {
   return invoke<HardwareReport>("get_hardware_report");
 }
 
+/**
+ * Diagnose: testet den Auto-Paste-Pfad direkt, ohne die normale Pipeline
+ * (kein Audio, kein STT, kein LLM). Wartet `delaySecs` Sekunden — User
+ * fokussiert in der Zwischenzeit das Ziel-Fenster — und sendet dann
+ * `text` per Clipboard + libei-Strg+V.
+ */
+export async function ipcTestAutoPaste(
+  text: string,
+  delaySecs: number,
+): Promise<void> {
+  return invoke("test_auto_paste", { text, delaySecs });
+}
+
 export async function ipcStartRecording(modeId: string): Promise<void> {
   return invoke("start_recording", { modeId });
 }

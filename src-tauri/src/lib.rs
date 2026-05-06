@@ -74,6 +74,7 @@ pub fn run() {
             ipc::diagnostics::get_session_info,
             ipc::diagnostics::get_whisper_backend,
             ipc::diagnostics::get_hardware_report,
+            ipc::diagnostics::test_auto_paste,
             ipc::secrets::get_provider_status,
             ipc::secrets::set_provider_key,
             ipc::secrets::delete_provider_key,

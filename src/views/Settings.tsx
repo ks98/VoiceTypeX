@@ -6,6 +6,7 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
 import Field from "../components/Field";
 import ApiKeysSection from "../components/ApiKeysSection";
 import TestTranscriptionSection from "../components/TestTranscriptionSection";
+import AutoPasteTestSection from "../components/AutoPasteTestSection";
 import { useSettingsStore } from "../store";
 import {
   ipcDownloadDefaultModel,
@@ -260,6 +261,8 @@ export default function Settings(): JSX.Element {
       </Field>
 
       <TestTranscriptionSection />
+
+      <AutoPasteTestSection />
 
       <ApiKeysSection />
     </div>
