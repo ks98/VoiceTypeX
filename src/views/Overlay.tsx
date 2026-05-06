@@ -59,6 +59,14 @@ export default function Overlay() {
       setPhase(next);
       setErrorMsg(event.payload.error ?? null);
 
+      // DIAGNOSE-MODUS: Overlay-Show temporaer deaktiviert, weil
+      // Verdacht besteht, dass das Overlay-Window beim show() den
+      // Fokus klaut und libei-Strg+V damit ins Overlay statt in die
+      // Ziel-App tippt. Wenn Auto-Paste mit deaktiviertem Overlay
+      // funktioniert, ist Overlay der Schuldige und wir bauen einen
+      // richtigen Fokus-neutralen Show-Pfad.
+      const OVERLAY_SHOW_DISABLED_FOR_DIAGNOSIS = true;
+
       if (next === "idle" || next === "error") {
         cancelHide();
         hideTimerRef.current = window.setTimeout(
@@ -68,7 +76,7 @@ export default function Overlay() {
           },
           next === "error" ? 2500 : 800,
         );
-      } else {
+      } else if (!OVERLAY_SHOW_DISABLED_FOR_DIAGNOSIS) {
         cancelHide();
         void showWindow();
       }
