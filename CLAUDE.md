@@ -174,6 +174,14 @@ und einen Phase-Text (*„Höre zu …"* / *„Transkribiere …"* / *„Verarbe
 zwischen Haupt-Fenster und Overlay über URL-Query-Parameter
 (`?window=overlay`) in `src/main.tsx`.
 
+**Hauptfenster startet versteckt** (`visible: false`). Erreichbar über
+Tray-Linksklick oder „Einstellungen öffnen". X-Knopf versteckt nur,
+beendet nicht — User kann es jederzeit wiederbringen. Der Grund: bei
+sichtbarem Hauptfenster fokussiert KDE Plasma's xdg-portal beim Trigger
+des globalen Shortcuts automatisch das App-Fenster und klaut damit den
+User-Fokus auf der Ziel-App; libei-Strg+V landet dann im VoiceTypeX-
+Hauptfenster statt in der Ziel-App. Versteckt = nichts zu fokussieren.
+
 ### 4.9 Wayland Auto-Paste via libei
 Auf Wayland kann eine App ohne Compositor-Hilfe keine Tastendrücke
 synthetisieren — `xdotool`/XTest sind X11-only, das ist Sicherheitsmodell,

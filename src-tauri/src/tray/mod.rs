@@ -73,6 +73,26 @@ pub fn setup_tray(app: &AppHandle) -> Result<()> {
             }
             _ => {}
         })
+        // Linksklick auf das Tray-Icon zeigt das Hauptfenster — Standard-
+        // Erwartung in Tray-Apps. Hauptfenster ist initial versteckt
+        // (siehe tauri.conf.json `visible: false`), damit Plasma's
+        // globaler Hotkey-Trigger nicht das App-Fenster fokussiert und
+        // damit den User-Fokus auf der Ziel-App klaut.
+        .on_tray_icon_event(|tray, event| {
+            use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                let app = tray.app_handle();
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
+        })
         .build(app)
         .map_err(|e| VoiceTypeError::Hotkey(format!("TrayIconBuilder::build: {e}")))?;
 

@@ -135,6 +135,20 @@ pub fn run() {
             // Tray, Hotkeys, State-Listener
             tray::setup_tray(&app_handle).map_err(|e| format!("setup_tray: {e}"))?;
 
+            // Hauptfenster X-Knopf soll verstecken statt beenden — sonst
+            // hat der User nach Close nur noch das Tray-Icon. App laeuft
+            // weiter, ueber Tray-Linksklick oder "Einstellungen oeffnen"
+            // wieder erreichbar.
+            if let Some(main_window) = app.get_webview_window("main") {
+                let main_clone = main_window.clone();
+                main_window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        let _ = main_clone.hide();
+                    }
+                });
+            }
+
             // Hotkey-Registrierung dispatch je nach Display-Server:
             //   - X11/Windows: tauri-plugin-global-shortcut (XGrabKey/RegisterHotKey)
             //   - Wayland: xdg-desktop-portal.GlobalShortcuts via ashpd
