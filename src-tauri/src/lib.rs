@@ -149,21 +149,15 @@ pub fn run() {
                 });
             }
 
-            // Overlay-Window: Cursor-Events durchlassen, damit Klicks
-            // *durch* das transparente Overlay zur darunter liegenden App
-            // gehen. Das Overlay ist bewusst dauerhaft sichtbar (kein
-            // show/hide-Toggle mehr) und steuert seine Visibility nur
-            // ueber CSS-Opacity — sonst klaut das show() den Tastatur-
-            // Fokus auf KDE Plasma 6 und libei-Strg+V landet im Overlay
-            // statt in der Ziel-App.
-            if let Some(overlay_window) = app.get_webview_window("overlay") {
-                if let Err(e) = overlay_window.set_ignore_cursor_events(true) {
-                    tracing::warn!(
-                        error = %e,
-                        "Overlay: set_ignore_cursor_events fehlgeschlagen — Klicks landen evtl. im Overlay statt der Ziel-App"
-                    );
-                }
-            }
+            // Overlay-Window: kein set_ignore_cursor_events mehr — das
+            // verursacht einen tao-Panic bei initial-hidden Windows
+            // (`visible: false`) auf Linux/GTK. Der Fokus-Schutz kommt
+            // jetzt durch das Backend-show/hide-Pattern: Overlay ist
+            // initial unsichtbar, wird nur bei Recording sichtbar
+            // gemacht und vor dem libei-Inject explizit wieder versteckt
+            // (siehe pipeline/mod.rs::finish_recording_and_inject). Das
+            // Frontend hat zusaetzlich `pointer-events-none` als CSS-
+            // Sicherheit, falls das Overlay mal sichtbar bleibt.
 
             // Hotkey-Registrierung dispatch je nach Display-Server:
             //   - X11/Windows: tauri-plugin-global-shortcut (XGrabKey/RegisterHotKey)
