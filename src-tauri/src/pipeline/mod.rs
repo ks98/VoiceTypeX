@@ -29,7 +29,7 @@ pub async fn execute_mode(app: AppHandle, ctx: Arc<AppContext>, mode: Mode) -> R
     if matches!(current, AppState::Recording) {
         finish_recording_and_inject(&app, &ctx, &mode).await
     } else if matches!(current, AppState::Idle) {
-        start_recording(&ctx, &mode).await
+        start_recording(&app, &ctx, &mode).await
     } else {
         tracing::warn!(state = %current.label(), "Mode-Trigger ignoriert (busy)");
         Ok(())
@@ -51,8 +51,7 @@ pub async fn handle_hotkey_pressed(app: AppHandle, ctx: Arc<AppContext>, mode: M
         );
         return Ok(());
     }
-    let _ = app;
-    start_recording(&ctx, &mode).await
+    start_recording(&app, &ctx, &mode).await
 }
 
 /// Hotkey-Release-Handler: stoppt Recording, durchlaeuft die Pipeline.
@@ -76,8 +75,23 @@ pub async fn handle_hotkey_released(
     finish_recording_and_inject(&app, &ctx, &mode).await
 }
 
-async fn start_recording(ctx: &Arc<AppContext>, mode: &Mode) -> Result<()> {
+async fn start_recording(
+    app: &AppHandle,
+    ctx: &Arc<AppContext>,
+    mode: &Mode,
+) -> Result<()> {
     ctx.state_bus.transition(AppState::Recording)?;
+
+    // Overlay sichtbar machen. Das `show()` klaut zwar kurz den
+    // Tastatur-Fokus auf KDE Plasma 6, aber das ist OK: der User spricht
+    // jetzt sowieso, kein Tastatur-Input nötig. Vor dem libei-Inject
+    // (`finish_recording_and_inject`) versteckt sich das Overlay wieder
+    // und der Fokus springt zurück zur Ziel-App, sodass libei dort tippt.
+    if let Some(overlay) = app.get_webview_window("overlay") {
+        if let Err(e) = overlay.show() {
+            tracing::warn!(error = %e, "Overlay show() fehlgeschlagen (nicht fatal)");
+        }
+    }
 
     if let Err(e) = play_start_cue().await {
         tracing::warn!(error = %e, "Start-Cue fehlgeschlagen (nicht fatal)");
@@ -227,9 +241,26 @@ async fn finish_recording_and_inject(
 
     if final_text.trim().is_empty() {
         tracing::warn!(mode = %mode.id, "Pipeline-Output leer — kein Inject");
+        // Overlay verstecken auch im Empty-Pfad, damit der Compositor-State
+        // konsistent bleibt.
+        if let Some(overlay) = app.get_webview_window("overlay") {
+            let _ = overlay.hide();
+        }
         ctx.state_bus.transition(AppState::Idle)?;
         return Ok(());
     }
+
+    // **Kritischer Schritt:** Overlay vor libei-Inject verstecken, damit
+    // der Tastatur-Fokus zur vorher fokussierten Ziel-App zurueckspringt.
+    // Ohne diesen Schritt landet libei-Strg+V im Overlay-Window selbst.
+    // Die 80 ms Pause gibt dem Compositor Zeit, den Fokus-Wechsel
+    // tatsaechlich zu vollziehen, bevor libei tippt.
+    if let Some(overlay) = app.get_webview_window("overlay") {
+        if let Err(e) = overlay.hide() {
+            tracing::warn!(error = %e, "Overlay hide() vor Inject fehlgeschlagen");
+        }
+    }
+    tokio::time::sleep(std::time::Duration::from_millis(80)).await;
 
     let injection_strategy = match mode.injection_method {
         crate::core::modes::InjectionMethod::Clipboard => InjectionStrategy::Clipboard,
@@ -252,7 +283,6 @@ async fn finish_recording_and_inject(
     ctx.state_bus.transition(AppState::Idle)?;
     tracing::info!(mode = %mode.id, len = final_text.len(), "Pipeline abgeschlossen");
 
-    let _ = app; // app wird perspektivisch fuer Erfolgs-Notifications genutzt
     Ok(())
 }
 
@@ -464,6 +494,34 @@ pub fn spawn_state_event_emitter(app: AppHandle) {
                 other => serde_json::json!({ "state": other.label() }),
             };
             let _ = app.emit("app://state", payload);
+        }
+    });
+}
+
+/// Spawnt einen Listener, der das Overlay-Window automatisch versteckt,
+/// sobald der State auf `Idle` (oder kurzzeitig `Error`) wechselt. Damit
+/// ist sichergestellt, dass das Overlay auch bei Pipeline-Fehlern
+/// (Transkriptions-Error, LLM-Failure) wieder verschwindet — und nicht
+/// nur im Happy-Path-Inject-Pfad. Das Sichtbar-Machen ist explizit in
+/// `start_recording` (siehe oben), nicht hier — sonst koennte das Window
+/// kurzzeitig wieder aufpoppen, wenn schon hidden, weil ein State-Event
+/// nochmal Recording meldet.
+pub fn spawn_overlay_state_listener(app: AppHandle) {
+    let mut rx = {
+        let state = app.state::<Arc<AppContext>>();
+        state.state_bus.subscribe()
+    };
+    tauri::async_runtime::spawn(async move {
+        loop {
+            if rx.changed().await.is_err() {
+                break;
+            }
+            let state = rx.borrow().clone();
+            if matches!(state, AppState::Idle | AppState::Error(_)) {
+                if let Some(overlay) = app.get_webview_window("overlay") {
+                    let _ = overlay.hide();
+                }
+            }
         }
     });
 }

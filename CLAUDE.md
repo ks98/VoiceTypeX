@@ -176,17 +176,26 @@ zwischen Haupt-Fenster und Overlay über URL-Query-Parameter
 
 **Pflicht-Disziplinen für Wayland-Fokus-Neutralität:**
 
-1. Das Overlay-Window ist **dauerhaft sichtbar** (`visible: true` in
-   tauri.conf). Ein `getCurrentWindow().show()` auf KDE Plasma 6 klaut
-   den Tastatur-Fokus, **auch** wenn `focus: false` in der Window-Config
-   steht — der Compositor respektiert den Hint nicht zuverlässig in
-   Kombination mit `alwaysOnTop`. Statt show/hide togglen wir nur die
-   CSS-Opacity zwischen 0 und 1.
+1. Das Overlay-Window ist initial **versteckt** (`visible: false`).
+   Sichtbarkeit wird **vom Backend** gesteuert: `start_recording`
+   ruft `overlay.show()`, **direkt vor dem libei-Inject** ruft die
+   Pipeline `overlay.hide()` (mit 80 ms Pause), damit der Tastatur-Fokus
+   zur Ziel-App zurückspringt. State-Listener versteckt das Overlay
+   außerdem bei `Idle`/`Error` als Cleanup-Pfad.
 2. `set_ignore_cursor_events(true)` wird im Setup-Hook für das Overlay
    aufgerufen — damit Klicks *durch* das (auch transparent gerenderte)
-   Window zur darunter liegenden App durchgehen. Ohne diesen Aufruf
-   würde das dauerhaft sichtbare Window oben links Klicks abfangen.
+   Window zur darunter liegenden App durchgehen, falls es mal sichtbar
+   bleibt.
 3. Render mit `pointer-events-none` als zusätzliche Sicherheit.
+
+**Warum nicht `visible: true` mit Opacity-Toggle?** Diese Variante haben
+wir probiert — KWin optimiert ein dauerhaft transparentes + nicht-
+interaktives Window weg, beim ersten Sichtbarmachen ist der Frame nicht
+aktiv. Der `opacity: 0.001`-Hack flackerte beim App-Start. Die jetzige
+Lösung (echtes `show()` / `hide()` mit explizitem Hide-vor-Inject) ist
+robust: das Overlay ist außer während Aufnahme/Transkription/Postproc
+konsequent unsichtbar, und der Fokus-Klau-Effekt durch `show()` wird
+durch das vor-dem-Inject `hide()` neutralisiert.
 
 **Hauptfenster startet versteckt** (`visible: false`). Erreichbar über
 Tray-Linksklick oder „Einstellungen öffnen". X-Knopf versteckt nur,
@@ -316,11 +325,10 @@ User können eigene Modi via TOML hinzufügen — keine Code-Änderung nötig.
   benutzen — die beiden Mechanismen sehen einander nicht. Wenn ein Feld einen
   echten Anwendungs-Default braucht, manueller `impl Default`.
 - **Niemals** auf Wayland (KDE Plasma) ein `alwaysOnTop`-Window per
-  `show()` / `hide()` togglen, wenn die App parallel libei zum Tippen
-  nutzt — der Compositor klaut beim `show()` den Tastatur-Fokus und
-  libei-Events landen im falschen Fenster. Stattdessen: Window
-  dauerhaft sichtbar lassen, Sichtbarkeit per CSS-Opacity steuern, plus
-  `set_ignore_cursor_events(true)` (siehe §4.8).
+  `show()` zeigen und libei-Inject *währenddessen* ausführen — `show()`
+  klaut den Tastatur-Fokus, libei-Events landen im Overlay statt der
+  Ziel-App. Stattdessen: vor dem libei-Inject explizit `overlay.hide()`
+  + 80 ms Pause, damit Fokus zurückspringt (siehe §4.8).
 
 ---
 

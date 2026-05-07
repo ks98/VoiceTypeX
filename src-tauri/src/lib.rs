@@ -26,8 +26,8 @@ use crate::injection::{make_default_injector, TextInjector};
 #[cfg(target_os = "linux")]
 use crate::pipeline::spawn_wayland_hotkey_session;
 use crate::pipeline::{
-    register_mode_hotkeys, spawn_state_event_emitter, spawn_tray_recording_pulse,
-    spawn_tray_state_listener,
+    register_mode_hotkeys, spawn_overlay_state_listener, spawn_state_event_emitter,
+    spawn_tray_recording_pulse, spawn_tray_state_listener,
 };
 use crate::transcription::local::LocalTranscriber;
 use crate::transcription::Transcriber;
@@ -193,6 +193,7 @@ pub fn run() {
             spawn_tray_state_listener(app_handle.clone());
             spawn_tray_recording_pulse(app_handle.clone());
             spawn_state_event_emitter(app_handle.clone());
+            spawn_overlay_state_listener(app_handle.clone());
 
             tracing::info!(
                 display_server = %session.display_server,
