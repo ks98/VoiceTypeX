@@ -122,9 +122,10 @@ Zwei Traits, ausgewählt zur Laufzeit:
 - `HotkeyManager` — Implementierungen: X11/Windows
   (tauri-plugin-global-shortcut), Wayland (xdg-desktop-portal.GlobalShortcuts
   via ashpd), macOS (Stub).
-- `TextInjector` — aktuell ein einziger `ClipboardFallbackInjector` mit
-  Session-Awareness; auf X11/Windows mit Auto-Paste (enigo Ctrl+V), auf
-  Wayland ohne Auto-Paste (User drückt Strg+V manuell — bis Phase 5 Teil 2).
+- `TextInjector` — `ClipboardFallbackInjector` für X11/Windows
+  (enigo Ctrl+V), `WaylandLibeiInjector` für Wayland (libei via
+  xdg-desktop-portal.RemoteDesktop, siehe §4.9). Auswahl in
+  `make_default_injector` per Plattform-Detection.
 
 Linux-Detection: `WAYLAND_DISPLAY` vs. `DISPLAY` zur Laufzeit.
 
@@ -182,11 +183,8 @@ zwischen Haupt-Fenster und Overlay über URL-Query-Parameter
    Pipeline `overlay.hide()` (mit 80 ms Pause), damit der Tastatur-Fokus
    zur Ziel-App zurückspringt. State-Listener versteckt das Overlay
    außerdem bei `Idle`/`Error` als Cleanup-Pfad.
-2. `set_ignore_cursor_events(true)` wird im Setup-Hook für das Overlay
-   aufgerufen — damit Klicks *durch* das (auch transparent gerenderte)
-   Window zur darunter liegenden App durchgehen, falls es mal sichtbar
-   bleibt.
-3. Render mit `pointer-events-none` als zusätzliche Sicherheit.
+2. CSS `pointer-events-none` auf dem Overlay-Root-Element, damit Klicks
+   während der kurzen Sichtbarkeitsphase nicht abgefangen werden.
 
 **Warum nicht `visible: true` mit Opacity-Toggle?** Diese Variante haben
 wir probiert — KWin optimiert ein dauerhaft transparentes + nicht-
@@ -196,6 +194,14 @@ Lösung (echtes `show()` / `hide()` mit explizitem Hide-vor-Inject) ist
 robust: das Overlay ist außer während Aufnahme/Transkription/Postproc
 konsequent unsichtbar, und der Fokus-Klau-Effekt durch `show()` wird
 durch das vor-dem-Inject `hide()` neutralisiert.
+
+**Warum nicht zusätzlich `set_ignore_cursor_events(true)`?** Das war in
+einer Zwischen-Iteration drin (für die Opacity-Toggle-Variante mit
+dauerhaft sichtbarem Window). Auf einem initial-hidden Window triggert
+der Aufruf einen tao-Panic in der GTK-EventLoop (`Option::unwrap() on
+None` in `tao::platform_impl::linux::event_loop:457`). Mit dem
+Backend-show/hide-Pattern reicht `pointer-events-none` als CSS-Schutz
+vollkommen.
 
 **Hauptfenster startet versteckt** (`visible: false`). Erreichbar über
 Tray-Linksklick oder „Einstellungen öffnen". X-Knopf versteckt nur,
@@ -329,6 +335,12 @@ User können eigene Modi via TOML hinzufügen — keine Code-Änderung nötig.
   klaut den Tastatur-Fokus, libei-Events landen im Overlay statt der
   Ziel-App. Stattdessen: vor dem libei-Inject explizit `overlay.hide()`
   + 80 ms Pause, damit Fokus zurückspringt (siehe §4.8).
+- **Niemals** `webview_window.set_ignore_cursor_events(true)` auf einem
+  initial-hidden Window (`visible: false`) aufrufen — triggert
+  tao-Panic in der Linux-GTK-EventLoop. Wenn pointer-passthrough nötig
+  ist, das Window erst zeigen und *dann* den Aufruf machen — oder per
+  CSS `pointer-events-none` lösen (das ist ohnehin robuster und
+  plattformneutral).
 
 ---
 
@@ -361,25 +373,23 @@ blind hinzufügen.
 
 ## 11. Roadmap
 
-### Wayland Auto-Paste — Folge-Verbesserungen
-Phase 5 Teil 2 (libei-Auto-Paste auf Wayland) ist umgesetzt für KDE
-Plasma 6 / GNOME 46+ — Architektur und Pflicht-Disziplinen siehe §4.9.
-Offen sind zwei Folge-Stücke:
-
-- **`restore_token` persistieren** in `~/.config/.../wayland_session.json`
-  (chmod 0600), damit der Permission-Dialog nicht nach jedem App-Restart
-  erneut auftaucht. Aktuell wird der Token vom Server entgegengenommen,
-  aber nicht auf Disk gespeichert.
-- **`wtype`-Fallback** für Hyprland und Sway/wlroots (Compositors ohne
-  RemoteDesktop-Portal-Support). Detection via D-Bus-Introspection auf
-  `ConnectToEIS`; bei Nicht-Verfügbarkeit Sub-Prozess-Aufruf von `wtype`.
-
 ### Phase 6 — macOS + Distribution-Hardening
 - macOS-Implementierungen (CGEvent für Inject, NSStatusItem für Tray).
 - Signierte Installer (Apple Notarization, Windows Authenticode).
 - Auto-Update via tauri-plugin-updater mit signierten Manifesten.
 
 ### Optional / nice-to-have
+- **Wayland `restore_token` persistieren** in `~/.config/.../wayland_session.json`
+  (chmod 0600), damit der RemoteDesktop-Permission-Dialog nicht nach
+  jedem App-Restart erneut auftaucht. Aktuell wird der Token vom Server
+  entgegengenommen, aber nicht auf Disk gespeichert. Nicht-blockierend —
+  Auto-Paste funktioniert auch ohne, der Dialog kommt nur einmal pro
+  App-Session.
+- **`wtype`-Fallback** für Hyprland und Sway/wlroots (Compositors ohne
+  `xdg-desktop-portal.RemoteDesktop`-Support). Detection via
+  D-Bus-Introspection auf `ConnectToEIS`; bei Nicht-Verfügbarkeit
+  Sub-Prozess-Aufruf von `wtype`. Nicht-blockierend für KDE Plasma 6 /
+  GNOME 46+ User.
 - **Live-Inject-Modus** für Exaktes-Diktat (Wörter werden während des
   Sprechens getippt; nur X11/Windows + `processing = none` +
   `injection_method = keystrokes`).
