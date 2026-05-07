@@ -1,7 +1,11 @@
 # VoiceTypeX — Architektur & Konventionen
 
-> Lebende Referenz für die laufende Entwicklung. Phasen 1–4 + 5-Teil-1 sind
-> implementiert; offene Arbeit steht in §11 "Roadmap".
+> Lebende Referenz für die laufende Entwicklung. Auf Linux/Wayland (KDE
+> Plasma 6) + Windows + X11 funktional komplett — Auto-Paste über
+> `xdg-desktop-portal.RemoteDesktop` + libei. Settings und
+> RemoteDesktop-Token persistent. Offen: macOS-Port + Distribution-
+> Signing (Phase 6) und `wtype`-Fallback für Hyprland/Sway. Details
+> in §11 „Roadmap".
 
 ---
 
@@ -398,9 +402,6 @@ blind hinzufügen.
   D-Bus-Introspection auf `ConnectToEIS`; bei Nicht-Verfügbarkeit
   Sub-Prozess-Aufruf von `wtype`. Nicht-blockierend für KDE Plasma 6 /
   GNOME 46+ User.
-- **Live-Inject-Modus** für Exaktes-Diktat (Wörter werden während des
-  Sprechens getippt; nur X11/Windows + `processing = none` +
-  `injection_method = keystrokes`).
 
 ### Bekannte Limitierungen ohne geplanten Fix
 - xAI's STT-API hat keine Sprach-Erzwingung — die Erkennung ist
