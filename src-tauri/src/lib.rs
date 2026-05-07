@@ -116,7 +116,8 @@ pub fn run() {
             let model_path = model_dir.join("ggml-large-v3-turbo-q5_0.bin");
             let transcriber: Arc<dyn Transcriber> =
                 Arc::new(LocalTranscriber::new(model_path.clone()));
-            let injector_box = make_default_injector(app_handle.clone());
+            let wayland_token_path = config_dir.join("wayland_session.json");
+            let injector_box = make_default_injector(app_handle.clone(), wayland_token_path);
             let injector: Arc<dyn TextInjector> = Arc::from(injector_box);
 
             // Settings persistent laden — fehlt die Datei, kommen Defaults

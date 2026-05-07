@@ -23,6 +23,7 @@ use crate::core::error::{Result, VoiceTypeError};
 use crate::injection::libei_worker::{run_libei_worker, KeyCommand};
 use crate::injection::{InjectOptions, InjectorCapabilities, TextInjector};
 use async_trait::async_trait;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tauri_plugin_clipboard_manager::ClipboardExt;
@@ -49,13 +50,19 @@ enum SessionState {
 pub struct WaylandLibeiInjector {
     app_handle: tauri::AppHandle,
     session: Arc<Mutex<SessionState>>,
+    /// Pfad fuer den `restore_token` (~/.config/.../wayland_session.json).
+    /// Wird beim ersten erfolgreichen Setup geschrieben und bei naechsten
+    /// App-Starts gelesen — dann fragt das Portal nicht mehr nach
+    /// Permission, weil der Token gueltig ist.
+    token_path: PathBuf,
 }
 
 impl WaylandLibeiInjector {
-    pub fn new(app_handle: tauri::AppHandle) -> Self {
+    pub fn new(app_handle: tauri::AppHandle, token_path: PathBuf) -> Self {
         Self {
             app_handle,
             session: Arc::new(Mutex::new(SessionState::Uninitialized)),
+            token_path,
         }
     }
 
@@ -73,20 +80,38 @@ impl WaylandLibeiInjector {
             SessionState::Uninitialized => {}
         }
 
-        let (restore_token, eis_fd) = match build_remote_desktop_session().await {
-            Ok(v) => v,
-            Err(e) => {
-                tracing::warn!(error = %e, "RemoteDesktop-Session-Setup fehlgeschlagen — Fallback auf Clipboard+Notification");
-                *guard = SessionState::Failed {
-                    reason: e.clone(),
-                };
-                return None;
-            }
-        };
+        // Vorhandenen Token laden (kein Permission-Dialog beim Start,
+        // wenn KWin/Mutter den Token akzeptiert).
+        let prior_token = load_restore_token(&self.token_path);
+        if prior_token.is_some() {
+            tracing::info!("RemoteDesktop: nutze gespeicherten restore_token");
+        }
+
+        let (restore_token, eis_fd) =
+            match build_remote_desktop_session(prior_token.as_deref()).await {
+                Ok(v) => v,
+                Err(e) => {
+                    tracing::warn!(error = %e, "RemoteDesktop-Session-Setup fehlgeschlagen — Fallback auf Clipboard+Notification");
+                    *guard = SessionState::Failed {
+                        reason: e.clone(),
+                    };
+                    return None;
+                }
+            };
         tracing::info!(
             has_token = restore_token.is_some(),
             "RemoteDesktop-Session aufgebaut + EIS-FD bezogen"
         );
+
+        // Neuen Token persistieren, falls der Compositor einen geliefert
+        // hat. Best-effort — wenn der Disk-Write fehlschlaegt, laeuft die
+        // App weiter, der User sieht dann beim naechsten Start halt nochmal
+        // den Permission-Dialog.
+        if let Some(token) = &restore_token {
+            if let Err(e) = save_restore_token(&self.token_path, token) {
+                tracing::warn!(error = %e, "restore_token konnte nicht persistiert werden");
+            }
+        }
 
         // Worker spawnen + warten bis Keyboard ready (oder Timeout/Fail).
         let (cmd_tx, cmd_rx) = std::sync::mpsc::channel::<KeyCommand>();
@@ -201,16 +226,13 @@ impl WaylandLibeiInjector {
     }
 }
 
-/// Baut eine `xdg-desktop-portal.RemoteDesktop`-Session auf:
-///   1. `RemoteDesktop::new()` → Proxy fuer das Portal.
-///   2. `create_session()` → Session-Handle.
-///   3. `select_devices(KEYBOARD, persist_mode=ExplicitlyRevoked)` → fragt
-///      Tastatur-Permission an, mit Wunsch auf permanenten Token (= bis
-///      User die Erlaubnis aktiv widerruft).
-///   4. `start(...)` → Compositor zeigt Permission-Dialog (wenn nicht
-///      schon via restore_token genehmigt). Returnet `restore_token`.
-///   5. `connect_to_eis(&session)` → liefert den EIS-File-Descriptor.
+/// Baut eine `xdg-desktop-portal.RemoteDesktop`-Session auf. Falls
+/// `prior_token` existiert, wird er in `select_devices` durchgereicht —
+/// dann fragt der Compositor nicht erneut nach Permission, vorausgesetzt
+/// der Token ist noch gueltig (User hat die Erlaubnis nicht widerrufen,
+/// Compositor wurde nicht zwischenzeitlich neu gestartet).
 async fn build_remote_desktop_session(
+    prior_token: Option<&str>,
 ) -> std::result::Result<(Option<String>, std::os::fd::OwnedFd), String> {
     use ashpd::desktop::remote_desktop::{DeviceType, RemoteDesktop};
     use ashpd::desktop::PersistMode;
@@ -226,7 +248,7 @@ async fn build_remote_desktop_session(
         .select_devices(
             &session,
             DeviceType::Keyboard.into(),
-            None, // restore_token kommt in 5.2.C
+            prior_token,
             PersistMode::ExplicitlyRevoked,
         )
         .await
@@ -246,4 +268,47 @@ async fn build_remote_desktop_session(
         .map_err(|e| format!("connect_to_eis: {e}"))?;
 
     Ok((restore_token, eis_fd))
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct StoredToken {
+    restore_token: String,
+}
+
+/// Liest den persistierten `restore_token` aus `path`. Liefert `None`
+/// bei fehlender Datei oder Parse-Fehler — beides ist nicht-fatal,
+/// es kommt halt der Permission-Dialog wieder.
+fn load_restore_token(path: &std::path::Path) -> Option<String> {
+    if !path.exists() {
+        return None;
+    }
+    let content = std::fs::read_to_string(path).ok()?;
+    let stored: StoredToken = serde_json::from_str(&content).ok()?;
+    Some(stored.restore_token)
+}
+
+/// Schreibt den `restore_token` als JSON nach `path`. Erstellt das
+/// Parent-Verzeichnis bei Bedarf. Auf Linux mit chmod 0600 — der Token
+/// ist zwar kein Secret im Sinne von API-Key, aber das File-Permission-
+/// Setup ist konsistent mit dem Secrets-Storage, weil das Token einer
+/// erteilten Tastatur-Inject-Erlaubnis entspricht.
+fn save_restore_token(path: &std::path::Path, token: &str) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| VoiceTypeError::Injection(format!("create_dir: {e}")))?;
+    }
+    let stored = StoredToken {
+        restore_token: token.to_string(),
+    };
+    let json = serde_json::to_string_pretty(&stored)
+        .map_err(|e| VoiceTypeError::Injection(format!("json: {e}")))?;
+    std::fs::write(path, json)
+        .map_err(|e| VoiceTypeError::Injection(format!("write: {e}")))?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+    }
+    Ok(())
 }

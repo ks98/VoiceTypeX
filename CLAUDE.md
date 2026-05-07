@@ -262,6 +262,14 @@ brauchen einen `wtype`-Sub-Prozess-Fallback (siehe §11). Mindestversionen:
 Session aus anderen Gründen scheitert, fällt der Injector silent auf
 Clipboard + Notification *„Drücke Strg+V"* zurück. Kein harter Fehler.
 
+**`restore_token`-Persistenz:** Der vom Compositor zurückgegebene
+`restore_token` wird in `~/.config/.../wayland_session.json` (chmod
+0600) gespeichert und bei nächsten App-Starts in `select_devices`
+durchgereicht. Damit kommt der Permission-Dialog **nur einmal**, beim
+allerersten Inject. Bei Token-Reject (z.B. nach Compositor-Neustart)
+fällt das Setup auf den normalen Permission-Flow zurück und schreibt
+einen frischen Token.
+
 ---
 
 ## 5. Verifizierte Provider-Protokolle
@@ -385,12 +393,6 @@ blind hinzufügen.
 - Auto-Update via tauri-plugin-updater mit signierten Manifesten.
 
 ### Optional / nice-to-have
-- **Wayland `restore_token` persistieren** in `~/.config/.../wayland_session.json`
-  (chmod 0600), damit der RemoteDesktop-Permission-Dialog nicht nach
-  jedem App-Restart erneut auftaucht. Aktuell wird der Token vom Server
-  entgegengenommen, aber nicht auf Disk gespeichert. Nicht-blockierend —
-  Auto-Paste funktioniert auch ohne, der Dialog kommt nur einmal pro
-  App-Session.
 - **`wtype`-Fallback** für Hyprland und Sway/wlroots (Compositors ohne
   `xdg-desktop-portal.RemoteDesktop`-Support). Detection via
   D-Bus-Introspection auf `ConnectToEIS`; bei Nicht-Verfügbarkeit

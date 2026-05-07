@@ -56,17 +56,25 @@ pub trait TextInjector: Send + Sync {
 }
 
 /// Liefert den Default-Injector. Plattform-Routing:
-///   - Linux + Wayland → `WaylandLibeiInjector` (Composite: Clipboard + libei
-///     in 5.2.B; vorerst Session-Aufbau + Notification wie bisher).
+///   - Linux + Wayland → `WaylandLibeiInjector` (Clipboard + libei via
+///     xdg-desktop-portal.RemoteDesktop, siehe §4.9).
 ///   - sonst → `ClipboardFallbackInjector` (X11/Windows mit Auto-Paste,
 ///     macOS Stub).
 ///
-/// `app_handle` wird fuer Clipboard, Notifications und Tauri-State benoetigt.
-pub fn make_default_injector(app_handle: tauri::AppHandle) -> Box<dyn TextInjector> {
+/// `wayland_token_path` ist der Pfad zum persistierten `restore_token`
+/// (auf Nicht-Wayland-Plattformen ungenutzt).
+pub fn make_default_injector(
+    app_handle: tauri::AppHandle,
+    #[cfg_attr(not(target_os = "linux"), allow(unused_variables))]
+    wayland_token_path: std::path::PathBuf,
+) -> Box<dyn TextInjector> {
     #[cfg(target_os = "linux")]
     {
         if crate::core::session::is_wayland() {
-            return Box::new(linux_wayland::WaylandLibeiInjector::new(app_handle));
+            return Box::new(linux_wayland::WaylandLibeiInjector::new(
+                app_handle,
+                wayland_token_path,
+            ));
         }
     }
     Box::new(clipboard_fallback::ClipboardFallbackInjector::new(
