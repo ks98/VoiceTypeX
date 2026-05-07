@@ -145,6 +145,12 @@ parallel sind unzuverlässig, daher diese Reihenfolge. Keys werden **nie**
 geloggt, **nie** in Fehlerberichten serialisiert, **nie** ins Frontend
 exponiert (alle Provider-Requests gehen durch das Rust-Backend).
 
+**User-Settings** (PTT-Mode, Whisper-Slot, Audio-Gerät, Auto-Start, …)
+liegen in `~/.config/.../settings.json` (kein Secret, chmod 0644).
+`Settings::load_or_default(path)` beim App-Start, `Settings::save(path)`
+nach jedem Mutations-IPC. Bei korruptem JSON Fallback auf Defaults
+mit Log-Warning — App startet trotzdem sauber.
+
 ### 4.5 Clipboard als Default-Inject-Strategie
 Save → Set → Paste → Restore (X11/Windows). Auf Wayland: nur Set + Notification
 ("Drücke Ctrl+V"). Direkte Tastendruck-Injection (`injection_method =
@@ -393,9 +399,6 @@ blind hinzufügen.
 - **Live-Inject-Modus** für Exaktes-Diktat (Wörter werden während des
   Sprechens getippt; nur X11/Windows + `processing = none` +
   `injection_method = keystrokes`).
-- **Settings-Persistenz** wirklich nutzen — aktuell gibt es nur Backend-State,
-  jeder App-Start resettet auf Default. Lösung: tauri-plugin-store wirklich
-  einsetzen (Read in `setup`, Write-on-Update).
 
 ### Bekannte Limitierungen ohne geplanten Fix
 - xAI's STT-API hat keine Sprach-Erzwingung — die Erkennung ist

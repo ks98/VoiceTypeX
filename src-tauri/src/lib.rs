@@ -89,6 +89,7 @@ pub fn run() {
                 .map_err(|e| format!("app_config_dir: {e}"))?;
             let modes_dir = config_dir.join("modes");
             let model_dir = config_dir.join("models");
+            let settings_path = config_dir.join("settings.json");
             std::fs::create_dir_all(&model_dir)?;
             std::fs::create_dir_all(&config_dir)?;
 
@@ -118,13 +119,18 @@ pub fn run() {
             let injector_box = make_default_injector(app_handle.clone());
             let injector: Arc<dyn TextInjector> = Arc::from(injector_box);
 
+            // Settings persistent laden — fehlt die Datei, kommen Defaults
+            // (siehe core/config.rs::Settings::load_or_default).
+            let initial_settings = Settings::load_or_default(&settings_path);
+
             let ctx = Arc::new(AppContext {
                 state_bus,
                 modes: Arc::clone(&modes_registry),
                 recorder_slot: Arc::new(Mutex::new(None)),
                 transcriber,
                 injector,
-                settings: Arc::new(RwLock::new(Settings::default())),
+                settings: Arc::new(RwLock::new(initial_settings)),
+                settings_path,
                 log_buffer: log_buffer.clone(),
                 model_dir,
                 modes_dir,

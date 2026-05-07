@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! User-Settings (separat von Modi).
 //!
-//! Persistenz: tauri-plugin-store legt das im app_data_dir/settings.json ab,
-//! aber die in-process Repraesentation ist diese Struktur. Der Store wird
-//! ueber IPC-Commands aus settings.rs synchronisiert.
+//! Persistenz: JSON-File in `~/.config/.../settings.json` (chmod 0644 —
+//! kein Secret). Beim App-Start `load_or_default(path)`, nach jedem
+//! Mutations-IPC-Aufruf `save(path)`. Bei korruptem JSON faellt der
+//! Loader auf `Settings::default()` zurueck (mit Log-Warning) — User
+//! verliert einmalig die Settings, App startet aber sauber.
 
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
@@ -82,6 +85,46 @@ impl Default for Settings {
 
 fn default_ptt_mode() -> bool {
     true
+}
+
+impl Settings {
+    /// Liest die Settings aus `path` oder gibt `Settings::default()`
+    /// zurueck, wenn die Datei fehlt oder korrupt ist. Nicht-fatal —
+    /// loggt Warnings, App soll weiterlaufen.
+    pub fn load_or_default(path: &Path) -> Self {
+        if !path.exists() {
+            tracing::info!(path = %path.display(), "Settings-Datei nicht vorhanden — Defaults");
+            return Self::default();
+        }
+        match std::fs::read_to_string(path) {
+            Ok(content) => match serde_json::from_str::<Settings>(&content) {
+                Ok(settings) => {
+                    tracing::info!(path = %path.display(), "Settings aus Disk geladen");
+                    settings
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "Settings-JSON-Parse fehlgeschlagen — nutze Defaults");
+                    Self::default()
+                }
+            },
+            Err(e) => {
+                tracing::warn!(error = %e, "Settings-Read fehlgeschlagen — nutze Defaults");
+                Self::default()
+            }
+        }
+    }
+
+    /// Schreibt die Settings als JSON nach `path`. Erstellt das
+    /// Parent-Verzeichnis bei Bedarf.
+    pub fn save(&self, path: &Path) -> Result<(), String> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("create_dir: {e}"))?;
+        }
+        let json = serde_json::to_string_pretty(self).map_err(|e| format!("json: {e}"))?;
+        std::fs::write(path, json).map_err(|e| format!("write: {e}"))?;
+        tracing::debug!(path = %path.display(), "Settings auf Disk geschrieben");
+        Ok(())
+    }
 }
 
 fn default_whisper_slot() -> String {

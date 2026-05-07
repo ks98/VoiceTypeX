@@ -22,6 +22,9 @@ pub struct AppContext {
     pub transcriber: Arc<dyn Transcriber>,
     pub injector: Arc<dyn TextInjector>,
     pub settings: Arc<RwLock<Settings>>,
+    /// Persistenz-Pfad fuer Settings (`~/.config/.../settings.json`).
+    /// Nach jedem Mutations-IPC `Settings::save(&settings_path)` aufrufen.
+    pub settings_path: PathBuf,
     pub log_buffer: LogRingBuffer,
     pub model_dir: PathBuf,
     pub modes_dir: PathBuf,

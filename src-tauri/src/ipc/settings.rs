@@ -28,7 +28,7 @@ pub async fn set_settings(
     settings: Settings,
 ) -> IpcResult<()> {
     *state.settings.write() = settings;
-    Ok(())
+    persist_settings(&state)
 }
 
 #[tauri::command]
@@ -42,7 +42,7 @@ pub async fn set_whisper_model_path(
     path: String,
 ) -> IpcResult<()> {
     state.settings.write().whisper_model_path = Some(path);
-    Ok(())
+    persist_settings(&state)
 }
 
 /// Lade das im Settings-Slot konfigurierte Default-Whisper-Modell nach
@@ -82,5 +82,15 @@ pub async fn download_default_model(
 
     let path_str = result.to_string_lossy().into_owned();
     state.settings.write().whisper_model_path = Some(path_str.clone());
+    let _ = persist_settings(&state); // Best-effort, Download-Result trotzdem zurueckgeben
     Ok(path_str)
+}
+
+/// Schreibt den aktuellen Settings-Snapshot auf Disk. Wird nach jedem
+/// Mutations-IPC aufgerufen, damit User-Aenderungen App-Restart-fest sind.
+fn persist_settings(state: &tauri::State<'_, Arc<AppContext>>) -> IpcResult<()> {
+    let snapshot = state.settings.read().clone();
+    snapshot
+        .save(&state.settings_path)
+        .map_err(|e| format!("Settings-Persist: {e}"))
 }
