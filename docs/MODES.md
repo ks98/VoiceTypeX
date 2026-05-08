@@ -37,7 +37,11 @@ cloud_stt_provider = "xai"     # "xai" | "openai" | "groq" | "deepgram"
 
 # Nur wenn processing = "cloud":
 cloud_llm_provider = "xai"     # "xai" | "openai" | "anthropic"
-cloud_llm_model = "grok-4"     # provider-spezifischer Model-Identifier
+cloud_llm_model = "grok-4-fast-non-reasoning"
+                               # provider-spezifischer Model-Identifier
+                               # xAI-Default ist grok-4-fast-non-reasoning
+                               # (kein Reasoning-Overhead, ~6× günstiger
+                               # als grok-4 bei Postprocessing-Aufgaben)
 
 # Nur wenn processing = "local":
 local_llm_model = "qwen2.5:7b" # Ollama-Model-Tag
@@ -74,6 +78,17 @@ erscheint im UI-Logs-View.
 `CommandOrControl` wird auf macOS als `Cmd` interpretiert, sonst als
 `Ctrl`.
 
+## Push-to-Talk vs. Toggle
+
+Der Hotkey-Modus ist global konfiguriert (Settings: `ptt_mode`), nicht
+pro Modus:
+
+- **Push-to-Talk (Default):** Hotkey **gedrückt halten** = Aufnahme,
+  loslassen = Pipeline läuft an.
+- **Toggle:** Hotkey **drücken** = Aufnahme an, **drücken** = aus. Nützlich
+  als Fallback für Wayland-Compositors mit unzuverlässigem Release-
+  Signal.
+
 ## Beispiel: Nutzer-eigener Modus
 
 ```toml
@@ -86,7 +101,7 @@ transcription = "cloud"
 processing = "cloud"
 cloud_stt_provider = "xai"
 cloud_llm_provider = "xai"
-cloud_llm_model = "grok-4"
+cloud_llm_model = "grok-4-fast-non-reasoning"
 language = "de"
 injection_method = "clipboard"
 system_prompt = """

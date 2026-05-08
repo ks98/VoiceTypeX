@@ -1,110 +1,111 @@
 # VoiceTypeX
 
-Plattformübergreifendes Desktop-Werkzeug, das Diktate in Text verwandelt und ihn an der aktuellen Cursor-Position einfügt — überall, in jeder App.
+Plattformübergreifendes Desktop-Werkzeug, das Diktate in Text verwandelt
+und ihn an der aktuellen Cursor-Position einfügt — überall, in jeder App.
+Hotkey halten, sprechen, loslassen, fertig.
 
-**Status:** Phase 2 — xAI End-to-End plus lokales STT (Windows + Linux/X11). Wayland/macOS folgen in späteren Phasen.
+## Status
+
+Funktional komplett auf **Linux/Wayland (KDE Plasma 6 + GNOME 46+)**,
+**Linux/X11** und **Windows**. Auto-Paste auf Wayland über
+`xdg-desktop-portal.RemoteDesktop` + libei. Settings und Wayland-
+Permission-Token persistent. Offen: macOS-Port mit Code-Signing
+(roadmapped, kein ETA) und `wtype`-Fallback für Hyprland/Sway.
 
 ## Kernablauf
 
-1. Globaler Hotkey startet die Aufnahme.
-2. Audio wird vom Standard-Mikrofon aufgenommen, mit Tray-Statusanzeige und kurzem Hinweiston.
-3. Audio wird transkribiert (lokal via whisper.cpp **oder** Cloud-STT).
-4. Transkript wird durch ein LLM nach dem aktiven **Modus** nachbearbeitet (lokal via Ollama **oder** Cloud-LLM). Der Modus "Exaktes Diktat" überspringt diesen Schritt.
-5. Finaler Text wird an der Cursor-Position eingefügt.
+1. Globaler Hotkey **gedrückt halten** → Aufnahme startet, Tray-Icon
+   pulsiert rot, Overlay zeigt *„Höre zu …"*.
+2. Sprich, was du diktiert haben willst.
+3. Hotkey **loslassen** → Audio wird transkribiert (lokal via
+   whisper.cpp **oder** Cloud-STT), optional durch ein LLM nach dem
+   aktiven **Modus** nachbearbeitet (lokal via Ollama **oder**
+   Cloud-LLM), und an der Cursor-Position eingefügt.
 
-## Tech-Stack (kurz)
+Sechs Modi sind vorinstalliert: *Exaktes Diktat*, *Korrigierendes
+Diktat*, *Förmliche E-Mail*, *Slack/Teams*, *GitHub-Issue*,
+*Claude-Code-Anweisung*. Eigene Modi via TOML — siehe
+[`docs/MODES.md`](docs/MODES.md).
 
-- **Frontend:** React 18 + TypeScript + Vite + TailwindCSS + shadcn/ui + Zustand
-- **Backend:** Rust (Tauri 2, tokio)
-- **Audio:** cpal + hound + rubato (Resampling) + rodio (Cues)
-- **Lokales STT:** whisper-rs mit `ggml-large-v3-turbo-q5_0` (~547 MB, ~5–7 % WER auf deutschen Diktaten)
+## Tech-Stack (kompakt)
+
+- **App-Framework:** Tauri 2 (stable)
+- **Backend:** Rust 2021+ mit tokio
+- **Frontend:** React 18 + TypeScript strict + Vite + TailwindCSS +
+  shadcn/ui + Zustand
+- **Audio:** cpal + hound (WAV) + rubato (Sinc-Resampling auf 16 kHz)
+- **Lokales STT:** whisper-rs mit `ggml-large-v3-turbo-q5_0` (~547 MB,
+  ~5–7 % WER auf deutschen Diktaten); Cargo-Feature-Backends
+  (`fast-cpu`/OpenBLAS = Default, `gpu-vulkan`/`gpu-cuda`/`gpu-metal`/
+  `gpu-coreml` opt-in)
 - **Lokales LLM:** Ollama via HTTP
-- **Cloud (BYOK):** xAI (STT + Grok), OpenAI, Anthropic, Groq, Deepgram — API-Keys liegen ausschließlich im OS-Keychain via `keyring`
-- **Config:** TOML, Hot-Reload via `notify`
-- **Repo-Hosting & CI:** GitLab (`.gitlab-ci.yml`)
+- **Cloud-Provider (BYOK):** xAI (STT + Grok, Default `grok-4-fast-non-reasoning`),
+  OpenAI Whisper + GPT, Groq Whisper, Deepgram, Anthropic Claude
+- **Wayland Auto-Paste:** ashpd (RemoteDesktop-Portal) + reis (libei)
+- **Secrets:** `~/.config/.../secrets.json` (chmod 0600) als Source of
+  Truth, OS-Keychain best-effort Mirror (Linux-Setups mit
+  gnome-keyring + kwallet sind unzuverlässig)
+- **Repo & CI:** GitLab (`.gitlab-ci.yml`)
 
-Detaillierte Architektur-Entscheidungen: siehe [`CLAUDE.md`](CLAUDE.md) und [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (entsteht im Verlauf von Phase 1).
+Architektur-Tiefe: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+Konventionen + Mindset: [`CLAUDE.md`](CLAUDE.md).
 
 ## Bauen (lokal)
 
-Voraussetzungen:
-- Rust stable (über `rustup`; `rust-toolchain.toml` pinnt den Channel)
+**Voraussetzungen:**
+- Rust stable über `rustup` (`rust-toolchain.toml` pinnt den Channel)
 - Node.js 20+ und `pnpm` (`corepack enable && corepack prepare pnpm@latest --activate`)
-- Linux: siehe [`docs/PLATFORMS.md`](docs/PLATFORMS.md) für die vollständige
-  Paket-Liste (GTK3, WebKit2GTK 4.1, Soup3, AppIndicator, ALSA, libxdo,
-  libclang, cmake)
-- Windows: WebView2 Runtime (auf Windows 11 vorinstalliert) + MSVC Build Tools
+- Linux: System-Pakete laut [`docs/PLATFORMS.md`](docs/PLATFORMS.md)
+- Windows: WebView2 Runtime + MSVC Build Tools
 
 ```bash
 pnpm install
-pnpm tauri dev
+pnpm tauri dev          # Dev-Build mit HMR fürs Frontend
+pnpm tauri build        # Bundles (.deb, AppImage, NSIS) — auf Tags v* in CI
 ```
 
-## Phase-1-Test (manuell)
+## Erste Schritte
 
-Das ist der Definition-of-Done-Walkthrough für Phase 1 (CLAUDE.md §6.1):
+1. **App starten:** `pnpm tauri dev`. Tray-Icon erscheint im System-Tray
+   (Hauptfenster startet versteckt — siehe Wayland-Fokus-Hinweis in
+   [`CLAUDE.md`](CLAUDE.md) §4.8).
+2. **Hauptfenster öffnen:** Linksklick aufs Tray-Icon, oder Rechtsklick →
+   *„Einstellungen öffnen"*.
+3. **Whisper-Modell laden:** Tab *Einstellungen* → *„Default-Modell
+   herunterladen"*. Lädt `ggml-large-v3-turbo-q5_0` (~547 MB) mit
+   SHA-Verifikation aus Hugging Face nach `app_data_dir/models/`.
+4. **Optional — Cloud-STT/LLM einrichten:** Tab *Einstellungen* →
+   *„Cloud-API-Keys (BYOK)"* → Key bei xAI / OpenAI / etc. einfügen.
+   Button *„Verbindung testen"* prüft den Key direkt.
+5. **Diktat-Test (lokal):** Cursor in einem Textfeld (Browser, Editor,
+   Slack-Eingabe), `Ctrl+Alt+D` halten, sprich, lass los. Der
+   transkribierte Text erscheint an der Cursor-Position.
+6. **Auto-Paste auf Wayland:** Beim allerersten Diktat zeigt KDE Plasma
+   einen Permission-Dialog *„VoiceTypeX möchte Tastendrücke senden"*.
+   Erlauben — danach läuft Auto-Paste ohne weitere Dialoge, auch nach
+   App-Restart (`restore_token` wird persistiert).
 
-1. **App starten:** `pnpm tauri dev` — das Tray-Icon (lila V auf grauem
-   Kreis = Idle) erscheint. Im Hauptfenster siehst du die Tabs
-   *Einstellungen*, *Modi*, *Logs*.
-2. **Default-Modi prüfen:** Tab *Modi* zeigt 6 Einträge mit ihren Hotkeys.
-   `exakt` hat `CommandOrControl+Alt+D` und ist der einzige, der jetzt
-   schon end-to-end funktioniert.
-3. **Whisper-Modell laden:** Tab *Einstellungen*. Erstmals brauchst du das
-   Default-Modell unter
-   `app_data_dir/models/ggml-large-v3-turbo-q5_0.bin`. Phase 1 hat noch
-   keinen Download-Button — aktuell musst du es selbst von
-   <https://huggingface.co/ggerganov/whisper.cpp> herunterladen und im
-   Settings-Tab den Pfad setzen (oder direkt nach `app_data_dir/models/`
-   legen).
-4. **Diktat-Test:** Cursor in einem Textfeld (Browser, Notepad, beliebige
-   App), `Ctrl+Alt+D` drücken. Tray-Icon wird rot, kurzer Beep. Sprich.
-   `Ctrl+Alt+D` erneut → Beep, Icon wird gelb (Transcribing) → grün
-   (Injecting) → grau (Idle). Der transkribierte Text steht an der
-   Cursor-Position.
-5. **Andere Hotkeys:** `Ctrl+Alt+E` (E-Mail-Modus) → Notification "Modus
-   wird in einer späteren Phase implementiert." Korrekt.
-6. **Modi-Hot-Reload:** Editiere `app_config_dir/modes/exaktes_diktat.toml`
-   im Editor (z.B. ändere `name`). Speichern. Tab *Modi* aktualisiert
-   sich nach ~1 Sekunde.
+## Datenschutz & Sicherheit
 
-## Phase-2-Test (Cloud / xAI End-to-End)
-
-Nachdem Phase 1 sauber läuft:
-
-1. **xAI-Key beziehen:** Account auf <https://console.x.ai>, API-Key
-   generieren. Derselbe Key wird für STT und LLM (Grok) verwendet.
-2. **Key hinterlegen:** Tab *Einstellungen* → "Cloud-API-Keys (BYOK)"
-   → "Setzen" neben *xAI*. Key einfügen, speichern.
-3. **Verbindung testen:** Button "Verbindung testen" neben *xAI*.
-   Erfolgsmeldung "✓ Verbindung erfolgreich" sollte erscheinen.
-4. **Cloud-Diktat testen:** Cursor in einem E-Mail-Entwurf,
-   `Ctrl+Alt+E` drücken → Beep → diktiere → `Ctrl+Alt+E` →
-   Tray-Icon zeigt sequentiell Recording → Transcribing → Postprocessing
-   → Injecting → Idle. Der formell ausformulierte E-Mail-Text
-   landet an der Cursor-Position.
-5. **Andere Cloud-Modi:** `Ctrl+Alt+S` (Slack), `Ctrl+Alt+G` (GitHub Issue),
-   `Ctrl+Alt+C` (Claude-Code-Anweisung) — alle nutzen denselben xAI-Key.
-6. **Lokales LLM-Diktat (`Ctrl+Alt+K`):** braucht zusätzlich einen
-   laufenden Ollama-Server (`ollama serve`) und das gewählte Modell
-   (`ollama pull qwen2.5:7b`). Konfiguration in den Einstellungen unter
-   "Ollama-Endpunkt".
-
-## Datenschutz
-
-## Datenschutz
-
-- Audio, Transkripte und LLM-Antworten werden standardmäßig **nicht** geloggt. Es existiert ein opt-in-"Diagnose-Logging"-Toggle in den Einstellungen.
-- Es gibt **keine** Telemetrie und kein Analytics.
-- Cloud-API-Keys werden **niemals** im Klartext auf Disk gespeichert — sie liegen im OS-Keychain.
-- Whisper-Modelle werden beim ersten Start **nicht** im Installer mitgebündelt, sondern via Downloader mit Hash-Verifikation aus Hugging Face geholt.
-- Beim System-Start wird **nicht** automatisch gestartet — Auto-Start ist explizites Opt-in.
+- Audio, Transkripte und LLM-Antworten werden standardmäßig **nicht**
+  geloggt. Es existiert ein Opt-in-*Diagnose-Logging*-Toggle in den
+  Einstellungen.
+- **Keine** Telemetrie, **kein** Analytics.
+- Cloud-API-Keys werden **niemals** im Klartext auf Disk gespeichert —
+  sie liegen in `~/.config/.../secrets.json` mit chmod 0600 (plus
+  best-effort Spiegel in OS-Keychain) und werden nie geloggt, nie ins
+  Frontend exponiert (alle Provider-Requests gehen durch das Rust-Backend).
+- Whisper-Modelle werden **nicht** im Installer mitgebündelt — Downloader
+  mit Hash-Verifikation aus Hugging Face beim ersten Start.
+- Beim System-Start wird **nicht** automatisch gestartet — Auto-Start
+  ist explizites Opt-in.
 
 ## Lizenz
 
-VoiceTypeX ist freie Software unter der **GNU General Public License Version 3 oder später** (`GPL-3.0-or-later`).
-
-Den vollständigen Lizenztext findest du in [`LICENSE`](LICENSE) (identisch in [`COPYING`](COPYING) abgelegt, gemäß GNU-Konvention).
+VoiceTypeX ist freie Software unter der **GNU General Public License
+Version 3 oder später** (`GPL-3.0-or-later`). Volltext in
+[`LICENSE`](LICENSE) (identisch in [`COPYING`](COPYING) abgelegt, gemäß
+GNU-Konvention).
 
 ```
 Copyright (C) 2026 Kevin Stenzel und Mitwirkende
