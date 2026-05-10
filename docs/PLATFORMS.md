@@ -37,10 +37,10 @@ Funktional komplett: Hotkeys via `tauri-plugin-global-shortcut`
 `xdg-desktop-portal-hyprland` implementiert das `RemoteDesktop`-Portal
 nicht (Issue #252 offen); wlroots-Maintainer haben sich gegen den
 Portal-Ansatz positioniert. Auf diesen Compositors fällt der Wayland-
-Pfad aktuell auf Clipboard + Notification *„Drücke Strg+V"* zurück.
-
-Geplant als Folge-Verbesserung: `wtype`-Sub-Prozess als Fallback
-(Detection via D-Bus-Introspection auf `ConnectToEIS`).
+Pfad auf Clipboard + Notification *„Drücke Strg+V"* zurück. Eine native
+Auto-Paste-Lösung müsste über `wlr-virtual-keyboard-unstable-v1`
+(z.B. via `wtype`-Sub-Prozess) gebaut werden — aktuell **nicht
+implementiert** und ohne konkretes Bedürfnis auch nicht eingeplant.
 
 ### Build-Anforderungen (Debian/Ubuntu)
 

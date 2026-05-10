@@ -1,11 +1,10 @@
 # VoiceTypeX — Architektur & Konventionen
 
 > Lebende Referenz für die laufende Entwicklung. Auf Linux/Wayland (KDE
-> Plasma 6) + Windows + X11 funktional komplett — Auto-Paste über
-> `xdg-desktop-portal.RemoteDesktop` + libei. Settings und
+> Plasma 6 + GNOME 46+) + Windows + X11 funktional komplett — Auto-Paste
+> über `xdg-desktop-portal.RemoteDesktop` + libei. Settings und
 > RemoteDesktop-Token persistent. Offen: macOS-Port + Distribution-
-> Signing (Phase 6) und `wtype`-Fallback für Hyprland/Sway. Details
-> in §11 „Roadmap".
+> Signing (Phase 6). Details in §11 „Roadmap".
 
 ---
 
@@ -259,7 +258,10 @@ für den Text-Transport, libei nur für den `Ctrl+V`-Keystroke.
 
 **Compositor-Matrix** (Mai 2026, in Praxis verifiziert): KDE Plasma 6.1+
 und GNOME 46+/47 funktionieren über das Portal; Hyprland und Sway/wlroots
-brauchen einen `wtype`-Sub-Prozess-Fallback (siehe §11). Mindestversionen:
+unterstützen `xdg-desktop-portal.RemoteDesktop` nicht (Issue
+hyprland #252 offen, wlroots-Maintainer dagegen positioniert) — dort
+fällt der Wayland-Pfad auf Clipboard + Notification *„Drücke Strg+V"*
+zurück. Mindestversionen:
 `xdg-desktop-portal ≥ 1.18`, `libei ≥ 1.0`.
 
 **Failure-UX:** Wenn der User den Permission-Dialog ablehnt oder die
@@ -323,7 +325,7 @@ User können eigene Modi via TOML hinzufügen — keine Code-Änderung nötig.
 | Plattform | Hotkey | Audio | Transkription | Auto-Paste | Tray |
 |---|---|---|---|---|---|
 | Linux X11 | ✅ tauri-plugin-global-shortcut | ✅ | ✅ | ✅ enigo (XTest) | ✅ |
-| Linux Wayland | ✅ xdg-portal | ✅ | ✅ | ✅ libei (KDE Plasma 6.1+, GNOME 46+); Hyprland/Sway noch offen | ✅ |
+| Linux Wayland | ✅ xdg-portal | ✅ | ✅ | ✅ libei (KDE Plasma 6.1+, GNOME 46+); Hyprland/Sway: Clipboard-Fallback | ✅ |
 | Windows | ✅ | ✅ | ✅ | ✅ enigo (SendInput) | ✅ (Maintainer-Verifikation offen) |
 | macOS | ⏳ Phase 6 | ⏳ | ⏳ | ⏳ | ⏳ |
 
@@ -397,11 +399,7 @@ blind hinzufügen.
 - Auto-Update via tauri-plugin-updater mit signierten Manifesten.
 
 ### Optional / nice-to-have
-- **`wtype`-Fallback** für Hyprland und Sway/wlroots (Compositors ohne
-  `xdg-desktop-portal.RemoteDesktop`-Support). Detection via
-  D-Bus-Introspection auf `ConnectToEIS`; bei Nicht-Verfügbarkeit
-  Sub-Prozess-Aufruf von `wtype`. Nicht-blockierend für KDE Plasma 6 /
-  GNOME 46+ User.
+_(aktuell keine Einträge — die Hauptzielplattformen funktionieren komplett.)_
 
 ### Bekannte Limitierungen ohne geplanten Fix
 - xAI's STT-API hat keine Sprach-Erzwingung — die Erkennung ist

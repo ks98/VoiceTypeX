@@ -241,5 +241,3 @@ nutzt das, was der jeweilige Build liefert.
     TCC-/Accessibility-Permissions im Onboarding)
   - Signierte Installer (Apple Notarization, Windows Authenticode)
   - Auto-Update via tauri-plugin-updater mit signierten Manifesten
-- **`wtype`-Fallback** für Hyprland und Sway/wlroots (Compositors ohne
-  RemoteDesktop-Portal-Support) — Sub-Prozess-Aufruf statt libei.

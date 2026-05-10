@@ -10,7 +10,7 @@ Funktional komplett auf **Linux/Wayland (KDE Plasma 6 + GNOME 46+)**,
 **Linux/X11** und **Windows**. Auto-Paste auf Wayland über
 `xdg-desktop-portal.RemoteDesktop` + libei. Settings und Wayland-
 Permission-Token persistent. Offen: macOS-Port mit Code-Signing
-(roadmapped, kein ETA) und `wtype`-Fallback für Hyprland/Sway.
+(roadmapped, kein ETA).
 
 ## Kernablauf
 
