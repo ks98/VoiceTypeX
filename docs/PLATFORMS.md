@@ -97,14 +97,12 @@ dem Tauri-Installer).
   aber einige UWP-/WinUI-Apps haben restriktive Input-Pfade. Workaround
   mit Clipboard-Fallback (Standard).
 
-## macOS — geplant (Phase 6)
+## macOS — nicht im Scope
 
-Aktuell sind alle macOS-Implementierungen Stubs hinter
-`#[cfg(target_os = "macos")]`. Geplant:
-- CGEvent für Keystroke-Injection
-- TCC-/Accessibility-Permission-Flow im Onboarding
-- Signierter `.dmg`-Installer + Apple Notarization
-- Auto-Update via tauri-plugin-updater
+Alle macOS-Implementierungen sind Stubs hinter
+`#[cfg(target_os = "macos")]`. Der Code kompiliert dort, aber ein
+funktionaler macOS-Port (CGEvent für Inject, NSStatusItem für Tray,
+TCC-/Accessibility-Permissions, signierter `.dmg`) ist nicht eingeplant.
 
 ## CI
 

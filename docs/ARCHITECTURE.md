@@ -234,10 +234,8 @@ CoreML) durch Library-Probing. Empfehlung wird im Settings-UI gezeigt;
 User kann das Cargo-Feature beim Build wählen — der Code zur Laufzeit
 nutzt das, was der jeweilige Build liefert.
 
-## Offene Punkte für spätere Phasen
+## Offene Punkte
 
-- **Phase 6 — macOS + Distribution-Hardening:**
-  - macOS-Implementierungen (CGEvent-Inject, NSStatusItem-Tray,
-    TCC-/Accessibility-Permissions im Onboarding)
-  - Signierte Installer (Apple Notarization, Windows Authenticode)
-  - Auto-Update via tauri-plugin-updater mit signierten Manifesten
+Aktuell keine. macOS ist nicht im Scope; die `#[cfg(target_os = "macos")]`-
+Stubs bleiben erhalten, damit der Code auf macOS kompiliert, aber sind
+nicht aktives Implementierungs-Ziel.

@@ -3,8 +3,8 @@
 > Lebende Referenz für die laufende Entwicklung. Auf Linux/Wayland (KDE
 > Plasma 6 + GNOME 46+) + Windows + X11 funktional komplett — Auto-Paste
 > über `xdg-desktop-portal.RemoteDesktop` + libei. Settings und
-> RemoteDesktop-Token persistent. Offen: macOS-Port + Distribution-
-> Signing (Phase 6). Details in §11 „Roadmap".
+> RemoteDesktop-Token persistent. Distribution-Bundles für Linux
+> (DEB / RPM / AppImage) + Windows (NSIS) verfügbar.
 
 ---
 
@@ -103,8 +103,8 @@ Hotkey **gedrückt** → Recording (Tray pulsiert rot, Overlay zeigt
 | Repo & CI | GitLab (`.gitlab-ci.yml`, kein GitHub) |
 
 **Tauri-Plugins:** global-shortcut (X11/Windows), store, dialog, notification,
-os, fs, clipboard-manager, autostart. **Nicht** verwendet: tauri-plugin-updater
-(Phase 6), tauri-plugin-shell.
+os, fs, clipboard-manager, autostart. **Nicht** verwendet:
+tauri-plugin-updater (kein Auto-Update geplant), tauri-plugin-shell.
 
 Schlage **keine** Alternativen für Stack-Bestandteile vor. Bei begründetem
 Konflikt: anhalten und fragen, statt selbst tauschen.
@@ -327,7 +327,7 @@ User können eigene Modi via TOML hinzufügen — keine Code-Änderung nötig.
 | Linux X11 | ✅ tauri-plugin-global-shortcut | ✅ | ✅ | ✅ enigo (XTest) | ✅ |
 | Linux Wayland | ✅ xdg-portal | ✅ | ✅ | ✅ libei (KDE Plasma 6.1+, GNOME 46+); Hyprland/Sway: Clipboard-Fallback | ✅ |
 | Windows | ✅ | ✅ | ✅ | ✅ enigo (SendInput) | ✅ (Maintainer-Verifikation offen) |
-| macOS | ⏳ Phase 6 | ⏳ | ⏳ | ⏳ | ⏳ |
+| macOS | nicht im Scope | nicht im Scope | nicht im Scope | nicht im Scope | nicht im Scope |
 
 ---
 
@@ -393,9 +393,11 @@ blind hinzufügen.
 
 ## 11. Roadmap
 
-### Phase 6 — macOS + Distribution-Hardening
-- macOS-Implementierungen (CGEvent für Inject, NSStatusItem für Tray).
-- Signierte Installer (Apple Notarization, Windows Authenticode).
+### macOS-Support
+Aktuell **nicht im Scope**. Die plattform-spezifischen Implementierungen
+(`#[cfg(target_os = "macos")]`-Module für Hotkey, Inject, Tray) bleiben
+als Stubs erhalten, damit der Code auf macOS überhaupt kompiliert,
+falls jemand später anzieht — aber kein aktives Implementierungs-Ziel.
 - Auto-Update via tauri-plugin-updater mit signierten Manifesten.
 
 ### Optional / nice-to-have

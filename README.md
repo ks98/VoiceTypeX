@@ -9,8 +9,9 @@ Hotkey halten, sprechen, loslassen, fertig.
 Funktional komplett auf **Linux/Wayland (KDE Plasma 6 + GNOME 46+)**,
 **Linux/X11** und **Windows**. Auto-Paste auf Wayland über
 `xdg-desktop-portal.RemoteDesktop` + libei. Settings und Wayland-
-Permission-Token persistent. Offen: macOS-Port mit Code-Signing
-(roadmapped, kein ETA).
+Permission-Token persistent. Distribution-Bundles für Linux
+(`.deb` / `.rpm` / AppImage) + Windows (NSIS) verfügbar. macOS ist
+nicht im Scope.
 
 ## Kernablauf
 
