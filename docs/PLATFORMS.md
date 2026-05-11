@@ -104,6 +104,93 @@ Alle macOS-Implementierungen sind Stubs hinter
 funktionaler macOS-Port (CGEvent für Inject, NSStatusItem für Tray,
 TCC-/Accessibility-Permissions, signierter `.dmg`) ist nicht eingeplant.
 
+## Distribution-Bundles
+
+`pnpm tauri build` produziert auf Linux drei Bundle-Formate. Wichtig:
+der erste Release-Build dauert ~10–15 min (auf langsameren Systemen
+deutlich mehr — der Compile von `whisper-rs-sys` mit cmake/clang-LTO
+ist der Engpass), danach ist alles im Cargo-Release-Cache und folgende
+Builds laufen in ~3–5 min.
+
+**Voraussetzungen auf dem Build-System (Debian/Ubuntu):**
+- alle Pakete aus dem Build-Anforderungen-Abschnitt oben
+- zusätzlich `rpm` (stellt `rpmbuild` bereit) — sonst wird das
+  RPM-Target ohne Fehler übersprungen
+
+```bash
+sudo apt-get install rpm
+pnpm tauri build
+```
+
+**Output-Pfade nach erfolgreichem Build:**
+
+```
+src-tauri/target/release/bundle/deb/VoiceTypeX_0.1.0_amd64.deb         (~5 MB)
+src-tauri/target/release/bundle/appimage/VoiceTypeX_0.1.0_amd64.AppImage  (~110 MB)
+src-tauri/target/release/bundle/rpm/VoiceTypeX-0.1.0-1.x86_64.rpm      (~5 MB)
+```
+
+Der NSIS-Installer wird auf Linux übersprungen (NSIS-Toolchain ist
+Windows-spezifisch) — kein Fehler, das ist erwartet.
+
+### `.deb` installieren (Debian / Ubuntu / Linux Mint)
+
+```bash
+sudo dpkg -i src-tauri/target/release/bundle/deb/VoiceTypeX_0.1.0_amd64.deb
+# Bei fehlenden Deps:
+sudo apt-get -f install
+```
+
+Nach der Installation erscheint *VoiceTypeX* im App-Menü. Start
+über Menü oder `voicetypex` im Terminal.
+
+Uninstall: `sudo apt remove voice-type-x` (Tauri normalisiert
+`identifier` auf einen kebab-case-Paketnamen).
+
+### `.rpm` installieren (Fedora / RHEL / openSUSE)
+
+RPM auf das Ziel-System kopieren (z.B. via `scp`, USB-Stick), dann:
+
+```bash
+sudo dnf install ./VoiceTypeX-0.1.0-1.x86_64.rpm
+# Oder klassisch:
+sudo rpm -i VoiceTypeX-0.1.0-1.x86_64.rpm
+```
+
+Uninstall: `sudo dnf remove voice-type-x`.
+
+### AppImage starten (universell Linux)
+
+Keine Installation nötig — `chmod +x`, dann doppelklicken oder im
+Terminal:
+
+```bash
+chmod +x VoiceTypeX_0.1.0_amd64.AppImage
+./VoiceTypeX_0.1.0_amd64.AppImage
+```
+
+Falls FUSE auf dem System fehlt oder deaktiviert ist:
+
+```bash
+./VoiceTypeX_0.1.0_amd64.AppImage --appimage-extract-and-run
+```
+
+Das AppImage enthält den kompletten GTK/WebKit-Stack — funktioniert
+auf jeder modernen Linux-Distro, integriert sich aber **nicht** ins
+App-Menü. Für dauerhafte Nutzung empfiehlt sich DEB oder RPM.
+
+### Runtime-Dependencies (was die Pakete verlangen)
+
+- **`.deb`** (von Tauri's Bundler ermittelt): `libopenblas0`,
+  `libasound2`, `libxdo3`, `libayatana-appindicator3-1`,
+  `libwebkit2gtk-4.1-0`, `libgtk-3-0` — alle aus dem Debian-Standard-
+  Repo.
+- **`.rpm`** (von Tauri's Bundler ermittelt): `openblas-serial`,
+  `alsa-lib`, `libxdo`, `libayatana-appindicator3.so.1`,
+  `libwebkit2gtk-4.1.so.0`, `libgtk-3.so.0` — alle aus dem
+  Fedora-Standard-Repo.
+- **AppImage**: nichts — alles eingebacken, ~110 MB.
+
 ## CI
 
 `.gitlab-ci.yml` baut auf jedem Push:

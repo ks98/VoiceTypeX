@@ -62,8 +62,13 @@ Konventionen + Mindset: [`CLAUDE.md`](CLAUDE.md).
 ```bash
 pnpm install
 pnpm tauri dev          # Dev-Build mit HMR fürs Frontend
-pnpm tauri build        # Bundles (.deb, AppImage, NSIS) — auf Tags v* in CI
+pnpm tauri build        # Bundles (.deb, .rpm, AppImage, NSIS) — auf Tags v* in CI
 ```
+
+Für Linux-Bundle-Build inkl. RPM zusätzlich `rpmbuild` installieren
+(`sudo apt-get install rpm` auf Debian; auf Fedora bereits vorhanden).
+Details, Output-Pfade und Installations-Anleitung in
+[`docs/PLATFORMS.md`](docs/PLATFORMS.md) → *„Distribution-Bundles"*.
 
 ## Erste Schritte
 
