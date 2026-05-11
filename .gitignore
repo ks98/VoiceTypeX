@@ -61,3 +61,4 @@ release/
 *.AppImage
 *.deb
 *.rpm
+.claude/
