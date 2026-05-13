@@ -1,11 +1,30 @@
 # Modi schreiben
 
 Ein **Modus** ist eine TOML-Datei in `app_config_dir/modes/`. Beim ersten
-Start kopiert VoiceTypeX die 6 mitgelieferten Defaults dort hin
-(`exaktes_diktat.toml`, `korrigierendes_diktat.toml`, `foermliche_email.toml`,
-`slack_teams.toml`, `github_issue.toml`, `claude_code_anweisung.toml`).
+Start kopiert VoiceTypeX die 6 mitgelieferten Defaults dort hin.
 Eigene Modi einfach als weiteres `*.toml` ablegen — der Hot-Reload nimmt
 es ohne App-Neustart auf.
+
+## Mitgelieferte Standard-Modi
+
+| Modus | Hotkey | STT | LLM-Postprocessing | Datei |
+|---|---|---|---|---|
+| Exaktes Diktat | `Ctrl+Alt+D` | Lokal (whisper-rs) | — | `exaktes_diktat.toml` |
+| Korrigierendes Diktat | `Ctrl+Alt+K` | Lokal (whisper-rs) | Lokal (Ollama) | `korrigierendes_diktat.toml` |
+| Förmliche E-Mail | `Ctrl+Alt+E` | xAI | xAI Grok-fast | `foermliche_email.toml` |
+| Slack/Teams | `Ctrl+Alt+S` | xAI | xAI Grok-fast | `slack_teams.toml` |
+| GitHub-Issue | `Ctrl+Alt+G` | xAI | xAI Grok-fast | `github_issue.toml` |
+| Claude-Code-Anweisung | `Ctrl+Alt+C` | xAI | xAI Grok-fast | `claude_code_anweisung.toml` |
+
+**Welcher Modus wann?**
+- *Exaktes Diktat* — wenn die Worte 1:1 so wie gesprochen ankommen sollen
+  (z.B. Zitate, technische Begriffe, eigene Code-Identifier).
+- *Korrigierendes Diktat* — vollständig offline, mit lokalem LLM zur
+  Glättung von Verhasplern und Füllwörtern.
+- *Förmliche E-Mail* / *Slack* / *GitHub-Issue* / *Claude-Code* —
+  Cloud-Pipeline mit Zielton pro Kontext. Diese vier teilen die
+  STT-Stage (xAI), unterscheiden sich nur im `system_prompt` des
+  Postprocessings.
 
 ## Speicherort
 

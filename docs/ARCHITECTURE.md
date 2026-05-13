@@ -2,7 +2,42 @@
 
 > Diese Datei dokumentiert die wichtigsten Strukturen und Datenflüsse.
 > Detaillierte Implementierungs-Entscheidungen stehen als Kommentare im Code,
-> Tech-Stack-Festlegungen und Konventionen in [`CLAUDE.md`](../CLAUDE.md).
+> Senior-Engineer-Mindset und Repo-Konventionen in [`CLAUDE.md`](../CLAUDE.md).
+
+## Tech-Stack
+
+Festgelegt — Alternativen werden nicht ohne Rücksprache eingeführt.
+
+| Schicht | Wahl |
+|---|---|
+| App-Framework | Tauri 2 (stabil) |
+| Backend | Rust 2021+ |
+| Frontend | React 18 + TypeScript + Vite |
+| Styling | TailwindCSS + shadcn/ui |
+| Frontend-State | Zustand |
+| Async-Runtime | tokio |
+| Audio | cpal + hound (WAV) + rubato (Sinc-Resampling) |
+| Lokales STT | whisper-rs mit Cargo-Feature-Backends (`fast-cpu`/OpenBLAS = Default; `gpu-vulkan`/`gpu-cuda`/`gpu-metal`/`gpu-coreml` opt-in) |
+| Lokales LLM | Ollama via HTTP |
+| Cloud-STT | xAI (One-Shot REST), OpenAI Whisper, Groq Whisper, Deepgram |
+| Cloud-LLM | xAI Grok (Default `grok-4-fast-non-reasoning`), OpenAI GPT, Anthropic Claude |
+| HTTP-Client | reqwest (rustls-tls) |
+| Config | TOML (`serde` + `toml`) |
+| Logging | tracing + tracing-subscriber + Ringbuffer für UI |
+| Secrets | File (`~/.config/.../secrets.json`, chmod 0600) als Source of Truth, OS-Keychain best-effort Mirror |
+| Audio-Cues | rodio |
+| Datei-Watch | notify (Mode-Hot-Reload) |
+| Repo & CI | GitLab (`.gitlab-ci.yml`) |
+
+**Tauri-Plugins (verwendet):** global-shortcut (X11/Windows), store,
+dialog, notification, os, fs, clipboard-manager, autostart.
+
+**Tauri-Plugins (bewusst nicht verwendet):** tauri-plugin-updater
+(kein Auto-Update geplant), tauri-plugin-shell.
+
+Wire-Protokoll-Details der Cloud-Provider (Endpoints, Auth-Header,
+Multipart-Reihenfolge, Response-Parsing) sind in
+[`PROVIDERS.md`](PROVIDERS.md) dokumentiert.
 
 ## State-Machine
 
