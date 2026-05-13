@@ -87,17 +87,16 @@ impl WaylandLibeiInjector {
             tracing::info!("RemoteDesktop: nutze gespeicherten restore_token");
         }
 
-        let (restore_token, eis_fd) =
-            match build_remote_desktop_session(prior_token.as_deref()).await {
-                Ok(v) => v,
-                Err(e) => {
-                    tracing::warn!(error = %e, "RemoteDesktop-Session-Setup fehlgeschlagen — Fallback auf Clipboard+Notification");
-                    *guard = SessionState::Failed {
-                        reason: e.clone(),
-                    };
-                    return None;
-                }
-            };
+        let (restore_token, eis_fd) = match build_remote_desktop_session(prior_token.as_deref())
+            .await
+        {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::warn!(error = %e, "RemoteDesktop-Session-Setup fehlgeschlagen — Fallback auf Clipboard+Notification");
+                *guard = SessionState::Failed { reason: e.clone() };
+                return None;
+            }
+        };
         tracing::info!(
             has_token = restore_token.is_some(),
             "RemoteDesktop-Session aufgebaut + EIS-FD bezogen"
@@ -302,8 +301,7 @@ fn save_restore_token(path: &std::path::Path, token: &str) -> Result<()> {
     };
     let json = serde_json::to_string_pretty(&stored)
         .map_err(|e| VoiceTypeError::Injection(format!("json: {e}")))?;
-    std::fs::write(path, json)
-        .map_err(|e| VoiceTypeError::Injection(format!("write: {e}")))?;
+    std::fs::write(path, json).map_err(|e| VoiceTypeError::Injection(format!("write: {e}")))?;
 
     #[cfg(unix)]
     {

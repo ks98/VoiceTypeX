@@ -75,11 +75,7 @@ pub async fn handle_hotkey_released(
     finish_recording_and_inject(&app, &ctx, &mode).await
 }
 
-async fn start_recording(
-    app: &AppHandle,
-    ctx: &Arc<AppContext>,
-    mode: &Mode,
-) -> Result<()> {
+async fn start_recording(app: &AppHandle, ctx: &Arc<AppContext>, mode: &Mode) -> Result<()> {
     ctx.state_bus.transition(AppState::Recording)?;
 
     // Overlay sichtbar machen. Das `show()` klaut zwar kurz den
@@ -320,7 +316,6 @@ async fn run_cloud_processing(mode: &Mode, transcript: &str) -> Result<String> {
     };
     processor.process(transcript, system_prompt, opts).await
 }
-
 
 /// Registriere die Hotkeys aller geladenen Modi (X11/Windows-Pfad).
 /// Press → handle_hotkey_pressed, Release → handle_hotkey_released.

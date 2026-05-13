@@ -66,13 +66,7 @@ impl RecorderHandle {
         let worker = thread::Builder::new()
             .name("voicetypex-audio".into())
             .spawn(move || {
-                run_recorder_thread(
-                    config,
-                    samples_clone,
-                    is_recording_clone,
-                    stop_rx,
-                    meta_tx,
-                )
+                run_recorder_thread(config, samples_clone, is_recording_clone, stop_rx, meta_tx)
             })
             .map_err(|e| VoiceTypeError::Audio(format!("Worker-Thread-Spawn: {e}")))?;
 

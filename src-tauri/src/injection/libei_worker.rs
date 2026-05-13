@@ -199,10 +199,7 @@ impl WorkerState {
                     }
                     ei::device::Event::Done => {
                         let interfaces: Vec<&String> = data.interfaces.keys().collect();
-                        tracing::info!(
-                            ?interfaces,
-                            "libei: Device done"
-                        );
+                        tracing::info!(?interfaces, "libei: Device done");
                         if let Some(keyboard) = data.interface::<ei::Keyboard>() {
                             tracing::info!(
                                 "libei: Keyboard-Interface gefunden — warte auf Resumed-Event"
@@ -237,7 +234,10 @@ impl WorkerState {
                         self.try_signal_ready();
                     }
                     ei::device::Event::Paused { serial } => {
-                        tracing::warn!(serial, "libei: Device paused — sender darf nicht mehr tippen");
+                        tracing::warn!(
+                            serial,
+                            "libei: Device paused — sender darf nicht mehr tippen"
+                        );
                         self.last_serial = serial;
                         self.keyboard_resumed = false;
                         self.emulation_active = false;
@@ -329,17 +329,16 @@ impl WorkerState {
         // Helfer: Frame schreiben + sofort flushen + kurz schlafen
         // (Tastatur-Scan-Rhythmus simulieren).
         let mut last_t = 0u64;
-        let send_frame =
-            |key: u32, state: ei::keyboard::KeyState, prev_t: u64| -> u64 {
-                let t = monotonic_time_us().max(prev_t + 1);
-                keyboard.key(key, state);
-                device.frame(serial, t);
-                if let Err(e) = context.flush() {
-                    tracing::warn!(error = %e, "libei: flush fehlgeschlagen waehrend Ctrl+V");
-                }
-                std::thread::sleep(std::time::Duration::from_millis(1));
-                t
-            };
+        let send_frame = |key: u32, state: ei::keyboard::KeyState, prev_t: u64| -> u64 {
+            let t = monotonic_time_us().max(prev_t + 1);
+            keyboard.key(key, state);
+            device.frame(serial, t);
+            if let Err(e) = context.flush() {
+                tracing::warn!(error = %e, "libei: flush fehlgeschlagen waehrend Ctrl+V");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(1));
+            t
+        };
 
         last_t = send_frame(ctrl_evdev, ei::keyboard::KeyState::Press, last_t);
         last_t = send_frame(v_evdev, ei::keyboard::KeyState::Press, last_t);
