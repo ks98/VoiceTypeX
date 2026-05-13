@@ -64,16 +64,27 @@ und Recording.
 
 ## Trait-Schichten
 
-Plattform-/Provider-kritische Funktionalität ist hinter Traits
+Provider- und Inject-kritische Funktionalität ist hinter Traits
 abstrahiert. Plattform-Selektion zur Laufzeit (Linux nutzt
-`WAYLAND_DISPLAY` zur Differenzierung).
+`WAYLAND_DISPLAY` zur Differenzierung in `core::session::is_wayland()`).
 
 | Trait | Datei | Implementierungen |
 |---|---|---|
 | `Transcriber` | `transcription/mod.rs` | `LocalTranscriber` (whisper-rs), `XaiTranscriber`, `OpenAITranscriber`, `GroqTranscriber`, `DeepgramTranscriber` |
 | `Processor` | `processing/mod.rs` | `OllamaProcessor` (local), `XaiProcessor`/`OpenAIProcessor` (via gemeinsamer `OpenAICompatibleClient`), `AnthropicProcessor` |
 | `TextInjector` | `injection/mod.rs` | `ClipboardFallbackInjector` (X11/Windows: enigo Ctrl+V), `WaylandLibeiInjector` (Wayland: libei via xdg-desktop-portal.RemoteDesktop) |
-| `HotkeyManager` | `hotkey/mod.rs` | tauri-plugin-global-shortcut (X11/Windows), xdg-desktop-portal.GlobalShortcuts via ashpd (Wayland) |
+
+**Hotkey-Registrierung** ist plattform-direkt (kein Trait, siehe
+[CLAUDE.md §4.2](../CLAUDE.md)):
+
+- X11/Windows: `pipeline::register_mode_hotkeys()` registriert direkt
+  über `app.global_shortcut().on_shortcut()` aus
+  `tauri-plugin-global-shortcut`.
+- Wayland: `pipeline::spawn_wayland_hotkey_session()` betreibt eine
+  langlebige Portal-Session via
+  `hotkey::linux_wayland::run_global_shortcuts_session()`; Events
+  fließen als `HotkeyEvent` über einen broadcast-Channel zurück in
+  die Pipeline.
 
 ## AppContext (Tauri-State-Singleton)
 

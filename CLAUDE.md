@@ -121,16 +121,35 @@ Subscriber (Tray-Icon, Overlay-Window, Logs-View, Frontend-Events) hängen
 sich an den State-Bus.
 
 ### 4.2 Plattform-Abstraktion
-Zwei Traits, ausgewählt zur Laufzeit:
-- `HotkeyManager` — Implementierungen: X11/Windows
-  (tauri-plugin-global-shortcut), Wayland (xdg-desktop-portal.GlobalShortcuts
-  via ashpd), macOS (Stub).
+Ein Trait für Inject, plattform-direkte Hotkey-Registrierung:
+
 - `TextInjector` — `ClipboardFallbackInjector` für X11/Windows
   (enigo Ctrl+V), `WaylandLibeiInjector` für Wayland (libei via
   xdg-desktop-portal.RemoteDesktop, siehe §4.9). Auswahl in
   `make_default_injector` per Plattform-Detection.
+- **Hotkey-Registrierung** läuft pro Plattform direkt, weil
+  X11/Windows-Callback-APIs und die Wayland-Portal-Session
+  strukturell zu unterschiedlich sind, um sinnvoll hinter ein
+  gemeinsames `register/unregister`-Trait zu passen (drei unähnliche
+  Pfade — YAGNI):
+  - **X11/Windows**: `pipeline::register_mode_hotkeys()` ruft
+    `app.global_shortcut().on_shortcut()` aus
+    `tauri-plugin-global-shortcut` direkt; Press/Release kommt als
+    `ShortcutState` ins Closure.
+  - **Wayland**: `pipeline::spawn_wayland_hotkey_session()` startet
+    `hotkey::linux_wayland::run_global_shortcuts_session()` als
+    langlebige Task; die Session bindet alle Modus-Shortcuts
+    gleichzeitig an `xdg-desktop-portal.GlobalShortcuts` und
+    dispatched `HotkeyEvent { id, kind }` über einen
+    broadcast-Channel an die Pipeline.
+  - **macOS**: out-of-scope (siehe §11).
 
-Linux-Detection: `WAYLAND_DISPLAY` vs. `DISPLAY` zur Laufzeit.
+`HotkeyEvent` und `HotkeyEventKind` (in `hotkey/mod.rs`) sind die
+geteilte Pipeline-Sprache für Press/Release, unabhängig davon, welcher
+Plattform-Pfad sie erzeugt hat.
+
+Linux-Detection: `WAYLAND_DISPLAY` vs. `DISPLAY` zur Laufzeit
+(in `core::session::is_wayland()`).
 
 ### 4.3 Modus = TOML
 Felder: `id`, `name`, `hotkey`, `transcription` (`local`/`cloud`),
