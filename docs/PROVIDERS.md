@@ -38,8 +38,8 @@ eigenständig — kein künstlicher Shared-Wrapper.
   nur `text`.
 - **Sprach-Erzwingung:** keine. xAI's `language`-Parameter steuert nur
   Text-Formatting (Zahlen/Währungen), nicht die Spracherkennung.
-  Die Erkennung ist hartcodiert auto-detect (siehe CLAUDE.md §11
-  „Bekannte Limitierungen").
+  Die Erkennung ist hartcodiert auto-detect — siehe Abschnitt
+  „Bekannte Limitierungen" unten.
 
 ### OpenAI Whisper / Groq Whisper
 
@@ -141,6 +141,32 @@ nur die Key-Länge zur Diagnostik. Provider-Requests gehen
 ausschließlich durch das Rust-Backend; der Key verlässt den Prozess
 nicht ins Frontend (IPC `get_provider_status` liefert nur
 `{ configured: bool, error: Option<String> }`).
+
+## Bekannte Limitierungen
+
+### xAI STT — keine Sprach-Erzwingung
+
+xAI's STT-API akzeptiert keinen Parameter, mit dem sich die Sprach-
+Erkennung festnageln ließe. Das `language`-Feld in der Request steuert
+nur Text-Formatting (z.B. Schreibweise von Zahlen und Währungen),
+nicht die akustische Spracherkennung. Die Erkennung ist serverseitig
+hartcodiert auto-detect.
+
+**Praktische Konsequenz:** Bei kurzen, sprachneutralen Diktaten
+(z.B. einzelne Eigennamen, technische Begriffe, kurze Befehle) kann
+das Modell daneben raten — z.B. einen deutschen Befehl als englisch
+interpretieren und phonetisch transkribieren.
+
+**Workaround:** Auf lokales Whisper-STT (`transcription = "local"` im
+Modus) wechseln; dort lässt sich `language = "de"` erzwingen. Für
+längere, klar deutschsprachige Diktate ist xAI in der Praxis robust,
+deshalb akzeptieren wir das Limit für die Cloud-Modi und planen
+**keinen** Fix (würde Provider-API-seitig erfordern und ist nicht in
+unserer Hand).
+
+**Quellen:** Verhalten beobachtet in Eigenpraxis (Stand Mai 2026); xAI
+hat das Verhalten nicht offiziell als API-Constraint dokumentiert, also
+ist eine spätere Änderung jederzeit möglich.
 
 ## Wenn du einen neuen Provider einbaust
 
