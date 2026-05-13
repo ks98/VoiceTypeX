@@ -9,8 +9,7 @@
 //! **Vorschlag**.
 
 use crate::core::error::{Result, VoiceTypeError};
-use crate::hotkey::{HotkeyEvent, HotkeyEventKind, HotkeyManager};
-use async_trait::async_trait;
+use crate::hotkey::{HotkeyEvent, HotkeyEventKind};
 use std::collections::HashMap;
 use tokio::sync::broadcast;
 
@@ -20,45 +19,6 @@ pub struct WaylandShortcutSpec {
     pub id: String,
     pub description: String,
     pub preferred_trigger: String,
-}
-
-/// Stub fuer das HotkeyManager-Trait. Auf Wayland nutzen wir den
-/// dedizierten Session-Pfad aus `pipeline::wayland_hotkey`, daher gibt
-/// dieses Trait-Impl nur Receiver-Stubs zurueck.
-pub struct WaylandHotkeyManager {
-    sender: broadcast::Sender<HotkeyEvent>,
-}
-
-impl WaylandHotkeyManager {
-    pub fn new() -> Self {
-        let (sender, _) = broadcast::channel(16);
-        Self { sender }
-    }
-}
-
-impl Default for WaylandHotkeyManager {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[async_trait]
-impl HotkeyManager for WaylandHotkeyManager {
-    async fn register(&self, _id: &str, _accelerator: &str) -> Result<()> {
-        Err(VoiceTypeError::Hotkey(
-            "Wayland: nutze pipeline::wayland_hotkey::start_session statt register".into(),
-        ))
-    }
-
-    async fn unregister(&self, _id: &str) -> Result<()> {
-        Err(VoiceTypeError::Hotkey(
-            "Wayland: nutze pipeline::wayland_hotkey::stop_session".into(),
-        ))
-    }
-
-    fn events(&self) -> broadcast::Receiver<HotkeyEvent> {
-        self.sender.subscribe()
-    }
 }
 
 /// Verbinde mit dem GlobalShortcuts-Portal, registriere die uebergebenen
