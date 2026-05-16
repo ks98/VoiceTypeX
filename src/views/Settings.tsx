@@ -4,6 +4,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import Field from "../components/Field";
+import Button from "../components/Button";
 import ApiKeysSection from "../components/ApiKeysSection";
 import TestTranscriptionSection from "../components/TestTranscriptionSection";
 import AutoPasteTestSection from "../components/AutoPasteTestSection";
@@ -19,10 +20,6 @@ import {
 
 const inputCls =
   "bg-surface border border-outline rounded-md px-3 py-2 text-sm text-fg placeholder:text-fg-faint focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/40";
-const primaryBtn =
-  "inline-flex items-center px-3 py-2 rounded-md bg-brand text-brand-contrast text-sm font-medium hover:bg-brand-hover transition-colors disabled:bg-elevated disabled:text-fg-faint disabled:cursor-not-allowed";
-const secondaryBtn =
-  "inline-flex items-center px-3 py-2 rounded-md bg-elevated text-fg text-sm hover:bg-outline-strong/40 transition-colors disabled:opacity-50";
 
 export default function Settings(): JSX.Element {
   const settings = useSettingsStore((s) => s.settings);
@@ -145,13 +142,9 @@ export default function Settings(): JSX.Element {
               void update({ whisper_model_path: e.target.value || null })
             }
           />
-          <button
-            type="button"
-            onClick={() => void onPickModel()}
-            className={secondaryBtn}
-          >
+          <Button variant="secondary" onClick={() => void onPickModel()}>
             Datei waehlen…
-          </button>
+          </Button>
         </div>
         <select
           className={inputCls}
@@ -169,16 +162,15 @@ export default function Settings(): JSX.Element {
           </option>
         </select>
         <div className="flex flex-col gap-1.5">
-          <button
-            type="button"
+          <Button
             onClick={() => void onDownloadDefault()}
             disabled={downloading}
-            className={`${primaryBtn} self-start`}
+            className="self-start"
           >
             {downloading
               ? "Lade Modell…"
               : "Default-Modell jetzt herunterladen"}
-          </button>
+          </Button>
           {progress ? (
             <div className="flex flex-col gap-1 text-xs text-fg-muted">
               <div>

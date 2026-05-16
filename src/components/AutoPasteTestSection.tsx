@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { useState } from "react";
+import Button from "./Button";
 import { ipcTestAutoPaste } from "../lib/tauri";
 
 const DEFAULT_TEXT = "VoiceTypeX Auto-Paste-Test";
@@ -52,17 +53,17 @@ export default function AutoPasteTestSection() {
           onChange={(e) => setText(e.target.value)}
           disabled={running}
         />
-        <button
+        <Button
           onClick={runTest}
           disabled={running || text.trim().length === 0}
-          className="inline-flex items-center self-start px-3 py-1.5 rounded-md bg-brand text-brand-contrast text-sm font-medium hover:bg-brand-hover transition-colors disabled:bg-elevated disabled:text-fg-faint disabled:cursor-not-allowed"
+          className="self-start"
         >
           {running
             ? countdown > 0
               ? `Tippe in ${countdown} s … (jetzt Ziel-Fenster fokussieren)`
               : "Inject läuft …"
             : "Auto-Paste testen"}
-        </button>
+        </Button>
         {lastResult && (
           <div className="text-xs text-fg-muted mt-1">{lastResult}</div>
         )}

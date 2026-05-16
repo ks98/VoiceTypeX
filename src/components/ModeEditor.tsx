@@ -2,6 +2,7 @@
 import { useState } from "react";
 import type { Mode } from "../lib/types";
 import { ipcCreateMode, ipcUpdateMode } from "../lib/tauri";
+import Button from "./Button";
 
 interface ModeEditorProps {
   initial: Mode | null;
@@ -14,10 +15,6 @@ const LLM_PROVIDERS = ["xai", "openai", "anthropic"];
 
 const inputCls =
   "bg-surface border border-outline rounded-md px-2 py-1.5 text-sm w-full text-fg placeholder:text-fg-faint focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/40";
-const primaryBtn =
-  "inline-flex items-center px-4 py-2 rounded-md bg-brand text-brand-contrast text-sm font-medium hover:bg-brand-hover transition-colors disabled:bg-elevated disabled:text-fg-faint disabled:cursor-not-allowed";
-const secondaryBtn =
-  "inline-flex items-center px-4 py-2 rounded-md bg-elevated text-fg text-sm hover:bg-outline-strong/40 transition-colors";
 
 function emptyMode(): Mode {
   return {
@@ -280,17 +277,12 @@ export default function ModeEditor({
         </div>
 
         <div className="p-5 border-t border-outline flex justify-end gap-2">
-          <button type="button" onClick={onClose} className={secondaryBtn}>
+          <Button variant="secondary" onClick={onClose}>
             Abbrechen
-          </button>
-          <button
-            type="button"
-            onClick={() => void onSave()}
-            disabled={!canSave || saving}
-            className={primaryBtn}
-          >
+          </Button>
+          <Button onClick={() => void onSave()} disabled={!canSave || saving}>
             {saving ? "Speichere…" : isEdit ? "Speichern" : "Anlegen"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

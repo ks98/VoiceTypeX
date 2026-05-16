@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { useEffect, useState } from "react";
+import Button from "./Button";
 import {
   ipcDeleteProviderKey,
   ipcGetProviderStatus,
@@ -23,7 +24,7 @@ const PROVIDER_LABELS: Record<string, string> = {
 };
 
 const inputCls =
-  "bg-surface border border-outline rounded-md px-2 py-1 text-xs text-fg placeholder:text-fg-faint focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/40";
+  "bg-surface border border-outline rounded-md px-2 py-1.5 text-xs text-fg placeholder:text-fg-faint focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/40";
 
 export default function ApiKeysSection(): JSX.Element {
   const [status, setStatus] = useState<ProviderStatus[]>([]);
@@ -144,55 +145,51 @@ export default function ApiKeysSection(): JSX.Element {
                       className={`${inputCls} w-64`}
                       autoFocus
                     />
-                    <button
-                      type="button"
-                      onClick={() => void onSave(s.provider)}
-                      className="text-xs px-3 py-1 rounded-md bg-brand text-brand-contrast hover:bg-brand-hover transition-colors"
-                    >
+                    <Button size="sm" onClick={() => void onSave(s.provider)}>
                       Speichern
-                    </button>
-                    <button
-                      type="button"
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
                       onClick={() => {
                         setEditingProvider(null);
                         setDraftKey("");
                       }}
-                      className="text-xs px-3 py-1 rounded-md bg-elevated text-fg hover:bg-outline-strong/40 transition-colors"
                     >
                       Abbrechen
-                    </button>
+                    </Button>
                   </>
                 ) : (
                   <>
-                    <button
-                      type="button"
+                    <Button
+                      size="sm"
+                      variant="secondary"
                       onClick={() => {
                         setEditingProvider(s.provider);
                         setDraftKey("");
                       }}
-                      className="text-xs px-3 py-1 rounded-md bg-elevated text-fg hover:bg-outline-strong/40 transition-colors"
                     >
                       {s.configured ? "Aendern" : "Setzen"}
-                    </button>
+                    </Button>
                     {s.configured ? (
                       <>
-                        <button
-                          type="button"
+                        <Button
+                          size="sm"
+                          variant="secondary"
                           onClick={() => void onTest(s.provider)}
                           disabled={test.kind === "running"}
-                          className="text-xs px-3 py-1 rounded-md bg-elevated text-fg hover:bg-outline-strong/40 transition-colors disabled:opacity-50"
                         >
                           {test.kind === "running"
                             ? "Teste…"
                             : "Verbindung testen"}
-                        </button>
-                        <button
-                          type="button"
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="danger"
                           onClick={() => void onDelete(s.provider)}
-                          className="text-xs px-3 py-1 rounded-md bg-elevated text-fg-muted hover:bg-status-error/15 hover:text-status-error transition-colors"
                         >
                           Loeschen
-                        </button>
+                        </Button>
                       </>
                     ) : null}
                   </>

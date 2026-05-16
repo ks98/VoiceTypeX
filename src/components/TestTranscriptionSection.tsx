@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { useEffect, useState } from "react";
+import Button from "./Button";
 import {
   ipcGetWhisperBackend,
   ipcRunTestTranscription,
@@ -66,18 +67,13 @@ export default function TestTranscriptionSection(): JSX.Element {
         ) : null}
       </div>
       <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={() => void onRun()}
-          disabled={running}
-          className="inline-flex items-center px-3 py-2 rounded-md bg-brand text-brand-contrast text-sm font-medium hover:bg-brand-hover transition-colors disabled:bg-elevated disabled:text-fg-faint disabled:cursor-not-allowed"
-        >
+        <Button onClick={() => void onRun()} disabled={running}>
           {running
             ? countdown !== null
               ? `Aufnahme… ${countdown}`
               : "Transkribiere…"
             : "Test starten (5 s)"}
-        </button>
+        </Button>
       </div>
       {error ? (
         <div className="text-xs text-status-error">{error}</div>

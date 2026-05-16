@@ -22,7 +22,7 @@ export default function ThemeToggle(): JSX.Element {
           title={opt.hint}
           aria-pressed={theme === opt.id}
           className={
-            "px-3 py-1.5 font-medium transition-colors " +
+            "px-3 py-1.5 font-medium whitespace-nowrap leading-none transition-colors " +
             (theme === opt.id
               ? "bg-brand text-brand-contrast"
               : "text-fg-muted hover:bg-elevated hover:text-fg")

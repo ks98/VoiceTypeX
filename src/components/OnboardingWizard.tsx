@@ -13,6 +13,7 @@ import {
   type WhisperBackendInfo,
 } from "../lib/tauri";
 import { useSettingsStore } from "../store";
+import Button from "./Button";
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -22,10 +23,6 @@ interface OnboardingWizardProps {
 
 const inputCls =
   "bg-surface border border-outline rounded-md px-3 py-2 text-sm text-fg placeholder:text-fg-faint focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/40";
-const primaryBtn =
-  "inline-flex items-center px-4 py-2 rounded-md bg-brand text-brand-contrast text-sm font-medium hover:bg-brand-hover transition-colors disabled:bg-elevated disabled:text-fg-faint disabled:cursor-not-allowed";
-const secondaryBtn =
-  "inline-flex items-center px-4 py-2 rounded-md bg-elevated text-fg text-sm hover:bg-outline-strong/40 transition-colors";
 
 export default function OnboardingWizard({
   onClose,
@@ -125,13 +122,13 @@ export default function OnboardingWizard({
                 Setup in {4} kurzen Schritten
               </div>
             </div>
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => void skipAll()}
-              className="text-xs text-fg-faint hover:text-fg-muted transition-colors"
             >
               überspringen
-            </button>
+            </Button>
           </div>
           <StepIndicator current={step} total={4} />
         </div>
@@ -161,33 +158,27 @@ export default function OnboardingWizard({
           )}
         </div>
 
-        <div className="px-6 py-4 border-t border-outline flex justify-between gap-2">
-          <button
-            type="button"
+        <div className="px-6 py-4 border-t border-outline flex justify-between items-center gap-2">
+          <Button
+            variant="ghost"
             onClick={() => setStep((s) => Math.max(1, (s - 1) as Step) as Step)}
             disabled={step === 1}
-            className="text-xs text-fg-muted hover:text-fg disabled:opacity-30 transition-colors"
           >
             ← Zurück
-          </button>
+          </Button>
           {step < 4 ? (
-            <button
-              type="button"
+            <Button
+              variant="secondary"
               onClick={() =>
                 setStep((s) => Math.min(4, (s + 1) as Step) as Step)
               }
-              className={secondaryBtn}
             >
               Weiter →
-            </button>
+            </Button>
           ) : (
-            <button
-              type="button"
-              onClick={() => void onFinish()}
-              className={primaryBtn}
-            >
+            <Button onClick={() => void onFinish()}>
               Setup abschließen
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -229,16 +220,15 @@ export default function OnboardingWizard({
             heruntergeladen.
           </p>
         </div>
-        <button
-          type="button"
+        <Button
           onClick={() => void onDownload()}
           disabled={downloading}
-          className={`${primaryBtn} self-start`}
+          className="self-start"
         >
           {downloading
             ? "Lade Modell…"
             : "Default-Modell jetzt herunterladen"}
-        </button>
+        </Button>
         {downloadProgress ? (
           <div className="flex flex-col gap-1.5 text-xs text-fg-muted">
             <div>
@@ -313,19 +303,17 @@ export default function OnboardingWizard({
           className={`${inputCls} font-mono`}
         />
         <div className="flex items-center gap-3">
-          <button
-            type="button"
+          <Button
             onClick={() => void onSaveKey()}
             disabled={
               !xaiKey ||
               (keyStatus !== null && keyStatus.kind === "saving")
             }
-            className={primaryBtn}
           >
             {keyStatus?.kind === "saving"
               ? "Speichere + teste…"
               : "Speichern + Verbindung testen"}
-          </button>
+          </Button>
           {keyStatus?.kind === "ok" ? (
             <span className="text-xs text-status-done">
               ✓ Verbindung erfolgreich

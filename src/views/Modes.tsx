@@ -9,9 +9,7 @@ import {
 } from "../lib/tauri";
 import type { Mode } from "../lib/types";
 import ModeEditor from "../components/ModeEditor";
-
-const primaryBtn =
-  "inline-flex items-center px-3 py-2 rounded-md bg-brand text-brand-contrast text-sm font-medium hover:bg-brand-hover transition-colors disabled:bg-elevated disabled:text-fg-faint disabled:cursor-not-allowed";
+import Button from "../components/Button";
 
 export default function Modes(): JSX.Element {
   const modes = useModesStore((s) => s.modes);
@@ -100,13 +98,9 @@ export default function Modes(): JSX.Element {
           Hot-Reload-Watcher pickt sie auf. Du kannst die Dateien auch direkt im
           Editor anfassen.
         </p>
-        <button
-          type="button"
-          onClick={() => setShowNew(true)}
-          className={`${primaryBtn} shrink-0`}
-        >
+        <Button onClick={() => setShowNew(true)} className="shrink-0">
           + Neuer Modus
-        </button>
+        </Button>
       </div>
 
       {opError ? (
@@ -122,7 +116,7 @@ export default function Modes(): JSX.Element {
             <th className="py-2 font-medium">STT</th>
             <th className="py-2 font-medium">Nachbearbeitung</th>
             <th className="py-2 font-medium">Inject</th>
-            <th className="py-2 w-32"></th>
+            <th className="py-2 w-40"></th>
           </tr>
         </thead>
         <tbody>
@@ -149,30 +143,32 @@ export default function Modes(): JSX.Element {
               <td className="py-2 capitalize text-fg-muted">
                 {m.injection_method}
               </td>
-              <td className="py-2 text-right">
-                <button
-                  type="button"
-                  onClick={() => void onTrigger(m.id)}
-                  disabled={triggering !== null}
-                  className="text-xs px-2 py-1 rounded-md bg-brand text-brand-contrast hover:bg-brand-hover transition-colors mr-1 disabled:opacity-50"
-                  title="Aufnahme starten/stoppen (Toggle)"
-                >
-                  {triggering === m.id ? "…" : "Trigger"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditing(m)}
-                  className="text-xs px-2 py-1 rounded-md bg-elevated text-fg hover:bg-outline-strong/40 transition-colors mr-1"
-                >
-                  Edit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void onDelete(m.id, m.name)}
-                  className="text-xs px-2 py-1 rounded-md bg-elevated text-fg-muted hover:bg-status-error/15 hover:text-status-error transition-colors"
-                >
-                  X
-                </button>
+              <td className="py-2">
+                <div className="flex justify-end items-center gap-1">
+                  <Button
+                    size="sm"
+                    onClick={() => void onTrigger(m.id)}
+                    disabled={triggering !== null}
+                    title="Aufnahme starten/stoppen (Toggle)"
+                  >
+                    {triggering === m.id ? "…" : "Trigger"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setEditing(m)}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    onClick={() => void onDelete(m.id, m.name)}
+                    title="Modus loeschen"
+                  >
+                    X
+                  </Button>
+                </div>
               </td>
             </tr>
           ))}
