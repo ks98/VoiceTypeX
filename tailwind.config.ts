@@ -29,10 +29,6 @@ const config: Config = {
           DEFAULT: v("brand"),
           hover: v("brand-hover"),
           contrast: v("brand-contrast"),
-          // Backward-Compat (entfernt sich in Welle 2, sobald die Views
-          // auf brand/brand-hover migriert sind).
-          500: v("brand"),
-          700: v("brand-hover"),
         },
         status: {
           idle: v("status-idle"),

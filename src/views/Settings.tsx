@@ -7,6 +7,7 @@ import Field from "../components/Field";
 import ApiKeysSection from "../components/ApiKeysSection";
 import TestTranscriptionSection from "../components/TestTranscriptionSection";
 import AutoPasteTestSection from "../components/AutoPasteTestSection";
+import ThemeToggle from "../components/ThemeToggle";
 import { useSettingsStore } from "../store";
 import {
   ipcDownloadDefaultModel,
@@ -15,6 +16,13 @@ import {
   type ModelDownloadProgress,
   type SessionInfo,
 } from "../lib/tauri";
+
+const inputCls =
+  "bg-surface border border-outline rounded-md px-3 py-2 text-sm text-fg placeholder:text-fg-faint focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/40";
+const primaryBtn =
+  "inline-flex items-center px-3 py-2 rounded-md bg-brand text-brand-contrast text-sm font-medium hover:bg-brand-hover transition-colors disabled:bg-elevated disabled:text-fg-faint disabled:cursor-not-allowed";
+const secondaryBtn =
+  "inline-flex items-center px-3 py-2 rounded-md bg-elevated text-fg text-sm hover:bg-outline-strong/40 transition-colors disabled:opacity-50";
 
 export default function Settings(): JSX.Element {
   const settings = useSettingsStore((s) => s.settings);
@@ -55,7 +63,7 @@ export default function Settings(): JSX.Element {
   }, []);
 
   if (loading || !settings) {
-    return <div className="text-slate-500">Lade Einstellungen…</div>;
+    return <div className="text-fg-faint">Lade Einstellungen…</div>;
   }
 
   const onPickModel = async () => {
@@ -92,17 +100,21 @@ export default function Settings(): JSX.Element {
   return (
     <div className="flex flex-col gap-6 max-w-2xl">
       {error ? (
-        <div className="rounded-md bg-red-900/30 border border-red-700 px-3 py-2 text-sm text-red-300">
+        <div className="rounded-md bg-status-error/10 border border-status-error/40 px-3 py-2 text-sm text-status-error">
           {error}
         </div>
       ) : null}
+
+      <Field label="Erscheinungsbild" hint="System folgt der OS-Einstellung.">
+        <ThemeToggle />
+      </Field>
 
       <Field
         label="Audio-Eingabegeraet"
         hint="Leer = OS-Standard. Aenderungen wirken beim naechsten Recording."
       >
         <select
-          className="bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm"
+          className={inputCls}
           value={settings.audio_input_device ?? ""}
           onChange={(e) =>
             void update({
@@ -126,7 +138,7 @@ export default function Settings(): JSX.Element {
         <div className="flex gap-2">
           <input
             type="text"
-            className="flex-1 bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm"
+            className={`${inputCls} flex-1`}
             placeholder="(Default-Modell aus Slot)"
             value={settings.whisper_model_path ?? ""}
             onChange={(e) =>
@@ -136,13 +148,13 @@ export default function Settings(): JSX.Element {
           <button
             type="button"
             onClick={() => void onPickModel()}
-            className="px-3 py-2 rounded bg-slate-800 hover:bg-slate-700 text-sm"
+            className={secondaryBtn}
           >
             Datei waehlen…
           </button>
         </div>
         <select
-          className="bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm"
+          className={inputCls}
           value={settings.whisper_default_slot}
           onChange={(e) =>
             void update({ whisper_default_slot: e.target.value })
@@ -161,23 +173,23 @@ export default function Settings(): JSX.Element {
             type="button"
             onClick={() => void onDownloadDefault()}
             disabled={downloading}
-            className="self-start px-3 py-2 rounded bg-brand-700 hover:bg-brand-500 disabled:bg-slate-800 disabled:text-slate-500 text-sm"
+            className={`${primaryBtn} self-start`}
           >
             {downloading
               ? "Lade Modell…"
               : "Default-Modell jetzt herunterladen"}
           </button>
           {progress ? (
-            <div className="flex flex-col gap-1 text-xs text-slate-400">
+            <div className="flex flex-col gap-1 text-xs text-fg-muted">
               <div>
                 {fmtMb(progress.downloaded)}
                 {progress.total ? ` von ${fmtMb(progress.total)}` : ""}
                 {progressPct !== null ? ` (${progressPct} %)` : ""}
               </div>
               {progressPct !== null ? (
-                <div className="h-1.5 bg-slate-800 rounded overflow-hidden">
+                <div className="h-1.5 bg-elevated rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-brand-500 transition-all"
+                    className="h-full bg-brand transition-all"
                     style={{ width: `${progressPct}%` }}
                   />
                 </div>
@@ -185,7 +197,7 @@ export default function Settings(): JSX.Element {
             </div>
           ) : null}
           {downloadError ? (
-            <div className="text-xs text-red-400">{downloadError}</div>
+            <div className="text-xs text-status-error">{downloadError}</div>
           ) : null}
         </div>
       </Field>
@@ -205,7 +217,7 @@ export default function Settings(): JSX.Element {
           type="number"
           min={1}
           max={32}
-          className="bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm w-32"
+          className={`${inputCls} w-32`}
           placeholder="auto"
           value={settings.whisper_n_threads ?? ""}
           onChange={(e) => {
@@ -228,7 +240,7 @@ export default function Settings(): JSX.Element {
       >
         <input
           type="text"
-          className="bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm"
+          className={inputCls}
           value={settings.ollama_url}
           onChange={(e) => void update({ ollama_url: e.target.value })}
         />
@@ -238,7 +250,7 @@ export default function Settings(): JSX.Element {
         label="Diagnose-Logging"
         hint="Erlaubt Audio-Metadata, Transkripte und LLM-Antworten in den Logs. Default OFF (Datenschutz)."
       >
-        <label className="flex items-center gap-2 text-sm">
+        <label className="flex items-center gap-2 text-sm text-fg">
           <input
             type="checkbox"
             checked={settings.diagnostic_logging}
@@ -254,7 +266,7 @@ export default function Settings(): JSX.Element {
         label="Beim Login automatisch starten"
         hint="Default OFF. Tauri-Plugin-Autostart legt einen LaunchAgent bzw. Run-Eintrag an."
       >
-        <label className="flex items-center gap-2 text-sm">
+        <label className="flex items-center gap-2 text-sm text-fg">
           <input
             type="checkbox"
             checked={settings.autostart}
@@ -273,17 +285,6 @@ export default function Settings(): JSX.Element {
   );
 }
 
-/**
- * Menue-Hotkey-Anzeige + Bearbeitung. Plattform-abhaengig:
- *
- * - **Wayland**: read-only. KDE/GNOME verwalten die Tastenbindung selbst;
- *   ein Aendern des Settings-Werts schlaegt nur als *Vorschlag* fuer den
- *   allerersten Start durch. Wir zeigen den vom Compositor effektiv
- *   gebundenen Trigger an und verweisen auf System Settings.
- * - **X11 / Windows**: editierbar. Die App registriert den Hotkey direkt
- *   ueber `tauri-plugin-global-shortcut`, der Settings-Wert ist die
- *   Wahrheit.
- */
 function MenuHotkeyField({
   session,
   settingsValue,
@@ -303,7 +304,7 @@ function MenuHotkeyField({
         label="Globaler Menue-Hotkey (Wayland)"
         hint="Auf Wayland verwaltet der Compositor (KDE / GNOME) die Tastenbindung. Aenderungen unter System Settings → Globale Verknuepfungen → VoiceTypeX. Der hier angezeigte Wert ist der aktuelle effektive Trigger; Aenderungen wirken nach App-Neustart."
       >
-        <div className="bg-slate-900/60 border border-slate-700 rounded px-3 py-2 text-sm font-mono w-72 text-slate-300">
+        <div className="bg-elevated border border-outline rounded-md px-3 py-2 text-sm font-mono w-72 text-fg-muted">
           {effective ?? settingsValue}
         </div>
       </Field>
@@ -317,7 +318,7 @@ function MenuHotkeyField({
     >
       <input
         type="text"
-        className="bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm font-mono w-72"
+        className={`${inputCls} font-mono w-72`}
         value={settingsValue}
         onChange={(e) => onChange(e.target.value)}
         placeholder="CommandOrControl+Alt+Space"

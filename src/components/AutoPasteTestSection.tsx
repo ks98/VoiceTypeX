@@ -7,14 +7,8 @@ const DELAY_SECS = 3;
 
 /**
  * Diagnose-Test fuer den Auto-Paste-Pfad. Klick startet einen
- * 3-Sekunden-Countdown — der User hat Zeit, das Ziel-Fenster (z.B.
- * Kate, Browser-Adressleiste) zu fokussieren. Danach triggert die App
- * direkt einen Inject ohne Pipeline-Drumherum (Audio/STT/LLM).
- *
- * Sinn: trennt das libei-Tippen vom Pipeline-Fokus-Race. Wenn dieser
- * Test erfolgreich ist, der echte Hotkey-Pfad aber nicht, liegt das
- * Problem an dem, was zwischen Hotkey-Press und Inject den Fokus
- * verschiebt — nicht an libei selbst.
+ * 3-Sekunden-Countdown — der User hat Zeit, das Ziel-Fenster zu
+ * fokussieren. Trennt das libei-Tippen vom Pipeline-Fokus-Race.
  */
 export default function AutoPasteTestSection() {
   const [running, setRunning] = useState(false);
@@ -26,7 +20,6 @@ export default function AutoPasteTestSection() {
     setRunning(true);
     setLastResult(null);
     try {
-      // Counter im UI laufen lassen (kosmetisch).
       for (let i = DELAY_SECS; i > 0; i--) {
         setCountdown(i);
         await new Promise((r) => setTimeout(r, 1000));
@@ -42,11 +35,11 @@ export default function AutoPasteTestSection() {
   };
 
   return (
-    <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-4 mt-4">
-      <h3 className="text-base font-semibold text-slate-100 mb-2">
+    <div className="rounded-md border border-outline bg-surface p-4">
+      <h3 className="text-base font-semibold text-fg mb-2">
         Auto-Paste-Test (Diagnose)
       </h3>
-      <p className="text-sm text-slate-400 mb-3">
+      <p className="text-sm text-fg-muted mb-3">
         Klick startet einen {DELAY_SECS}-Sekunden-Countdown. Fokussiere in
         dieser Zeit das Ziel-Fenster (Kate, Notepad, Browser-Adressleiste,
         …). Danach wird der Text via Clipboard + Strg+V eingefügt — ohne
@@ -54,7 +47,7 @@ export default function AutoPasteTestSection() {
       </p>
       <div className="flex flex-col gap-2">
         <input
-          className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm font-mono text-slate-100"
+          className="bg-elevated border border-outline rounded-md px-2 py-1.5 text-sm font-mono text-fg placeholder:text-fg-faint focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/40"
           value={text}
           onChange={(e) => setText(e.target.value)}
           disabled={running}
@@ -62,7 +55,7 @@ export default function AutoPasteTestSection() {
         <button
           onClick={runTest}
           disabled={running || text.trim().length === 0}
-          className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 disabled:text-slate-400 text-white rounded px-3 py-1.5 text-sm font-medium transition"
+          className="inline-flex items-center self-start px-3 py-1.5 rounded-md bg-brand text-brand-contrast text-sm font-medium hover:bg-brand-hover transition-colors disabled:bg-elevated disabled:text-fg-faint disabled:cursor-not-allowed"
         >
           {running
             ? countdown > 0
@@ -71,7 +64,7 @@ export default function AutoPasteTestSection() {
             : "Auto-Paste testen"}
         </button>
         {lastResult && (
-          <div className="text-xs text-slate-300 mt-1">{lastResult}</div>
+          <div className="text-xs text-fg-muted mt-1">{lastResult}</div>
         )}
       </div>
     </div>

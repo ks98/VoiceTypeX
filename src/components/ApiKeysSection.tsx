@@ -22,6 +22,9 @@ const PROVIDER_LABELS: Record<string, string> = {
   deepgram: "Deepgram (STT)",
 };
 
+const inputCls =
+  "bg-surface border border-outline rounded-md px-2 py-1 text-xs text-fg placeholder:text-fg-faint focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/40";
+
 export default function ApiKeysSection(): JSX.Element {
   const [status, setStatus] = useState<ProviderStatus[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,23 +85,23 @@ export default function ApiKeysSection(): JSX.Element {
   };
 
   if (loading) {
-    return <div className="text-slate-500">Lade Provider-Status…</div>;
+    return <div className="text-fg-faint">Lade Provider-Status…</div>;
   }
 
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <h2 className="text-lg font-semibold text-slate-200">
+        <h2 className="text-lg font-semibold text-fg">
           Cloud-API-Keys (BYOK)
         </h2>
-        <p className="text-xs text-slate-500 mt-1">
+        <p className="text-xs text-fg-faint mt-1">
           Keys werden im OS-Keychain gespeichert, nie im Klartext auf Disk oder
           in Logs. Die UI sieht nur, ob ein Key gesetzt ist.
         </p>
       </div>
 
       {saveError ? (
-        <div className="rounded-md bg-red-900/30 border border-red-700 px-3 py-2 text-sm text-red-300">
+        <div className="rounded-md bg-status-error/10 border border-status-error/40 px-3 py-2 text-sm text-status-error">
           {saveError}
         </div>
       ) : null}
@@ -109,25 +112,25 @@ export default function ApiKeysSection(): JSX.Element {
           return (
             <div
               key={s.provider}
-              className="flex flex-col gap-2 border border-slate-800 rounded p-3"
+              className="flex flex-col gap-2 border border-outline rounded-md p-3 bg-surface"
             >
-              <div className="flex items-center gap-3">
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-slate-100">
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-fg">
                     {PROVIDER_LABELS[s.provider] ?? s.provider}
                   </div>
-                  <div className="text-xs text-slate-500">
+                  <div className="text-xs">
                     {s.error ? (
-                      <span className="text-red-400" title={s.error}>
+                      <span className="text-status-error" title={s.error}>
                         ⚠ Keychain-Fehler:{" "}
                         {s.error.length > 60
                           ? s.error.slice(0, 60) + "…"
                           : s.error}
                       </span>
                     ) : s.configured ? (
-                      <span className="text-emerald-400">✓ gesetzt</span>
+                      <span className="text-status-done">✓ gesetzt</span>
                     ) : (
-                      <span className="text-slate-500">nicht gesetzt</span>
+                      <span className="text-fg-faint">nicht gesetzt</span>
                     )}
                   </div>
                 </div>
@@ -138,13 +141,13 @@ export default function ApiKeysSection(): JSX.Element {
                       value={draftKey}
                       onChange={(e) => setDraftKey(e.target.value)}
                       placeholder="API-Key"
-                      className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs w-64"
+                      className={`${inputCls} w-64`}
                       autoFocus
                     />
                     <button
                       type="button"
                       onClick={() => void onSave(s.provider)}
-                      className="text-xs px-3 py-1 rounded bg-brand-700 hover:bg-brand-500"
+                      className="text-xs px-3 py-1 rounded-md bg-brand text-brand-contrast hover:bg-brand-hover transition-colors"
                     >
                       Speichern
                     </button>
@@ -154,7 +157,7 @@ export default function ApiKeysSection(): JSX.Element {
                         setEditingProvider(null);
                         setDraftKey("");
                       }}
-                      className="text-xs px-3 py-1 rounded bg-slate-800 hover:bg-slate-700"
+                      className="text-xs px-3 py-1 rounded-md bg-elevated text-fg hover:bg-outline-strong/40 transition-colors"
                     >
                       Abbrechen
                     </button>
@@ -167,7 +170,7 @@ export default function ApiKeysSection(): JSX.Element {
                         setEditingProvider(s.provider);
                         setDraftKey("");
                       }}
-                      className="text-xs px-3 py-1 rounded bg-slate-800 hover:bg-slate-700"
+                      className="text-xs px-3 py-1 rounded-md bg-elevated text-fg hover:bg-outline-strong/40 transition-colors"
                     >
                       {s.configured ? "Aendern" : "Setzen"}
                     </button>
@@ -177,7 +180,7 @@ export default function ApiKeysSection(): JSX.Element {
                           type="button"
                           onClick={() => void onTest(s.provider)}
                           disabled={test.kind === "running"}
-                          className="text-xs px-3 py-1 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-50"
+                          className="text-xs px-3 py-1 rounded-md bg-elevated text-fg hover:bg-outline-strong/40 transition-colors disabled:opacity-50"
                         >
                           {test.kind === "running"
                             ? "Teste…"
@@ -186,7 +189,7 @@ export default function ApiKeysSection(): JSX.Element {
                         <button
                           type="button"
                           onClick={() => void onDelete(s.provider)}
-                          className="text-xs px-3 py-1 rounded bg-slate-800 hover:bg-red-900/40 hover:border-red-700 border border-transparent"
+                          className="text-xs px-3 py-1 rounded-md bg-elevated text-fg-muted hover:bg-status-error/15 hover:text-status-error transition-colors"
                         >
                           Loeschen
                         </button>
@@ -196,12 +199,12 @@ export default function ApiKeysSection(): JSX.Element {
                 )}
               </div>
               {test.kind === "ok" ? (
-                <div className="text-xs text-emerald-400">
+                <div className="text-xs text-status-done">
                   ✓ Verbindung erfolgreich
                 </div>
               ) : null}
               {test.kind === "error" ? (
-                <div className="text-xs text-red-400">{test.message}</div>
+                <div className="text-xs text-status-error">{test.message}</div>
               ) : null}
             </div>
           );

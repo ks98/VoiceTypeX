@@ -10,6 +10,9 @@ import {
 import type { Mode } from "../lib/types";
 import ModeEditor from "../components/ModeEditor";
 
+const primaryBtn =
+  "inline-flex items-center px-3 py-2 rounded-md bg-brand text-brand-contrast text-sm font-medium hover:bg-brand-hover transition-colors disabled:bg-elevated disabled:text-fg-faint disabled:cursor-not-allowed";
+
 export default function Modes(): JSX.Element {
   const modes = useModesStore((s) => s.modes);
   const loading = useModesStore((s) => s.loading);
@@ -64,11 +67,11 @@ export default function Modes(): JSX.Element {
   };
 
   if (loading) {
-    return <div className="text-slate-500">Lade Modi…</div>;
+    return <div className="text-fg-faint">Lade Modi…</div>;
   }
   if (error) {
     return (
-      <div className="rounded-md bg-red-900/30 border border-red-700 px-3 py-2 text-sm text-red-300">
+      <div className="rounded-md bg-status-error/10 border border-status-error/40 px-3 py-2 text-sm text-status-error">
         {error}
       </div>
     );
@@ -79,7 +82,7 @@ export default function Modes(): JSX.Element {
   return (
     <div className="flex flex-col gap-3">
       {noHotkeys ? (
-        <div className="rounded-md bg-amber-900/20 border border-amber-700/50 px-3 py-2 text-xs text-amber-200">
+        <div className="rounded-md bg-status-processing/10 border border-status-processing/40 px-3 py-2 text-xs text-status-processing">
           <strong>Display-Server: {session?.display_server}.</strong> Globale
           Hotkeys sind hier nicht verfuegbar (Phase 5 ergaenzt das via
           xdg-desktop-portal). Nutze die <em>Trigger</em>-Buttons unten — sie
@@ -89,36 +92,36 @@ export default function Modes(): JSX.Element {
             : " danach drueck Ctrl+V in der Ziel-App."}
         </div>
       ) : null}
-      <div className="flex justify-between items-start">
-        <p className="text-sm text-slate-400 max-w-3xl">
+      <div className="flex justify-between items-start gap-4">
+        <p className="text-sm text-fg-muted max-w-3xl">
           Modi werden in{" "}
-          <code className="text-brand-500">app_config_dir/modes/</code> als
-          TOML-Dateien gespeichert. UI-Aenderungen schreiben dorthin; der
+          <code className="text-brand font-mono">app_config_dir/modes/</code>{" "}
+          als TOML-Dateien gespeichert. UI-Aenderungen schreiben dorthin; der
           Hot-Reload-Watcher pickt sie auf. Du kannst die Dateien auch direkt im
           Editor anfassen.
         </p>
         <button
           type="button"
           onClick={() => setShowNew(true)}
-          className="px-3 py-2 rounded bg-brand-700 hover:bg-brand-500 text-sm"
+          className={`${primaryBtn} shrink-0`}
         >
           + Neuer Modus
         </button>
       </div>
 
       {opError ? (
-        <div className="rounded-md bg-red-900/30 border border-red-700 px-3 py-2 text-sm text-red-300">
+        <div className="rounded-md bg-status-error/10 border border-status-error/40 px-3 py-2 text-sm text-status-error">
           {opError}
         </div>
       ) : null}
 
       <table className="w-full text-sm">
-        <thead className="text-left text-slate-400 border-b border-slate-800">
+        <thead className="text-left text-fg-muted border-b border-outline">
           <tr>
-            <th className="py-2">Name</th>
-            <th className="py-2">STT</th>
-            <th className="py-2">Nachbearbeitung</th>
-            <th className="py-2">Inject</th>
+            <th className="py-2 font-medium">Name</th>
+            <th className="py-2 font-medium">STT</th>
+            <th className="py-2 font-medium">Nachbearbeitung</th>
+            <th className="py-2 font-medium">Inject</th>
             <th className="py-2 w-32"></th>
           </tr>
         </thead>
@@ -126,28 +129,32 @@ export default function Modes(): JSX.Element {
           {modes.map((m) => (
             <tr
               key={m.id}
-              className="border-b border-slate-900 hover:bg-slate-900/40"
+              className="border-b border-outline/60 hover:bg-elevated/60 transition-colors"
             >
               <td className="py-2">
-                <div className="font-medium text-slate-100">{m.name}</div>
-                <div className="text-xs text-slate-500">id: {m.id}</div>
+                <div className="font-medium text-fg">{m.name}</div>
+                <div className="text-xs text-fg-faint font-mono">
+                  id: {m.id}
+                </div>
               </td>
-              <td className="py-2 capitalize">
+              <td className="py-2 capitalize text-fg-muted">
                 {m.transcription}
                 {m.cloud_stt_provider ? ` / ${m.cloud_stt_provider}` : ""}
               </td>
-              <td className="py-2 capitalize">
+              <td className="py-2 capitalize text-fg-muted">
                 {m.processing}
                 {m.cloud_llm_provider ? ` / ${m.cloud_llm_provider}` : ""}
                 {m.cloud_llm_model ? ` (${m.cloud_llm_model})` : ""}
               </td>
-              <td className="py-2 capitalize">{m.injection_method}</td>
+              <td className="py-2 capitalize text-fg-muted">
+                {m.injection_method}
+              </td>
               <td className="py-2 text-right">
                 <button
                   type="button"
                   onClick={() => void onTrigger(m.id)}
                   disabled={triggering !== null}
-                  className="text-xs px-2 py-1 rounded bg-brand-700 hover:bg-brand-500 mr-1 disabled:opacity-50"
+                  className="text-xs px-2 py-1 rounded-md bg-brand text-brand-contrast hover:bg-brand-hover transition-colors mr-1 disabled:opacity-50"
                   title="Aufnahme starten/stoppen (Toggle)"
                 >
                   {triggering === m.id ? "…" : "Trigger"}
@@ -155,14 +162,14 @@ export default function Modes(): JSX.Element {
                 <button
                   type="button"
                   onClick={() => setEditing(m)}
-                  className="text-xs px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 mr-1"
+                  className="text-xs px-2 py-1 rounded-md bg-elevated text-fg hover:bg-outline-strong/40 transition-colors mr-1"
                 >
                   Edit
                 </button>
                 <button
                   type="button"
                   onClick={() => void onDelete(m.id, m.name)}
-                  className="text-xs px-2 py-1 rounded bg-slate-800 hover:bg-red-900/40"
+                  className="text-xs px-2 py-1 rounded-md bg-elevated text-fg-muted hover:bg-status-error/15 hover:text-status-error transition-colors"
                 >
                   X
                 </button>

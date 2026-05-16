@@ -14,9 +14,9 @@ export default function Field({
 }: FieldProps): JSX.Element {
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="text-sm font-medium text-slate-300">{label}</label>
+      <label className="text-sm font-medium text-fg-muted">{label}</label>
       {children}
-      {hint ? <p className="text-xs text-slate-500">{hint}</p> : null}
+      {hint ? <p className="text-xs text-fg-faint">{hint}</p> : null}
     </div>
   );
 }

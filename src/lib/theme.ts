@@ -21,9 +21,9 @@ export function initTheme(): ThemeChoice {
 }
 
 export function readStoredChoice(): ThemeChoice {
-  if (typeof localStorage === "undefined") return "dark";
+  if (typeof localStorage === "undefined") return "system";
   const v = localStorage.getItem(STORAGE_KEY);
-  return v === "light" || v === "dark" || v === "system" ? v : "dark";
+  return v === "light" || v === "dark" || v === "system" ? v : "system";
 }
 
 export function storeChoice(choice: ThemeChoice): void {

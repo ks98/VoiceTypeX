@@ -31,17 +31,17 @@ export default function Logs(): JSX.Element {
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-sm text-slate-400">
+      <p className="text-sm text-fg-muted">
         Echtzeit-Log-Stream wird in Phase 1.6 ueber einen Tracing-Ringbuffer und
         ein <code>log_line</code>-Event verdrahtet. Aktuell holt das UI die
         letzten Eintraege per Pull alle 2 Sekunden.
       </p>
       {error ? (
-        <div className="rounded-md bg-red-900/30 border border-red-700 px-3 py-2 text-sm text-red-300">
+        <div className="rounded-md bg-status-error/10 border border-status-error/40 px-3 py-2 text-sm text-status-error">
           {error}
         </div>
       ) : null}
-      <pre className="bg-slate-900 border border-slate-800 rounded p-3 text-xs font-mono text-slate-300 overflow-auto max-h-[60vh]">
+      <pre className="bg-surface border border-outline rounded-md p-3 text-xs font-mono text-fg-muted overflow-auto max-h-[60vh]">
         {lines.length === 0 ? "(noch keine Logs)" : lines.join("\n")}
       </pre>
     </div>

@@ -12,6 +12,13 @@ interface ModeEditorProps {
 const STT_PROVIDERS = ["xai", "openai", "groq", "deepgram"];
 const LLM_PROVIDERS = ["xai", "openai", "anthropic"];
 
+const inputCls =
+  "bg-surface border border-outline rounded-md px-2 py-1.5 text-sm w-full text-fg placeholder:text-fg-faint focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/40";
+const primaryBtn =
+  "inline-flex items-center px-4 py-2 rounded-md bg-brand text-brand-contrast text-sm font-medium hover:bg-brand-hover transition-colors disabled:bg-elevated disabled:text-fg-faint disabled:cursor-not-allowed";
+const secondaryBtn =
+  "inline-flex items-center px-4 py-2 rounded-md bg-elevated text-fg text-sm hover:bg-outline-strong/40 transition-colors";
+
 function emptyMode(): Mode {
   return {
     id: "",
@@ -62,7 +69,6 @@ export default function ModeEditor({
     setSaving(true);
     setError(null);
     try {
-      // Bereinige conditional Felder, sodass keine Leichen im TOML landen.
       const cleaned: Mode = {
         ...draft,
         cloud_stt_provider: needsSttProvider ? draft.cloud_stt_provider : null,
@@ -85,17 +91,17 @@ export default function ModeEditor({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-950 border border-slate-700 rounded-lg max-w-3xl w-full max-h-[90vh] overflow-auto">
-        <div className="p-5 border-b border-slate-800">
-          <h2 className="text-lg font-semibold text-slate-100">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-surface border border-outline rounded-lg max-w-3xl w-full max-h-[90vh] overflow-auto shadow-2xl">
+        <div className="p-5 border-b border-outline">
+          <h2 className="text-lg font-semibold text-fg">
             {isEdit ? `Modus bearbeiten: ${draft.name}` : "Neuer Modus"}
           </h2>
         </div>
 
         <div className="p-5 flex flex-col gap-4">
           {error ? (
-            <div className="rounded-md bg-red-900/30 border border-red-700 px-3 py-2 text-sm text-red-300">
+            <div className="rounded-md bg-status-error/10 border border-status-error/40 px-3 py-2 text-sm text-status-error">
               {error}
             </div>
           ) : null}
@@ -103,20 +109,20 @@ export default function ModeEditor({
           <div className="grid grid-cols-2 gap-3">
             <Field label="ID" hint="kurz, ohne Leerzeichen, [a-zA-Z0-9_-]">
               <input
-                className="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm w-full disabled:opacity-50"
+                className={`${inputCls} disabled:opacity-50`}
                 value={draft.id}
                 onChange={(e) => update("id", e.target.value)}
                 disabled={isEdit}
               />
               {!idValid && draft.id ? (
-                <div className="text-xs text-red-400">
+                <div className="text-xs text-status-error">
                   Nur a-z, 0-9, _ und - erlaubt
                 </div>
               ) : null}
             </Field>
             <Field label="Anzeigename">
               <input
-                className="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm w-full"
+                className={inputCls}
                 value={draft.name}
                 onChange={(e) => update("name", e.target.value)}
               />
@@ -125,7 +131,7 @@ export default function ModeEditor({
 
           <Field label="Beschreibung">
             <input
-              className="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm w-full"
+              className={inputCls}
               value={draft.description}
               onChange={(e) => update("description", e.target.value)}
             />
@@ -134,7 +140,7 @@ export default function ModeEditor({
           <div className="grid grid-cols-2 gap-3">
             <Field label="Transkription">
               <select
-                className="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm w-full"
+                className={inputCls}
                 value={draft.transcription}
                 onChange={(e) =>
                   update("transcription", e.target.value as "local" | "cloud")
@@ -146,7 +152,7 @@ export default function ModeEditor({
             </Field>
             <Field label="Nachbearbeitung">
               <select
-                className="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm w-full"
+                className={inputCls}
                 value={draft.processing}
                 onChange={(e) =>
                   update(
@@ -165,7 +171,7 @@ export default function ModeEditor({
           {needsSttProvider ? (
             <Field label="Cloud-STT-Provider">
               <select
-                className="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm w-full"
+                className={inputCls}
                 value={draft.cloud_stt_provider ?? ""}
                 onChange={(e) =>
                   update("cloud_stt_provider", e.target.value || null)
@@ -185,7 +191,7 @@ export default function ModeEditor({
             <div className="grid grid-cols-2 gap-3">
               <Field label="Cloud-LLM-Provider">
                 <select
-                  className="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm w-full"
+                  className={inputCls}
                   value={draft.cloud_llm_provider ?? ""}
                   onChange={(e) =>
                     update("cloud_llm_provider", e.target.value || null)
@@ -204,7 +210,7 @@ export default function ModeEditor({
                 hint="z.B. grok-4-fast-non-reasoning, gpt-4o-mini, claude-sonnet-4-6"
               >
                 <input
-                  className="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm w-full font-mono"
+                  className={`${inputCls} font-mono`}
                   value={draft.cloud_llm_model ?? ""}
                   onChange={(e) =>
                     update("cloud_llm_model", e.target.value || null)
@@ -220,7 +226,7 @@ export default function ModeEditor({
               hint="z.B. qwen2.5:7b, llama3.1:8b"
             >
               <input
-                className="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm w-full font-mono"
+                className={`${inputCls} font-mono`}
                 value={draft.local_llm_model ?? ""}
                 onChange={(e) =>
                   update("local_llm_model", e.target.value || null)
@@ -232,7 +238,7 @@ export default function ModeEditor({
           <div className="grid grid-cols-2 gap-3">
             <Field label="Inject-Methode">
               <select
-                className="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm w-full"
+                className={inputCls}
                 value={draft.injection_method}
                 onChange={(e) =>
                   update(
@@ -249,7 +255,7 @@ export default function ModeEditor({
             </Field>
             <Field label="Sprache (ISO-Code)">
               <input
-                className="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm w-full"
+                className={inputCls}
                 value={draft.language ?? ""}
                 onChange={(e) => update("language", e.target.value || null)}
                 placeholder="de"
@@ -263,7 +269,7 @@ export default function ModeEditor({
               hint="Wird als System-Message ans LLM geschickt."
             >
               <textarea
-                className="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm w-full min-h-[120px] font-mono"
+                className={`${inputCls} min-h-[120px] font-mono`}
                 value={draft.system_prompt ?? ""}
                 onChange={(e) =>
                   update("system_prompt", e.target.value || null)
@@ -273,19 +279,15 @@ export default function ModeEditor({
           ) : null}
         </div>
 
-        <div className="p-5 border-t border-slate-800 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 rounded bg-slate-800 hover:bg-slate-700 text-sm"
-          >
+        <div className="p-5 border-t border-outline flex justify-end gap-2">
+          <button type="button" onClick={onClose} className={secondaryBtn}>
             Abbrechen
           </button>
           <button
             type="button"
             onClick={() => void onSave()}
             disabled={!canSave || saving}
-            className="px-4 py-2 rounded bg-brand-700 hover:bg-brand-500 disabled:bg-slate-800 disabled:text-slate-500 text-sm"
+            className={primaryBtn}
           >
             {saving ? "Speichere…" : isEdit ? "Speichern" : "Anlegen"}
           </button>
@@ -304,9 +306,9 @@ interface FieldProps {
 function Field({ label, hint, children }: FieldProps): JSX.Element {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-xs font-medium text-slate-400">{label}</label>
+      <label className="text-xs font-medium text-fg-muted">{label}</label>
       {children}
-      {hint ? <div className="text-xs text-slate-600">{hint}</div> : null}
+      {hint ? <div className="text-xs text-fg-faint">{hint}</div> : null}
     </div>
   );
 }
