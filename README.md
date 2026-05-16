@@ -2,7 +2,8 @@
 
 Plattformübergreifendes Desktop-Werkzeug, das Diktate in Text verwandelt
 und ihn an der aktuellen Cursor-Position einfügt — überall, in jeder App.
-Hotkey halten, sprechen, loslassen, fertig.
+Ein globaler Hotkey öffnet ein Modus-Menü, Pfeile + Enter wählen, Diktat
+läuft — derselbe Hotkey stoppt.
 
 ## Status
 
@@ -15,18 +16,30 @@ nicht im Scope.
 
 ## Kernablauf
 
-1. Globaler Hotkey **gedrückt halten** → Aufnahme startet, Tray-Icon
-   pulsiert rot, Overlay zeigt *„Höre zu …"*.
-2. Sprich, was du diktiert haben willst.
-3. Hotkey **loslassen** → Audio wird transkribiert (lokal via
-   whisper.cpp **oder** Cloud-STT), optional durch ein LLM nach dem
-   aktiven **Modus** nachbearbeitet (lokal via Ollama **oder**
-   Cloud-LLM), und an der Cursor-Position eingefügt.
+1. Globaler **Menü-Hotkey** drücken (Default `Ctrl+Alt+Space`) → das
+   Overlay zeigt die Modus-Liste, der Cursor steht auf der zuletzt
+   getroffenen Auswahl.
+2. Mit `↑`/`↓` einen anderen Modus wählen (oder direkt `Enter`, um die
+   zuletzt verwendete Auswahl zu bestätigen). `Esc` schließt das Menü
+   ohne Aktion.
+3. Nach `Enter` startet die Aufnahme, Tray-Icon pulsiert rot, Overlay
+   zeigt *„Höre zu …"*. Sprich.
+4. **Denselben Hotkey nochmal drücken** → Audio wird transkribiert
+   (lokal via whisper.cpp **oder** Cloud-STT), optional durch ein LLM
+   nach dem gewählten **Modus** nachbearbeitet (lokal via Ollama
+   **oder** Cloud-LLM), und an der Cursor-Position eingefügt.
 
 Sechs Modi sind vorinstalliert: *Exaktes Diktat*, *Korrigierendes
 Diktat*, *Förmliche E-Mail*, *Slack/Teams*, *GitHub-Issue*,
 *Claude-Code-Anweisung*. Eigene Modi via TOML — siehe
 [`docs/MODES.md`](docs/MODES.md).
+
+**Migration aus älteren Versionen:** Modi hatten bisher je einen eigenen
+Hotkey (`Ctrl+Alt+D`, `Ctrl+Alt+E`, …). Der Wechsel auf den einzigen
+Menü-Hotkey ist transparent — bestehende `hotkey`-Felder in
+`modes/*.toml` werden weiterhin akzeptiert, aber ignoriert. Den
+Menü-Hotkey selbst änderst du in *Einstellungen* → *Globaler
+Menü-Hotkey*.
 
 ## Tech-Stack (kompakt)
 
@@ -84,8 +97,10 @@ Details, Output-Pfade und Installations-Anleitung in
    *„Cloud-API-Keys (BYOK)"* → Key bei xAI / OpenAI / etc. einfügen.
    Button *„Verbindung testen"* prüft den Key direkt.
 5. **Diktat-Test (lokal):** Cursor in einem Textfeld (Browser, Editor,
-   Slack-Eingabe), `Ctrl+Alt+D` halten, sprich, lass los. Der
-   transkribierte Text erscheint an der Cursor-Position.
+   Slack-Eingabe), `Ctrl+Alt+Space` drücken, im Overlay-Menü *Exaktes
+   Diktat* wählen, `Enter` zum Starten, sprich, denselben Hotkey
+   nochmal zum Stoppen. Der transkribierte Text erscheint an der
+   Cursor-Position.
 6. **Auto-Paste auf Wayland:** Beim allerersten Diktat zeigt KDE Plasma
    einen Permission-Dialog *„VoiceTypeX möchte Tastendrücke senden"*.
    Erlauben — danach läuft Auto-Paste ohne weitere Dialoge, auch nach

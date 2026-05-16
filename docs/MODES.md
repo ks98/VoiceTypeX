@@ -7,14 +7,17 @@ es ohne App-Neustart auf.
 
 ## Mitgelieferte Standard-Modi
 
-| Modus | Hotkey | STT | LLM-Postprocessing | Datei |
-|---|---|---|---|---|
-| Exaktes Diktat | `Ctrl+Alt+D` | Lokal (whisper-rs) | — | `exaktes_diktat.toml` |
-| Korrigierendes Diktat | `Ctrl+Alt+K` | Lokal (whisper-rs) | Lokal (Ollama) | `korrigierendes_diktat.toml` |
-| Förmliche E-Mail | `Ctrl+Alt+E` | xAI | xAI Grok-fast | `foermliche_email.toml` |
-| Slack/Teams | `Ctrl+Alt+S` | xAI | xAI Grok-fast | `slack_teams.toml` |
-| GitHub-Issue | `Ctrl+Alt+G` | xAI | xAI Grok-fast | `github_issue.toml` |
-| Claude-Code-Anweisung | `Ctrl+Alt+C` | xAI | xAI Grok-fast | `claude_code_anweisung.toml` |
+| Modus | STT | LLM-Postprocessing | Datei |
+|---|---|---|---|
+| Exaktes Diktat | Lokal (whisper-rs) | — | `exaktes_diktat.toml` |
+| Korrigierendes Diktat | Lokal (whisper-rs) | Lokal (Ollama) | `korrigierendes_diktat.toml` |
+| Förmliche E-Mail | xAI | xAI Grok-fast | `foermliche_email.toml` |
+| Slack/Teams | xAI | xAI Grok-fast | `slack_teams.toml` |
+| GitHub-Issue | xAI | xAI Grok-fast | `github_issue.toml` |
+| Claude-Code-Anweisung | xAI | xAI Grok-fast | `claude_code_anweisung.toml` |
+
+Modi haben keinen eigenen Hotkey — siehe Abschnitt *Hotkey-Modell*
+weiter unten.
 
 **Welcher Modus wann?**
 - *Exaktes Diktat* — wenn die Worte 1:1 so wie gesprochen ankommen sollen
@@ -39,10 +42,14 @@ es ohne App-Neustart auf.
 ```toml
 id = "kurz_ohne_spaces"        # eindeutig, keine Whitespaces
 name = "Anzeigename"           # erscheint im UI
-hotkey = "CommandOrControl+Alt+D"  # globaler Shortcut
 transcription = "local"        # "local" | "cloud"
 processing = "none"            # "none" | "local" | "cloud"
 ```
+
+Es gibt **kein** Hotkey-Feld pro Modus mehr. Modi werden zur Laufzeit
+über das Overlay-Menü ausgewählt (siehe *Hotkey-Modell* weiter unten).
+Bestehende TOMLs aus älteren Versionen behalten das `hotkey`-Feld —
+es wird beim Laden akzeptiert und ignoriert.
 
 ## Optional
 
@@ -76,8 +83,7 @@ das gesprochene Diktat als User-Message.
 
 VoiceTypeX prüft beim Laden:
 
-- **`id`**: nicht leer, keine Whitespaces.
-- **Hotkey-Konflikte**: kein zweiter Modus darf denselben Hotkey nutzen.
+- **`id`**: nicht leer, keine Whitespaces, eindeutig.
 - **`transcription = "cloud"`**: erfordert `cloud_stt_provider`.
 - **`processing = "cloud"`**: erfordert `cloud_llm_provider`.
 - **`processing != "none"`**: erfordert `system_prompt`.
@@ -86,27 +92,43 @@ Fehlerhafte Modi werden komplett verworfen (das ganze Verzeichnis-Reload
 schlägt fehl) — die zuvor geladenen Modi bleiben aktiv. Der Fehler
 erscheint im UI-Logs-View.
 
-## Hotkey-Format
+## Hotkey-Modell
+
+Es gibt **genau einen** globalen Hotkey für die ganze App
+(Settings: `menu_hotkey`, Default `CommandOrControl+Alt+Space`):
+
+1. **`Idle` + Hotkey** → Overlay zeigt die Modus-Liste; `↑`/`↓` wählen,
+   `Enter` startet die Aufnahme, `Esc` bricht ab. Der Cursor steht
+   initial auf dem zuletzt gewählten Modus
+   (`Settings.last_selected_mode_id`).
+2. **`Recording` + Hotkey** → laufende Aufnahme wird mit dem beim Start
+   gewählten Modus finalisiert (Toggle-Stop, gleicher Hotkey).
+3. Andere Pipeline-Zustände (Transcribing/Postprocessing/Injecting)
+   ignorieren den Hotkey.
+
+### Hotkey-Format
 
 `tauri-plugin-global-shortcut`-kompatibel:
 - Modifier: `CommandOrControl`, `Alt`, `Shift`, `Super`/`Meta`
 - Key: `A`-`Z`, `0`-`9`, `F1`-`F24`, `Space`, `Tab`, `Enter`, …
-- Beispiele: `"CommandOrControl+Alt+D"`, `"Super+Space"`,
+- Beispiele: `"CommandOrControl+Alt+Space"`, `"Super+Space"`,
   `"Control+Shift+F12"`
 
 `CommandOrControl` wird auf macOS als `Cmd` interpretiert, sonst als
-`Ctrl`.
+`Ctrl`. Auf Wayland ist der Wert nur ein Vorschlag — der Compositor
+zeigt beim ersten Start einen Dialog zur finalen Zuweisung
+(`xdg-desktop-portal.GlobalShortcuts`).
 
-## Push-to-Talk vs. Toggle
+### Wayland: Hotkey-Anzeige weicht von der Einstellung ab
 
-Der Hotkey-Modus ist global konfiguriert (Settings: `ptt_mode`), nicht
-pro Modus:
-
-- **Push-to-Talk (Default):** Hotkey **gedrückt halten** = Aufnahme,
-  loslassen = Pipeline läuft an.
-- **Toggle:** Hotkey **drücken** = Aufnahme an, **drücken** = aus. Nützlich
-  als Fallback für Wayland-Compositors mit unzuverlässigem Release-
-  Signal.
+Wenn du auf KDE in *System-Settings → Globale Verknüpfungen →
+VoiceTypeX* einen anderen Hotkey zuweist, ist das die effektive
+Bindung — VoiceTypeX nimmt die `Settings.menu_hotkey`-Eingabe beim
+zweiten Start nicht mehr an, weil KDE die User-Zuweisung priorisiert.
+Die Einstellungsseite zeigt deshalb auf Wayland ein read-only Feld
+mit dem tatsächlich gebundenen Trigger; ändern geht nur über die
+KDE-System-Settings. Auf X11 / Windows ist die App-Einstellung
+weiterhin die Wahrheit (editierbar).
 
 ## Beispiel: Nutzer-eigener Modus
 
@@ -115,7 +137,6 @@ pro Modus:
 id = "sql"
 name = "SQL Review-Kommentar"
 description = "Diktat -> kompakter SQL-Review-Kommentar fuer Pull-Requests."
-hotkey = "CommandOrControl+Alt+Q"
 transcription = "cloud"
 processing = "cloud"
 cloud_stt_provider = "xai"
@@ -135,4 +156,4 @@ Forme es zu einem klaren, technisch-knappen Code-Review-Kommentar:
 ```
 
 Speichern, fertig. App-Neustart unnötig — der Hot-Reload sieht die neue
-Datei und registriert den Hotkey.
+Datei und nimmt den Modus sofort ins Overlay-Menü auf.

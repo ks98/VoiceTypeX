@@ -60,28 +60,47 @@ Subscriber, keine Backpressure-Probleme). Subscriber: Tray-Icon-Update,
 Tray-Recording-Pulse, Frontend-Event-Emitter (`app://state`),
 Overlay-State-Listener.
 
-## Pipeline (Push-to-Talk)
+## Pipeline (Menü-Hotkey + Toggle)
 
 [`src-tauri/src/pipeline/mod.rs`](../src-tauri/src/pipeline/mod.rs)
-orchestriert die Stages:
+orchestriert die Stages. Es gibt **einen** globalen Hotkey
+(`Settings.menu_hotkey`), der je nach Pipeline-State ein anderes
+Verhalten triggert:
 
 ```
 Hotkey-Press
    │
    ▼
-handle_hotkey_pressed(app, ctx, mode)   ─── PTT vs. Toggle nach Settings
+handle_menu_hotkey(app, ctx)
+   │
+   ├─ State == Idle ─────────────► overlay.show() + overlay.set_focus()
+   │                                emit("app://menu/open")
+   │                                Frontend zeigt Modus-Liste
+   │                                User: ↑/↓, Enter, Esc
+   │                                Enter → invoke("start_recording", {modeId})
+   │
+   ├─ State == Recording ───────► finish_recording_and_inject(active_mode)
+   │
+   └─ sonst ─────────────────────► ignoriert (Pipeline busy)
+
+invoke("start_recording", { mode_id })
+   │
+   ▼
+execute_mode(app, ctx, mode)   ─── State == Idle ? start : (Toggle-Stop)
    │
    ▼
 start_recording(app, ctx, mode)
+   │  • ctx.active_mode = Some(mode)   ── damit der Stop-Hotkey weiß, welcher Modus läuft
    │  • State → Recording
-   │  • overlay.show()              (Wayland-Fokus-Klau wird in finish() neutralisiert)
+   │  • overlay.show()                 (Wayland-Fokus-Klau wird in finish() neutralisiert)
    │  • Start-Cue (kurzer Beep)
-   │  • RecorderHandle::start()      (cpal-Stream im eigenen Thread)
+   │  • RecorderHandle::start()        (cpal-Stream im eigenen Thread)
    │
-Hotkey-Release
+Hotkey-Press im Recording-State
    │
    ▼
-finish_recording_and_inject(app, ctx, mode)
+finish_recording_and_inject(app, ctx, active_mode)
+   │  • ctx.active_mode = None
    │  • State → Transcribing, Stop-Cue
    │  • recorder.stop_and_finalize() → 16 kHz Mono PCM s16 LE WAV
    │  • Transcriber::transcribe_oneshot
@@ -93,9 +112,14 @@ finish_recording_and_inject(app, ctx, mode)
    │  • State → Idle
 ```
 
-Toggle-Mode (Setting `ptt_mode = false`) ruft die gleichen Funktionen,
-nur ohne Press/Release-Trennung — Hotkey-Druck toggelt zwischen Idle
-und Recording.
+`AppContext.active_mode: Arc<Mutex<Option<Mode>>>` ist das Bindeglied
+zwischen Start (kennt den Modus aus dem IPC-Aufruf) und Stop (Menü-
+Hotkey weiß nicht selbst, welcher Modus läuft). Wird in
+`start_recording` gesetzt, in `finish_recording_and_inject` direkt am
+Anfang geleert.
+
+UI-Trigger-Buttons in der Modi-Liste rufen `execute_mode` direkt — die
+Toggle-Logik ist dieselbe wie beim Hotkey.
 
 ## Trait-Schichten
 
@@ -110,16 +134,19 @@ abstrahiert. Plattform-Selektion zur Laufzeit (Linux nutzt
 | `TextInjector` | `injection/mod.rs` | `ClipboardFallbackInjector` (X11/Windows: enigo Ctrl+V), `WaylandLibeiInjector` (Wayland: libei via xdg-desktop-portal.RemoteDesktop) |
 
 **Hotkey-Registrierung** ist plattform-direkt (kein Trait, siehe
-[CLAUDE.md §4.2](../CLAUDE.md)):
+[CLAUDE.md §4.2](../CLAUDE.md)) und registriert **genau einen**
+globalen Shortcut (`Settings.menu_hotkey`):
 
-- X11/Windows: `pipeline::register_mode_hotkeys()` registriert direkt
+- X11/Windows: `pipeline::register_menu_hotkey()` registriert ihn direkt
   über `app.global_shortcut().on_shortcut()` aus
-  `tauri-plugin-global-shortcut`.
+  `tauri-plugin-global-shortcut`. Nur `ShortcutState::Pressed` wird
+  verarbeitet — Release-Events sind irrelevant (kein PTT mehr).
 - Wayland: `pipeline::spawn_wayland_hotkey_session()` betreibt eine
   langlebige Portal-Session via
-  `hotkey::linux_wayland::run_global_shortcuts_session()`; Events
-  fließen als `HotkeyEvent` über einen broadcast-Channel zurück in
-  die Pipeline.
+  `hotkey::linux_wayland::run_global_shortcuts_session()` mit einem
+  einzigen `WaylandShortcutSpec`-Eintrag (`id = "open_menu"`). Events
+  fließen als `HotkeyEvent` über einen broadcast-Channel zurück;
+  Released-Events werden im Dispatcher gefiltert.
 
 ## AppContext (Tauri-State-Singleton)
 
@@ -130,6 +157,7 @@ pub struct AppContext {
     pub state_bus: StateBus,
     pub modes: Arc<ModesRegistry>,
     pub recorder_slot: Arc<Mutex<Option<RecorderHandle>>>,
+    pub active_mode: Arc<Mutex<Option<Mode>>>,  // welcher Modus läuft gerade?
     pub transcriber: Arc<dyn Transcriber>,
     pub injector: Arc<dyn TextInjector>,
     pub settings: Arc<RwLock<Settings>>,
@@ -216,23 +244,74 @@ Kommentare in `libei_worker.rs`):
 - `Paused`-Event setzt `emulation_active` zurück; nächster `Resumed`
   startet neue Emulations-Sequenz mit incrementiertem `sequence`
 
-## Overlay-Window
+## Windows
 
-Zweites Tauri-Window (`label: "overlay"`), oben links 24 px vom Rand
-entfernt, 520 × 96 px, transparent + alwaysOnTop + decorations off +
-focus: false + `pointer-events-none` als CSS-Schutz.
+| Window | Zweck | Größe | Fokus | Pointer-Events | Position |
+|---|---|---|---|---|---|
+| `main` | Hauptfenster (Settings, Modes, Logs) | 960 × 720, resizable | ja | ja | OS-Default |
+| `overlay` | Status-Indikator während Recording / Transcribing / … | 520 × 96, **non-resizable** | **nein** (`focus: false`) | **none** (CSS) | oben links 24,24 |
+| `menu` | Modus-Auswahl per Pfeil-Navigation + Enter | 480 × 360, non-resizable, scrollbar bei vielen Modi | ja | ja | oben links 24,24 |
 
-**Sichtbarkeit ist Backend-gesteuert** (kein Frontend-show/hide):
-- `start_recording` ruft `overlay.show()`
-- `finish_recording_and_inject` ruft `overlay.hide()` direkt vor dem
-  libei-Inject (mit 80 ms Pause), damit der Tastatur-Fokus zurück zur
-  Ziel-App springt
-- `spawn_overlay_state_listener` versteckt zusätzlich bei `Idle`/`Error`
-  als Cleanup
+Alle drei Windows laden dieselbe `index.html`; das Routing erfolgt in
+`src/main.tsx` per `?window=overlay` / `?window=menu` URL-Query, sonst
+fällt es auf `App.tsx` (Hauptfenster).
 
-Frontend (`src/views/Overlay.tsx`) abonniert `app://state` und rendert
-phasengerechten Status-Text. Window-Routing zwischen Hauptfenster und
-Overlay über `?window=overlay` URL-Query in `src/main.tsx`.
+### Sichtbarkeit ist Backend-gesteuert
+
+Kein Frontend-show/hide — das Backend orchestriert beide
+Sekundär-Windows in `pipeline/mod.rs` und `ipc/recording.rs`:
+
+| Trigger | overlay | menu |
+|---|---|---|
+| `handle_menu_hotkey` (Idle) | — | `show()` + `set_focus()` |
+| `start_recording` | `show()` | `hide()` (idempotent) |
+| `finish_recording_and_inject` | `hide()` + 80 ms vor libei-Inject | — |
+| `spawn_overlay_state_listener` bei Idle / Error | `hide()` | — |
+| IPC `cancel_menu` (Esc) | — | `hide()` |
+
+### Overlay-View (`src/views/Overlay.tsx`)
+
+Schlank: abonniert `app://state`, rendert phasengerechten Status-Text
+(*„Höre zu …"*, *„Transkribiere …"*, *„Verarbeite …"*, *„Füge ein …"*,
+*„Fehler"*). Keine Tastatur-Interaktion, keine Pointer-Events
+(CSS-Schutz, falls das Window mal sichtbar bleiben würde).
+
+### Menu-View (`src/views/Menu.tsx`)
+
+Liest Modi aus `useModesStore`, Cursor initial auf
+`Settings.last_selected_mode_id` (1× Tippen für die häufigste Aktion).
+Tastatur-Handler auf dem Root-Div:
+- `↑` / `↓` / `Home` / `End` → Cursor
+- `Enter` → `invoke("start_recording", { modeId })` (Backend versteckt
+  das Menue-Window und zeigt das Overlay)
+- `Esc` → `invoke("cancel_menu")` (Backend versteckt das Menue-Window)
+
+### Wayland-Fokus-Quirk
+
+`menu.set_focus()` wird auf Wayland-Compositors nicht garantiert
+respektiert — der Compositor entscheidet. Auf KDE Plasma 6
+funktioniert es zuverlässig, weil das Menü-Window mit `focus: true`
+in der Tauri-Config geboren wird (stärkster Compositor-Hint). Auf
+wlroots-Compositors wie Hyprland / Sway kann der Fokus dennoch
+ausbleiben; dort ist die App ohnehin im Clipboard-Fallback-Modus
+([`docs/PLATFORMS.md`](PLATFORMS.md) → *Hyprland / Sway / wlroots*).
+
+### Wayland-Hotkey-Read-Back
+
+Auf Wayland ist `Settings.menu_hotkey` nur ein **Vorschlag** an das
+`xdg-desktop-portal.GlobalShortcuts`. KDE merkt sich nach dem ersten
+`bind_shortcuts` die Zuweisung und ignoriert spätere
+`preferred_trigger`-Werte; der User kann den Hotkey zudem in
+*System-Settings → Globale Verknüpfungen → VoiceTypeX* nachjustieren.
+
+`hotkey::linux_wayland::run_global_shortcuts_session` ruft daher nach
+`bind_shortcuts` einmal `list_shortcuts` auf und schreibt das
+`trigger_description` der ersten Action in
+`AppContext.effective_menu_hotkey: Arc<RwLock<Option<String>>>`. Der
+IPC-Command `get_effective_menu_hotkey` liest diesen Cache; das
+Frontend (`Settings.tsx → MenuHotkeyField`) zeigt auf Wayland ein
+read-only Feld mit dem effektiven Trigger + Hinweis auf die System-
+Settings, auf X11 / Windows bleibt das Feld editierbar.
 
 ## Persistenz
 
