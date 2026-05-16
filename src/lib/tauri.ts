@@ -117,6 +117,22 @@ export async function ipcStartRecording(modeId: string): Promise<void> {
   return invoke("start_recording", { modeId });
 }
 
+export async function ipcCancelMenu(): Promise<void> {
+  return invoke("cancel_menu");
+}
+
+/**
+ * Effektiver Menue-Hotkey, wie er aktuell tatsaechlich gebunden ist.
+ *
+ * - X11/Windows: `null` — Frontend zeigt `Settings.menu_hotkey` direkt.
+ * - Wayland: vom Compositor zurueckgegebener Trigger (z.B. "Meta+Space").
+ *   Auf KDE darf der User in System-Settings → Globale Verknuepfungen
+ *   einen anderen Hotkey zuweisen — der landet dann hier.
+ */
+export async function ipcGetEffectiveMenuHotkey(): Promise<string | null> {
+  return invoke<string | null>("get_effective_menu_hotkey");
+}
+
 export interface ProviderStatus {
   provider: string;
   configured: boolean;

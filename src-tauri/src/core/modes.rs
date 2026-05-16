@@ -9,7 +9,6 @@
 use crate::core::error::{Result, VoiceTypeError};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::broadcast;
@@ -43,7 +42,12 @@ pub struct Mode {
     pub name: String,
     #[serde(default)]
     pub description: String,
-    pub hotkey: String,
+    /// Legacy-Feld. Wird nur noch zur Backward-Compatibility geparst und
+    /// danach ignoriert — seit dem Menue-Hotkey-Umbau gibt es einen
+    /// einzigen globalen Hotkey (Settings.menu_hotkey), der das
+    /// Modus-Auswahl-Menue oeffnet.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hotkey: Option<String>,
     pub transcription: TranscriptionTarget,
     pub processing: ProcessingTarget,
 
@@ -112,11 +116,10 @@ pub fn load_mode_from_path(path: &Path) -> Result<Mode> {
     Ok(mode)
 }
 
-/// Lade alle `*.toml` aus einem Verzeichnis. Doppelte IDs oder Hotkeys
-/// gelten als Konflikt und produzieren einen Fehler.
+/// Lade alle `*.toml` aus einem Verzeichnis. Doppelte IDs gelten als
+/// Konflikt und produzieren einen Fehler.
 pub fn load_modes_from_dir(dir: &Path) -> Result<Vec<Mode>> {
-    let mut by_id: HashMap<String, Mode> = HashMap::new();
-    let mut by_hotkey: HashMap<String, String> = HashMap::new();
+    let mut by_id: std::collections::HashMap<String, Mode> = std::collections::HashMap::new();
 
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
@@ -134,14 +137,7 @@ pub fn load_modes_from_dir(dir: &Path) -> Result<Vec<Mode>> {
                 prev.name
             )));
         }
-        if let Some(prev) = by_hotkey.get(&mode.hotkey) {
-            return Err(VoiceTypeError::Mode(format!(
-                "Hotkey-Konflikt: '{}' bereits durch Modus '{}' belegt, auch in '{}'",
-                mode.hotkey, prev, mode.id
-            )));
-        }
 
-        by_hotkey.insert(mode.hotkey.clone(), mode.id.clone());
         by_id.insert(mode.id.clone(), mode);
     }
 
@@ -190,14 +186,6 @@ impl ModesRegistry {
 
     pub fn find_by_id(&self, id: &str) -> Option<Mode> {
         self.modes.read().iter().find(|m| m.id == id).cloned()
-    }
-
-    pub fn find_by_hotkey(&self, hotkey: &str) -> Option<Mode> {
-        self.modes
-            .read()
-            .iter()
-            .find(|m| m.hotkey == hotkey)
-            .cloned()
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<ModesEvent> {
@@ -270,7 +258,6 @@ mod tests {
             r#"
             id = "exakt"
             name = "Exaktes Diktat"
-            hotkey = "CommandOrControl+Alt+D"
             transcription = "local"
             processing = "none"
             language = "de"
@@ -281,6 +268,26 @@ mod tests {
         assert_eq!(m.transcription, TranscriptionTarget::Local);
         assert_eq!(m.processing, ProcessingTarget::None);
         assert_eq!(m.injection_method, InjectionMethod::Clipboard);
+        assert!(m.hotkey.is_none());
+    }
+
+    #[test]
+    fn legacy_hotkey_field_is_accepted_and_ignored() {
+        // Bestehende User-TOMLs (vor dem Menue-Hotkey-Umbau) haben ein
+        // Pflicht-`hotkey`-Feld. Der Parser muss es weiterhin akzeptieren,
+        // damit der erste App-Start nach dem Update nicht alle Modi
+        // verwirft.
+        let m = parse(
+            r#"
+            id = "exakt"
+            name = "Exaktes Diktat"
+            hotkey = "CommandOrControl+Alt+D"
+            transcription = "local"
+            processing = "none"
+        "#,
+        )
+        .unwrap();
+        assert_eq!(m.hotkey.as_deref(), Some("CommandOrControl+Alt+D"));
     }
 
     #[test]
@@ -289,7 +296,6 @@ mod tests {
             r#"
             id = "email"
             name = "Email"
-            hotkey = "CommandOrControl+Alt+E"
             transcription = "cloud"
             processing = "cloud"
             system_prompt = "test"
@@ -305,7 +311,6 @@ mod tests {
             r#"
             id = "exakt diktat"
             name = "x"
-            hotkey = "Ctrl+Alt+D"
             transcription = "local"
             processing = "none"
         "#,

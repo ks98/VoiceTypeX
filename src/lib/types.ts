@@ -10,7 +10,8 @@ export interface Mode {
   id: string;
   name: string;
   description: string;
-  hotkey: string;
+  /** Legacy-Feld; seit dem Menue-Hotkey-Umbau optional und ungenutzt. */
+  hotkey?: string | null;
   transcription: TranscriptionTarget;
   processing: ProcessingTarget;
   cloud_stt_provider: string | null;
@@ -31,7 +32,8 @@ export interface Settings {
   ollama_url: string;
   onboarding_done: boolean;
   whisper_n_threads: number | null;
-  ptt_mode: boolean;
+  menu_hotkey: string;
+  last_selected_mode_id: string | null;
 }
 
 export interface LogLine {

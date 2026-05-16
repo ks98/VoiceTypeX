@@ -25,9 +25,33 @@ pub async fn start_recording(
         .modes
         .find_by_id(&mode_id)
         .ok_or_else(|| format!("Modus '{mode_id}' nicht gefunden"))?;
+
+    // Auswahl als zuletzt-gewaehlt merken, damit der Cursor im Menue
+    // beim naechsten Oeffnen direkt auf diesem Modus steht.
+    {
+        let mut settings = state.settings.write();
+        if settings.last_selected_mode_id.as_deref() != Some(&mode_id) {
+            settings.last_selected_mode_id = Some(mode_id.clone());
+            if let Err(e) = settings.save(&state.settings_path) {
+                tracing::warn!(error = %e, "Settings-Save (last_selected_mode_id) fehlgeschlagen");
+            }
+        }
+    }
+
     execute_mode(app, Arc::clone(&state), mode)
         .await
         .map_err(|e| e.to_string())
+}
+
+/// Schliesst das Menue-Window ohne Recording zu starten. Wird von Esc im
+/// Frontend-Menue aufgerufen.
+#[tauri::command]
+pub async fn cancel_menu(app: AppHandle) -> IpcResult<()> {
+    use tauri::Manager;
+    if let Some(menu) = app.get_webview_window("menu") {
+        menu.hide().map_err(|e| format!("menu.hide(): {e}"))?;
+    }
+    Ok(())
 }
 
 #[tauri::command]

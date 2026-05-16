@@ -15,17 +15,19 @@ type StatePayload = {
 };
 
 /**
- * Live-Overlay-Fenster.
+ * Live-Overlay-Fenster — zeigt waehrend Recording/Transcribe/… den
+ * Pipeline-Phasen-Indikator.
  *
- * Sichtbarkeit wird **vom Backend** via `webview_window.show()` /
+ * Sichtbarkeit wird **vom Backend** ueber `webview_window.show()` /
  * `webview_window.hide()` gesteuert (siehe `pipeline/mod.rs`):
  *   - `start_recording` → `overlay.show()`
  *   - direkt vor libei-Inject → `overlay.hide()` + 80 ms Pause, damit der
  *     Tastatur-Fokus zur Ziel-App zurueckspringt
  *   - State-Listener → bei Idle / Error → `overlay.hide()` (Cleanup)
  *
- * Dieses Component selbst rendert nur den Phase-Text aus dem `app://state`
- * Event — kein eigenes show/hide-Logik mehr.
+ * Die Modus-Auswahl-UI laeuft im separaten `menu`-Window (Menu.tsx) —
+ * dieses Overlay hat keine Tastatur-Interaktion und kein Pointer-Events
+ * (CSS-Schutz, falls es mal unerwartet sichtbar bleibt).
  *
  * Phase-Default ist `"recording"`, weil das Window vom Backend nur
  * sichtbar gemacht wird, *wenn* die Pipeline gerade in Recording wechselt.

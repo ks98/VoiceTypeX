@@ -1,7 +1,6 @@
 id = "korrektur"
 name = "Korrigierendes Diktat"
 description = "Lokales LLM glaettet Grammatik und Versprecher, behaelt Inhalt strikt."
-hotkey = "CommandOrControl+Alt+K"
 transcription = "local"
 processing = "local"
 local_llm_model = "qwen2.5:7b"

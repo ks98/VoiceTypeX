@@ -1,7 +1,6 @@
 id = "issue"
 name = "GitHub Issue"
 description = "Diktat -> klar strukturiertes GitHub-Issue in Markdown."
-hotkey = "CommandOrControl+Alt+G"
 transcription = "cloud"
 processing = "cloud"
 cloud_stt_provider = "xai"

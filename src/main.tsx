@@ -2,6 +2,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import Menu from "./views/Menu";
 import Overlay from "./views/Overlay";
 import "./styles/globals.css";
 
@@ -12,13 +13,16 @@ if (!rootEl) {
   );
 }
 
-// Window-Routing: Tauri startet zwei Fenster aus derselben index.html
-// (label=main → App, label=overlay → Overlay). Die Unterscheidung erfolgt
-// per URL-Query, da Tauri das `url`-Field der Window-Config sauber an
-// die Renderer-URL weiterreicht.
+// Window-Routing: Tauri startet drei Fenster aus derselben index.html
+// (label=main → App, label=overlay → Overlay, label=menu → Menu). Die
+// Unterscheidung erfolgt per URL-Query, da Tauri das `url`-Field der
+// Window-Config sauber an die Renderer-URL weiterreicht.
 const params = new URLSearchParams(window.location.search);
-const isOverlay = params.get("window") === "overlay";
+const win = params.get("window");
+
+const view =
+  win === "overlay" ? <Overlay /> : win === "menu" ? <Menu /> : <App />;
 
 ReactDOM.createRoot(rootEl).render(
-  <React.StrictMode>{isOverlay ? <Overlay /> : <App />}</React.StrictMode>,
+  <React.StrictMode>{view}</React.StrictMode>,
 );

@@ -36,6 +36,24 @@ pub async fn list_audio_devices() -> IpcResult<Vec<String>> {
     audio::list_input_devices().map_err(|e| e.to_string())
 }
 
+/// Liefert den **effektiven** Menue-Hotkey, wie er gerade tatsaechlich
+/// gebunden ist.
+///
+/// - X11/Windows: gibt den Settings-Wert zurueck — die App registriert
+///   den Hotkey direkt, also ist Settings die Wahrheit.
+/// - Wayland: gibt den vom Compositor zurueckgegebenen Trigger zurueck
+///   (oder `None`, falls die Portal-Session noch nicht geantwortet hat
+///   bzw. `list_shortcuts` fehlschlug — Frontend faellt dann auf den
+///   Settings-Wert zurueck). KDE/GNOME duerfen vom Settings-Wert
+///   abweichen, weil der User den Hotkey in den System-Einstellungen
+///   nachjustieren kann.
+#[tauri::command]
+pub async fn get_effective_menu_hotkey(
+    state: tauri::State<'_, Arc<AppContext>>,
+) -> IpcResult<Option<String>> {
+    Ok(state.effective_menu_hotkey.read().clone())
+}
+
 #[tauri::command]
 pub async fn set_whisper_model_path(
     state: tauri::State<'_, Arc<AppContext>>,

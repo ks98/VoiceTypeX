@@ -291,13 +291,17 @@ export default function OnboardingWizard({
               <p className="text-sm text-slate-300">
                 Du kannst jetzt diktieren. Drueck{" "}
                 <kbd className="px-2 py-0.5 rounded bg-slate-800 font-mono text-xs">
-                  Ctrl+Alt+D
-                </kbd>{" "}
-                fuer ein lokales Diktat (Modus „Exaktes Diktat").
+                  Ctrl+Alt+Space
+                </kbd>
+                , waehle mit den Pfeiltasten einen Modus und bestaetige mit{" "}
+                <kbd className="px-2 py-0.5 rounded bg-slate-800 font-mono text-xs">
+                  Enter
+                </kbd>
+                . Derselbe Hotkey stoppt die Aufnahme.
               </p>
               <ul className="text-sm text-slate-400 list-disc pl-5 flex flex-col gap-1">
                 <li>
-                  Hotkeys aller Modi: Tab{" "}
+                  Modus-Liste anpassen: Tab{" "}
                   <strong className="text-slate-200">Modi</strong>.
                 </li>
                 <li>

@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! VoiceTypeX — Bibliotheks-Einstiegspunkt.
 //!
-//! Phase 1.4: Pipeline ist verdrahtet. `exakt` (lokales Diktat) ist
-//! end-to-end funktional; die anderen 5 Modi haben registrierte Hotkeys,
-//! antworten aber mit "noch nicht implementiert" + Notification.
+//! Setzt App-State, Plugins, Tray und Hotkey-Registrierung auf.
+//! Pipeline-Details siehe [`pipeline`].
 
 pub mod audio;
 pub mod core;
@@ -26,7 +25,7 @@ use crate::injection::{make_default_injector, TextInjector};
 #[cfg(target_os = "linux")]
 use crate::pipeline::spawn_wayland_hotkey_session;
 use crate::pipeline::{
-    register_mode_hotkeys, spawn_overlay_state_listener, spawn_state_event_emitter,
+    register_menu_hotkey, spawn_overlay_state_listener, spawn_state_event_emitter,
     spawn_tray_recording_pulse, spawn_tray_state_listener,
 };
 use crate::transcription::local::LocalTranscriber;
@@ -59,6 +58,7 @@ pub fn run() {
             ipc::settings::get_settings,
             ipc::settings::set_settings,
             ipc::settings::list_audio_devices,
+            ipc::settings::get_effective_menu_hotkey,
             ipc::settings::set_whisper_model_path,
             ipc::settings::download_default_model,
             ipc::modes::get_modes,
@@ -68,6 +68,7 @@ pub fn run() {
             ipc::modes::delete_mode,
             ipc::recording::start_recording,
             ipc::recording::stop_recording,
+            ipc::recording::cancel_menu,
             ipc::recording::run_test_transcription,
             ipc::diagnostics::get_app_version,
             ipc::diagnostics::get_recent_logs,
@@ -128,6 +129,8 @@ pub fn run() {
                 state_bus,
                 modes: Arc::clone(&modes_registry),
                 recorder_slot: Arc::new(Mutex::new(None)),
+                active_mode: Arc::new(Mutex::new(None)),
+                effective_menu_hotkey: Arc::new(RwLock::new(None)),
                 transcriber,
                 injector,
                 settings: Arc::new(RwLock::new(initial_settings)),
@@ -156,15 +159,17 @@ pub fn run() {
                 });
             }
 
-            // Overlay-Window: kein set_ignore_cursor_events mehr — das
+            // Overlay-Window: kein set_ignore_cursor_events — das
             // verursacht einen tao-Panic bei initial-hidden Windows
-            // (`visible: false`) auf Linux/GTK. Der Fokus-Schutz kommt
-            // jetzt durch das Backend-show/hide-Pattern: Overlay ist
-            // initial unsichtbar, wird nur bei Recording sichtbar
-            // gemacht und vor dem libei-Inject explizit wieder versteckt
-            // (siehe pipeline/mod.rs::finish_recording_and_inject). Das
-            // Frontend hat zusaetzlich `pointer-events-none` als CSS-
-            // Sicherheit, falls das Overlay mal sichtbar bleibt.
+            // (`visible: false`) auf Linux/GTK. Stattdessen Backend-
+            // show/hide-Pattern: Overlay ist initial unsichtbar, wird
+            // bei Menue-Open (Fokus erwuenscht, fuer Pfeil-/Enter-
+            // Navigation) und Recording-Start sichtbar gemacht und vor
+            // dem libei-Inject explizit wieder versteckt — siehe
+            // pipeline/mod.rs::handle_menu_hotkey und
+            // finish_recording_and_inject. Im Recording-Render-Modus
+            // hat der StatusView zusaetzlich `pointer-events-none` als
+            // CSS-Sicherheit; der Menue-Render-Modus laesst Eingaben zu.
 
             // Hotkey-Registrierung dispatch je nach Display-Server:
             //   - X11/Windows: tauri-plugin-global-shortcut (XGrabKey/RegisterHotKey)
@@ -180,8 +185,8 @@ pub fn run() {
                     );
                 }
                 "x11" | "windows" => {
-                    register_mode_hotkeys(&app_handle, Arc::clone(&ctx))
-                        .map_err(|e| format!("register_mode_hotkeys: {e}"))?;
+                    register_menu_hotkey(&app_handle, Arc::clone(&ctx))
+                        .map_err(|e| format!("register_menu_hotkey: {e}"))?;
                 }
                 other => {
                     tracing::warn!(

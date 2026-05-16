@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Linux Wayland: globale Hotkeys via `xdg-desktop-portal.GlobalShortcuts`.
+//! Linux Wayland: globaler Hotkey via `xdg-desktop-portal.GlobalShortcuts`.
 //!
-//! Anders als X11/Windows kann die App auf Wayland NICHT die Tasten selbst
-//! greifen. Sie meldet eine Liste **Aktionen** beim Portal an
-//! (id + Beschreibung + Wunsch-Trigger); der Compositor zeigt dem User einen
-//! Dialog, in dem er die finale Tastenkombination zuweist. Daher heisst das
-//! TOML-Feld auch `hotkey` weiterhin, aber auf Wayland ist es nur ein
-//! **Vorschlag**.
+//! Anders als X11/Windows kann die App auf Wayland NICHT die Tasten
+//! selbst greifen. Sie meldet eine Aktion beim Portal an
+//! (id + Beschreibung + Wunsch-Trigger); der Compositor zeigt dem User
+//! einen Dialog, in dem er die finale Tastenkombination zuweist. Der
+//! `Settings.menu_hotkey`-Wert ist auf Wayland also nur ein **Vorschlag**.
 
 use crate::core::error::{Result, VoiceTypeError};
 use crate::hotkey::{HotkeyEvent, HotkeyEventKind};
+use parking_lot::RwLock;
 use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::sync::broadcast;
 
 /// Beschreibung einer App-Action, die als Wayland-Shortcut registriert wird.
@@ -26,9 +27,17 @@ pub struct WaylandShortcutSpec {
 /// `HotkeyEvent` ueber den Sender weitergibt. Diese Funktion gibt
 /// nicht zurueck — sie ist als langlebige Task gedacht (in
 /// `tokio::spawn`).
+///
+/// `effective_trigger_cache`: optionaler Cache, in den der nach
+/// `bind_shortcuts` vom Compositor zurueckgegebene `trigger_description`
+/// des ersten Shortcuts geschrieben wird. KDE/GNOME duerfen vom
+/// `preferred_trigger` abweichen (User kann den Hotkey in den System-
+/// Settings umstellen) — das Frontend liest diesen Cache, um den
+/// tatsaechlichen Trigger anzuzeigen.
 pub async fn run_global_shortcuts_session(
     shortcuts: Vec<WaylandShortcutSpec>,
     sender: broadcast::Sender<HotkeyEvent>,
+    effective_trigger_cache: Option<Arc<RwLock<Option<String>>>>,
 ) -> Result<()> {
     use ashpd::desktop::global_shortcuts::{GlobalShortcuts, NewShortcut};
     use futures_util::StreamExt;
@@ -56,6 +65,39 @@ pub async fn run_global_shortcuts_session(
         .map_err(|e| VoiceTypeError::Hotkey(format!("bind_shortcuts: {e}")))?;
 
     tracing::info!(count = shortcuts.len(), "Wayland-Hotkeys registriert");
+
+    // Nach bind_shortcuts list_shortcuts aufrufen, um den tatsaechlich
+    // gebundenen Trigger zu lernen. Das ist eigenes Portal-Verhalten:
+    // beim allerersten bind_shortcuts wird der preferred_trigger
+    // uebernommen, danach merkt sich KDE die User-Zuweisung und meldet
+    // sie ueber list_shortcuts zurueck. Wir scheitern hier nicht hart —
+    // wenn list_shortcuts fehlschlaegt oder leer ist, bleibt der Cache
+    // einfach None und die UI faellt auf den Settings-Wert zurueck.
+    if let Some(cache) = effective_trigger_cache.as_ref() {
+        match proxy.list_shortcuts(&session).await {
+            Ok(req) => match req.response() {
+                Ok(list) => {
+                    if let Some(first) = list.shortcuts().first() {
+                        let trigger = first.trigger_description().to_string();
+                        tracing::info!(
+                            id = %first.id(),
+                            trigger = %trigger,
+                            "Wayland-Hotkey effektiver Trigger gelesen"
+                        );
+                        *cache.write() = Some(trigger);
+                    } else {
+                        tracing::warn!("list_shortcuts: leere Liste — Cache bleibt None");
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "list_shortcuts.response() fehlgeschlagen");
+                }
+            },
+            Err(e) => {
+                tracing::warn!(error = %e, "list_shortcuts(&session) fehlgeschlagen");
+            }
+        }
+    }
 
     // Beide Streams parallel: Activated (Press) + Deactivated (Release).
     // Activated kommt sofort beim Hotkey-Druck; Deactivated ist

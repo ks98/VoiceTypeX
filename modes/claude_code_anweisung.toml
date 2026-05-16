@@ -1,7 +1,6 @@
 id = "agent"
 name = "Claude Code / Codex Anweisung"
 description = "Diktat -> praezise Coding-Agent-Anweisung mit Schritten und Akzeptanzkriterien."
-hotkey = "CommandOrControl+Alt+C"
 transcription = "cloud"
 processing = "cloud"
 cloud_stt_provider = "xai"

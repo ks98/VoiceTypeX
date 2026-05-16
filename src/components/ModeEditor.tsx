@@ -5,7 +5,6 @@ import { ipcCreateMode, ipcUpdateMode } from "../lib/tauri";
 
 interface ModeEditorProps {
   initial: Mode | null;
-  existingHotkeys: { id: string; hotkey: string; name: string }[];
   onClose: () => void;
   onSaved: () => void;
 }
@@ -18,7 +17,6 @@ function emptyMode(): Mode {
     id: "",
     name: "",
     description: "",
-    hotkey: "",
     transcription: "local",
     processing: "none",
     cloud_stt_provider: null,
@@ -33,7 +31,6 @@ function emptyMode(): Mode {
 
 export default function ModeEditor({
   initial,
-  existingHotkeys,
   onClose,
   onSaved,
 }: ModeEditorProps): JSX.Element {
@@ -45,10 +42,6 @@ export default function ModeEditor({
   const update = <K extends keyof Mode>(key: K, value: Mode[K]) =>
     setDraft((d) => ({ ...d, [key]: value }));
 
-  const hotkeyConflict =
-    draft.hotkey !== "" &&
-    existingHotkeys.find((h) => h.hotkey === draft.hotkey && h.id !== draft.id);
-
   const idValid = /^[a-zA-Z0-9_-]+$/.test(draft.id);
   const needsSttProvider = draft.transcription === "cloud";
   const needsLlmProvider = draft.processing === "cloud";
@@ -59,8 +52,6 @@ export default function ModeEditor({
     draft.id.length > 0 &&
     idValid &&
     draft.name.length > 0 &&
-    draft.hotkey.length > 0 &&
-    !hotkeyConflict &&
     (!needsSttProvider || !!draft.cloud_stt_provider) &&
     (!needsLlmProvider || !!draft.cloud_llm_provider) &&
     (!needsLocalModel || !!draft.local_llm_model) &&
@@ -138,23 +129,6 @@ export default function ModeEditor({
               value={draft.description}
               onChange={(e) => update("description", e.target.value)}
             />
-          </Field>
-
-          <Field
-            label="Hotkey"
-            hint="Format: CommandOrControl+Alt+D, Super+Space, …"
-          >
-            <input
-              className="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm w-full font-mono"
-              value={draft.hotkey}
-              onChange={(e) => update("hotkey", e.target.value)}
-              placeholder="CommandOrControl+Alt+X"
-            />
-            {hotkeyConflict ? (
-              <div className="text-xs text-red-400">
-                Konflikt mit „{hotkeyConflict.name}" (id: {hotkeyConflict.id})
-              </div>
-            ) : null}
           </Field>
 
           <div className="grid grid-cols-2 gap-3">

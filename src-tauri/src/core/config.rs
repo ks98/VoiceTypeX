@@ -53,20 +53,23 @@ pub struct Settings {
     #[serde(default)]
     pub whisper_n_threads: Option<u32>,
 
-    /// Push-to-Talk: Hotkey halten zum Sprechen, loslassen stoppt.
-    /// Default `true` (moderne Diktat-Tool-Konvention). Bei Wayland-
-    /// Compositors die das Release-Signal unzuverlaessig liefern, kann
-    /// der User auf Toggle-Mode wechseln.
-    #[serde(default = "default_ptt_mode")]
-    pub ptt_mode: bool,
+    /// Globaler Hotkey, der das Modus-Auswahl-Menue oeffnet. Genau ein
+    /// Hotkey fuer die ganze App — die einzelnen Modi haben keine
+    /// eigenen Hotkeys mehr.
+    #[serde(default = "default_menu_hotkey")]
+    pub menu_hotkey: String,
+
+    /// Modus-ID, die beim oeffnen des Menues vorausgewaehlt ist
+    /// (Cursor-Position). Wird nach jeder erfolgreichen Auswahl
+    /// gespeichert, sodass der "letzte" Modus immer mit einem einzigen
+    /// Enter erreichbar ist.
+    #[serde(default)]
+    pub last_selected_mode_id: Option<String>,
 }
 
 /// Manueller `Default`-Impl statt `#[derive(Default)]`: das Derive
 /// ignoriert die `#[serde(default = "...")]`-Annotationen und benutzt
-/// die Typ-Defaults (`bool` -> `false`, `String` -> `""`). Hier setzen
-/// wir die echten Anwendungs-Defaults, damit der erste Start (vor dem
-/// ersten Settings-Save) sinnvolle Werte hat — insbesondere
-/// `ptt_mode = true`.
+/// die Typ-Defaults. Hier setzen wir die echten Anwendungs-Defaults.
 impl Default for Settings {
     fn default() -> Self {
         Self {
@@ -78,13 +81,14 @@ impl Default for Settings {
             ollama_url: default_ollama_url(),
             onboarding_done: false,
             whisper_n_threads: None,
-            ptt_mode: default_ptt_mode(),
+            menu_hotkey: default_menu_hotkey(),
+            last_selected_mode_id: None,
         }
     }
 }
 
-fn default_ptt_mode() -> bool {
-    true
+fn default_menu_hotkey() -> String {
+    "CommandOrControl+Alt+Space".to_string()
 }
 
 impl Settings {

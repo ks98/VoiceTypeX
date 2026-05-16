@@ -45,11 +45,7 @@ export default function Modes(): JSX.Element {
   }, [load]);
 
   const onDelete = async (id: string, name: string) => {
-    if (
-      !window.confirm(
-        `Modus „${name}" wirklich loeschen? Der Hotkey wird frei.`,
-      )
-    ) {
+    if (!window.confirm(`Modus „${name}" wirklich loeschen?`)) {
       return;
     }
     try {
@@ -120,7 +116,6 @@ export default function Modes(): JSX.Element {
         <thead className="text-left text-slate-400 border-b border-slate-800">
           <tr>
             <th className="py-2">Name</th>
-            <th className="py-2">Hotkey</th>
             <th className="py-2">STT</th>
             <th className="py-2">Nachbearbeitung</th>
             <th className="py-2">Inject</th>
@@ -137,7 +132,6 @@ export default function Modes(): JSX.Element {
                 <div className="font-medium text-slate-100">{m.name}</div>
                 <div className="text-xs text-slate-500">id: {m.id}</div>
               </td>
-              <td className="py-2 font-mono text-xs">{m.hotkey}</td>
               <td className="py-2 capitalize">
                 {m.transcription}
                 {m.cloud_stt_provider ? ` / ${m.cloud_stt_provider}` : ""}
@@ -181,11 +175,6 @@ export default function Modes(): JSX.Element {
       {editing ? (
         <ModeEditor
           initial={editing}
-          existingHotkeys={modes.map((m) => ({
-            id: m.id,
-            hotkey: m.hotkey,
-            name: m.name,
-          }))}
           onClose={() => setEditing(null)}
           onSaved={() => void onSaved()}
         />
@@ -194,11 +183,6 @@ export default function Modes(): JSX.Element {
       {showNew ? (
         <ModeEditor
           initial={null}
-          existingHotkeys={modes.map((m) => ({
-            id: m.id,
-            hotkey: m.hotkey,
-            name: m.name,
-          }))}
           onClose={() => setShowNew(false)}
           onSaved={() => void onSaved()}
         />

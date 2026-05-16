@@ -10,7 +10,10 @@ import AutoPasteTestSection from "../components/AutoPasteTestSection";
 import { useSettingsStore } from "../store";
 import {
   ipcDownloadDefaultModel,
+  ipcGetEffectiveMenuHotkey,
+  ipcGetSessionInfo,
   type ModelDownloadProgress,
+  type SessionInfo,
 } from "../lib/tauri";
 
 export default function Settings(): JSX.Element {
@@ -25,10 +28,18 @@ export default function Settings(): JSX.Element {
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [progress, setProgress] = useState<ModelDownloadProgress | null>(null);
+  const [session, setSession] = useState<SessionInfo | null>(null);
+  const [effectiveHotkey, setEffectiveHotkey] = useState<string | null>(null);
 
   useEffect(() => {
     void load();
     void loadAudioDevices();
+    void ipcGetSessionInfo()
+      .then(setSession)
+      .catch(() => null);
+    void ipcGetEffectiveMenuHotkey()
+      .then(setEffectiveHotkey)
+      .catch(() => null);
   }, [load, loadAudioDevices]);
 
   useEffect(() => {
@@ -179,19 +190,12 @@ export default function Settings(): JSX.Element {
         </div>
       </Field>
 
-      <Field
-        label="Hotkey-Verhalten"
-        hint="Push-to-Talk: halte den Hotkey gedrueckt waehrend du sprichst, loslassen stoppt. Toggle: ein Druck startet, ein zweiter stoppt. Auf Wayland kann das Release-Signal compositorabhaengig unzuverlaessig sein — dann lieber Toggle."
-      >
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={settings.ptt_mode}
-            onChange={(e) => void update({ ptt_mode: e.target.checked })}
-          />
-          Push-to-Talk (gedrueckt halten zum Sprechen)
-        </label>
-      </Field>
+      <MenuHotkeyField
+        session={session}
+        settingsValue={settings.menu_hotkey}
+        effective={effectiveHotkey}
+        onChange={(v) => void update({ menu_hotkey: v })}
+      />
 
       <Field
         label="Whisper-Threads (lokales STT)"
@@ -266,5 +270,58 @@ export default function Settings(): JSX.Element {
 
       <ApiKeysSection />
     </div>
+  );
+}
+
+/**
+ * Menue-Hotkey-Anzeige + Bearbeitung. Plattform-abhaengig:
+ *
+ * - **Wayland**: read-only. KDE/GNOME verwalten die Tastenbindung selbst;
+ *   ein Aendern des Settings-Werts schlaegt nur als *Vorschlag* fuer den
+ *   allerersten Start durch. Wir zeigen den vom Compositor effektiv
+ *   gebundenen Trigger an und verweisen auf System Settings.
+ * - **X11 / Windows**: editierbar. Die App registriert den Hotkey direkt
+ *   ueber `tauri-plugin-global-shortcut`, der Settings-Wert ist die
+ *   Wahrheit.
+ */
+function MenuHotkeyField({
+  session,
+  settingsValue,
+  effective,
+  onChange,
+}: {
+  session: SessionInfo | null;
+  settingsValue: string;
+  effective: string | null;
+  onChange: (v: string) => void;
+}): JSX.Element {
+  const isWayland = session?.display_server === "wayland";
+
+  if (isWayland) {
+    return (
+      <Field
+        label="Globaler Menue-Hotkey (Wayland)"
+        hint="Auf Wayland verwaltet der Compositor (KDE / GNOME) die Tastenbindung. Aenderungen unter System Settings → Globale Verknuepfungen → VoiceTypeX. Der hier angezeigte Wert ist der aktuelle effektive Trigger; Aenderungen wirken nach App-Neustart."
+      >
+        <div className="bg-slate-900/60 border border-slate-700 rounded px-3 py-2 text-sm font-mono w-72 text-slate-300">
+          {effective ?? settingsValue}
+        </div>
+      </Field>
+    );
+  }
+
+  return (
+    <Field
+      label="Globaler Menue-Hotkey"
+      hint="Genau ein Hotkey fuer die ganze App. Drueckst du ihn, oeffnet sich das Modus-Menue (Pfeile + Enter); waehrend einer laufenden Aufnahme stoppt derselbe Hotkey das Recording. Aenderungen wirken nach App-Neustart."
+    >
+      <input
+        type="text"
+        className="bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm font-mono w-72"
+        value={settingsValue}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="CommandOrControl+Alt+Space"
+      />
+    </Field>
   );
 }

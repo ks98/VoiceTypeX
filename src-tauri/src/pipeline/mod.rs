@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! State-Machine-Pipeline-Driver.
 //!
-//! Verbindet Hotkey-Events mit Recorder, Transcriber, Processor, Injector.
-//! Phase 1.4: nur der Modus `exakt` ist end-to-end verdrahtet (lokales
-//! Whisper, keine LLM-Nachbearbeitung, Clipboard-Inject). Die anderen 5
-//! Modi loggen `noch nicht implementiert` und zeigen eine Notification —
-//! ihre Hotkeys sind aber registriert (DoD §6.1).
+//! Verbindet den einen globalen Menue-Hotkey mit Recorder, Transcriber,
+//! Processor und Injector. Der Hotkey oeffnet im Idle-State das Modus-
+//! Auswahl-Overlay; nach Enter im Frontend startet die Pipeline ueber
+//! den `start_recording`-IPC-Command. Im Recording-State stoppt
+//! derselbe Hotkey die Aufnahme und laesst die Pipeline durchlaufen.
 
 use crate::audio::{play_start_cue, play_stop_cue, recorder::RecorderHandle, RecorderConfig};
 use crate::core::error::{Result, VoiceTypeError};
@@ -20,14 +20,21 @@ use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use tauri_plugin_notification::NotificationExt;
 
-/// Toggle-Logik (legacy): wird vom IPC-Pfad genutzt (UI-Trigger-Button).
-/// Hotkey-Pfad nutzt jetzt `handle_hotkey_pressed` / `handle_hotkey_released`,
-/// die das Push-to-Talk-Verhalten machen.
+/// Toggle-Logik fuer den IPC-Pfad (UI-Trigger-Button in der Modi-Liste,
+/// `stop_recording`-Command).
+///
+/// Beim Toggle-Stop nutzen wir den im AppContext gespeicherten
+/// `active_mode` statt des Parameters: sonst koennte ein UI-Trigger fuer
+/// Modus B die Pipeline finalisieren, die mit Modus A vom Menue-Hotkey
+/// gestartet wurde. Der Parameter-Modus ist nur fuer den Start-Pfad
+/// relevant.
 pub async fn execute_mode(app: AppHandle, ctx: Arc<AppContext>, mode: Mode) -> Result<()> {
     let current = ctx.state_bus.current();
 
     if matches!(current, AppState::Recording) {
-        finish_recording_and_inject(&app, &ctx, &mode).await
+        let active = ctx.active_mode.lock().clone();
+        let resolved = active.unwrap_or(mode);
+        finish_recording_and_inject(&app, &ctx, &resolved).await
     } else if matches!(current, AppState::Idle) {
         start_recording(&app, &ctx, &mode).await
     } else {
@@ -36,53 +43,67 @@ pub async fn execute_mode(app: AppHandle, ctx: Arc<AppContext>, mode: Mode) -> R
     }
 }
 
-/// Hotkey-Press-Handler: in PTT-Mode "Recording starten", in
-/// Toggle-Mode "execute_mode" (Toggle-Verhalten).
-pub async fn handle_hotkey_pressed(app: AppHandle, ctx: Arc<AppContext>, mode: Mode) -> Result<()> {
-    let ptt = ctx.settings.read().ptt_mode;
-    if !ptt {
-        return execute_mode(app, ctx, mode).await;
-    }
+/// Handler fuer den einen globalen Menue-Hotkey.
+///
+/// - `Idle` → `menu`-Window zeigen, Fokus dorthin geben.
+/// - `Recording` → laufende Aufnahme mit dem `active_mode` finalisieren
+///   (Toggle-Stop).
+/// - sonst → ignorieren (Pipeline arbeitet gerade, kein erneuter Trigger).
+pub async fn handle_menu_hotkey(app: AppHandle, ctx: Arc<AppContext>) -> Result<()> {
     let current = ctx.state_bus.current();
-    if !matches!(current, AppState::Idle) {
-        tracing::warn!(
-            state = %current.label(),
-            "PTT-Press ignoriert (nicht im Idle-State)"
-        );
-        return Ok(());
+    match current {
+        AppState::Idle => {
+            if let Some(menu) = app.get_webview_window("menu") {
+                if let Err(e) = menu.show() {
+                    tracing::warn!(error = %e, "menu.show() fehlgeschlagen");
+                }
+                // set_focus auf Wayland Compositor-abhaengig. Das menu-
+                // Window startet mit `focus: true` in der Config, das gibt
+                // KDE einen staerkeren Hint als ein nachtraegliches
+                // set_focus auf das overlay-Window.
+                if let Err(e) = menu.set_focus() {
+                    tracing::warn!(error = %e, "menu.set_focus() fehlgeschlagen (Compositor-Quirk)");
+                }
+            }
+            tracing::info!("Menue-Hotkey: Idle → Menue geoeffnet");
+        }
+        AppState::Recording => {
+            let active = ctx.active_mode.lock().clone();
+            let Some(mode) = active else {
+                tracing::warn!("Recording-State ohne active_mode — Menue-Hotkey-Stop ignoriert");
+                return Ok(());
+            };
+            tracing::info!(mode = %mode.id, "Menue-Hotkey: Recording → finish");
+            finish_recording_and_inject(&app, &ctx, &mode).await?;
+        }
+        other => {
+            tracing::warn!(state = %other.label(), "Menue-Hotkey ignoriert (busy)");
+        }
     }
-    start_recording(&app, &ctx, &mode).await
-}
-
-/// Hotkey-Release-Handler: stoppt Recording, durchlaeuft die Pipeline.
-pub async fn handle_hotkey_released(
-    app: AppHandle,
-    ctx: Arc<AppContext>,
-    mode: Mode,
-) -> Result<()> {
-    let ptt = ctx.settings.read().ptt_mode;
-    if !ptt {
-        return Ok(());
-    }
-    let current = ctx.state_bus.current();
-    if !matches!(current, AppState::Recording) {
-        tracing::debug!(
-            state = %current.label(),
-            "PTT-Release ignoriert (nicht Recording)"
-        );
-        return Ok(());
-    }
-    finish_recording_and_inject(&app, &ctx, &mode).await
+    Ok(())
 }
 
 async fn start_recording(app: &AppHandle, ctx: &Arc<AppContext>, mode: &Mode) -> Result<()> {
     ctx.state_bus.transition(AppState::Recording)?;
 
-    // Overlay sichtbar machen. Das `show()` klaut zwar kurz den
-    // Tastatur-Fokus auf KDE Plasma 6, aber das ist OK: der User spricht
-    // jetzt sowieso, kein Tastatur-Input nötig. Vor dem libei-Inject
-    // (`finish_recording_and_inject`) versteckt sich das Overlay wieder
-    // und der Fokus springt zurück zur Ziel-App, sodass libei dort tippt.
+    // Aktiven Modus merken: der Menue-Hotkey-Stop liest hier den Modus,
+    // mit dem die Pipeline finalisiert werden muss. Wird in
+    // `finish_recording_and_inject` wieder geleert.
+    *ctx.active_mode.lock() = Some(mode.clone());
+
+    // Menue-Window verstecken, falls der Start aus dem Menue kam — sonst
+    // bleibt es sichtbar hinter dem Overlay. Idempotent: war es schon
+    // versteckt (UI-Trigger-Pfad), passiert nichts.
+    if let Some(menu) = app.get_webview_window("menu") {
+        if let Err(e) = menu.hide() {
+            tracing::warn!(error = %e, "menu.hide() vor Recording fehlgeschlagen");
+        }
+    }
+
+    // Status-Overlay sichtbar machen. Das Window hat `focus: false`,
+    // klaut also keinen Tastatur-Fokus von der Ziel-App. Vor dem
+    // libei-Inject (`finish_recording_and_inject`) versteckt sich das
+    // Overlay wieder und der Fokus bleibt bei der Ziel-App.
     if let Some(overlay) = app.get_webview_window("overlay") {
         if let Err(e) = overlay.show() {
             tracing::warn!(error = %e, "Overlay show() fehlgeschlagen (nicht fatal)");
@@ -94,7 +115,10 @@ async fn start_recording(app: &AppHandle, ctx: &Arc<AppContext>, mode: &Mode) ->
     }
 
     let recorder = RecorderHandle::start(RecorderConfig::default()).inspect_err(|e| {
-        // Bei Fehler State zurueck auf Idle, damit kein Deadlock entsteht
+        // Bei Fehler State zurueck auf Idle, damit kein Deadlock entsteht.
+        // active_mode auch raeumen, sonst sieht der Menue-Hotkey einen
+        // veralteten Eintrag.
+        *ctx.active_mode.lock() = None;
         let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
         let _ = ctx.state_bus.transition(AppState::Idle);
     })?;
@@ -162,6 +186,12 @@ async fn finish_recording_and_inject(
         cloud_llm = ?mode.cloud_llm_provider,
         "Pipeline-Start (Modus-Eigenschaften)"
     );
+
+    // active_mode jetzt schon raeumen — ab hier ist die Pipeline busy und
+    // der Menue-Hotkey wuerde im Recording-State sowieso nichts mehr tun
+    // (State ist schon Transcribing/Postprocessing/Injecting). Wir
+    // vermeiden, dass eine Pipeline-Exception den Eintrag stehen laesst.
+    *ctx.active_mode.lock() = None;
 
     let recorder = ctx
         .recorder_slot
@@ -317,135 +347,101 @@ async fn run_cloud_processing(mode: &Mode, transcript: &str) -> Result<String> {
     processor.process(transcript, system_prompt, opts).await
 }
 
-/// Registriere die Hotkeys aller geladenen Modi (X11/Windows-Pfad).
-/// Press → handle_hotkey_pressed, Release → handle_hotkey_released.
-/// PTT-vs-Toggle entscheidet sich erst in den Handlern via Settings.
-pub fn register_mode_hotkeys(app: &AppHandle, ctx: Arc<AppContext>) -> Result<()> {
-    let modes = ctx.modes.current();
+/// Registriere den einen globalen Menue-Hotkey (X11/Windows-Pfad).
+///
+/// Anders als frueher gibt es **einen** Shortcut fuer die ganze App: der
+/// `Settings.menu_hotkey` oeffnet das Modus-Auswahl-Menue (im Idle-State)
+/// bzw. stoppt eine laufende Aufnahme (im Recording-State). Wir reagieren
+/// nur auf `Pressed`; Release-Events werden ignoriert, weil PTT durch
+/// den Menue-Flow obsolet ist.
+pub fn register_menu_hotkey(app: &AppHandle, ctx: Arc<AppContext>) -> Result<()> {
+    let accelerator = ctx.settings.read().menu_hotkey.clone();
 
-    for mode in modes {
-        let accelerator = mode.hotkey.clone();
-        let app_for_handler = app.clone();
-        let ctx_for_handler = Arc::clone(&ctx);
-        let mode_clone = mode.clone();
+    let app_for_handler = app.clone();
+    let ctx_for_handler = Arc::clone(&ctx);
 
-        let handler =
-            move |_app: &AppHandle,
-                  _shortcut: &_,
-                  event: tauri_plugin_global_shortcut::ShortcutEvent| {
-                let app = app_for_handler.clone();
-                let ctx = Arc::clone(&ctx_for_handler);
-                let mode = mode_clone.clone();
-                let kind = event.state();
-                tauri::async_runtime::spawn(async move {
-                    let result = match kind {
-                        ShortcutState::Pressed => {
-                            handle_hotkey_pressed(app.clone(), ctx, mode.clone()).await
-                        }
-                        ShortcutState::Released => {
-                            handle_hotkey_released(app.clone(), ctx, mode.clone()).await
-                        }
-                    };
-                    if let Err(e) = result {
-                        tracing::error!(
-                            mode = %mode.id,
-                            kind = ?kind,
-                            error = %e,
-                            "Pipeline fehlgeschlagen"
-                        );
-                        let _ = app
-                            .notification()
-                            .builder()
-                            .title("VoiceTypeX — Fehler")
-                            .body(e.to_string())
-                            .show();
-                    }
-                });
-            };
+    let handler = move |_app: &AppHandle,
+                        _shortcut: &_,
+                        event: tauri_plugin_global_shortcut::ShortcutEvent| {
+        if !matches!(event.state(), ShortcutState::Pressed) {
+            return;
+        }
+        let app = app_for_handler.clone();
+        let ctx = Arc::clone(&ctx_for_handler);
+        tauri::async_runtime::spawn(async move {
+            if let Err(e) = handle_menu_hotkey(app.clone(), ctx).await {
+                tracing::error!(error = %e, "Menue-Hotkey-Handler fehlgeschlagen");
+                let _ = app
+                    .notification()
+                    .builder()
+                    .title("VoiceTypeX — Fehler")
+                    .body(e.to_string())
+                    .show();
+            }
+        });
+    };
 
-        app.global_shortcut()
-            .on_shortcut(accelerator.as_str(), handler)
-            .map_err(|e| {
-                VoiceTypeError::Hotkey(format!(
-                    "register '{}' fuer Modus '{}': {e}",
-                    mode.hotkey, mode.id
-                ))
-            })?;
-        tracing::info!(mode = %mode.id, hotkey = %mode.hotkey, "Hotkey registriert");
-    }
-
+    app.global_shortcut()
+        .on_shortcut(accelerator.as_str(), handler)
+        .map_err(|e| {
+            VoiceTypeError::Hotkey(format!("register menu-hotkey '{accelerator}': {e}"))
+        })?;
+    tracing::info!(hotkey = %accelerator, "Menue-Hotkey registriert");
     Ok(())
 }
 
-/// Wayland-Pfad: bind alle Modus-Hotkeys ueber das xdg-portal.GlobalShortcuts
-/// und spawnt einen Listener, der Activations auf `execute_mode` mappt.
+/// Wayland-Pfad: bindet den einen Menue-Hotkey ueber das
+/// xdg-portal.GlobalShortcuts und spawnt einen Listener, der jede
+/// Activation auf `handle_menu_hotkey` mappt.
+///
+/// Auf Wayland ist der Hotkey nur ein **Vorschlag** — der Compositor zeigt
+/// dem User beim ersten Start einen Dialog zur finalen Zuweisung.
 ///
 /// Zwei Tasks werden gespawnt:
-/// 1) Session-Task: hält die Portal-Verbindung am Leben + sendet Events
+/// 1) Session-Task: haelt die Portal-Verbindung am Leben + sendet Events
 ///    in den broadcast-Channel.
-/// 2) Dispatcher-Task: liest broadcast-Channel, ruft `execute_mode` mit
-///    dem entsprechenden Modus.
+/// 2) Dispatcher-Task: liest broadcast-Channel, ruft `handle_menu_hotkey`.
+///    Release-Events werden ignoriert (kein PTT mehr).
 #[cfg(target_os = "linux")]
 pub fn spawn_wayland_hotkey_session(app: AppHandle, ctx: Arc<AppContext>) {
     use crate::hotkey::linux_wayland::{run_global_shortcuts_session, WaylandShortcutSpec};
     use tokio::sync::broadcast;
 
-    let modes = ctx.modes.current();
-    let specs: Vec<WaylandShortcutSpec> = modes
-        .iter()
-        .map(|m| WaylandShortcutSpec {
-            id: m.id.clone(),
-            description: m.name.clone(),
-            preferred_trigger: m.hotkey.clone(),
-        })
-        .collect();
-
-    if specs.is_empty() {
-        tracing::warn!("Keine Modi geladen — kein Wayland-Hotkey-Bind");
-        return;
-    }
+    let preferred = ctx.settings.read().menu_hotkey.clone();
+    let specs = vec![WaylandShortcutSpec {
+        id: "open_menu".to_string(),
+        description: "VoiceTypeX: Modus-Menue oeffnen / Aufnahme stoppen".to_string(),
+        preferred_trigger: preferred,
+    }];
 
     let (sender, mut receiver) = broadcast::channel(16);
     let sender_clone = sender.clone();
+    let effective_cache = Arc::clone(&ctx.effective_menu_hotkey);
 
     // Task 1: Portal-Session
     tauri::async_runtime::spawn(async move {
-        if let Err(e) = run_global_shortcuts_session(specs, sender_clone).await {
+        if let Err(e) =
+            run_global_shortcuts_session(specs, sender_clone, Some(effective_cache)).await
+        {
             tracing::error!(error = %e, "Wayland-Hotkey-Session beendet mit Fehler");
         }
     });
 
-    // Task 2: Dispatcher — leitet Pressed/Released an PTT-aware Handler weiter.
+    // Task 2: Dispatcher — nur auf Pressed reagieren.
     let app_for_dispatch = app.clone();
     let ctx_for_dispatch = Arc::clone(&ctx);
     tauri::async_runtime::spawn(async move {
         loop {
             match receiver.recv().await {
                 Ok(event) => {
-                    let mode = ctx_for_dispatch.modes.find_by_id(&event.id);
-                    let Some(mode) = mode else {
-                        tracing::warn!(id = %event.id, "Wayland-Hotkey-Event ohne passenden Modus");
+                    if !matches!(event.kind, crate::hotkey::HotkeyEventKind::Pressed) {
                         continue;
-                    };
+                    }
                     let app = app_for_dispatch.clone();
                     let ctx = Arc::clone(&ctx_for_dispatch);
-                    let kind = event.kind;
                     tauri::async_runtime::spawn(async move {
-                        let result = match kind {
-                            crate::hotkey::HotkeyEventKind::Pressed => {
-                                handle_hotkey_pressed(app.clone(), ctx, mode.clone()).await
-                            }
-                            crate::hotkey::HotkeyEventKind::Released => {
-                                handle_hotkey_released(app.clone(), ctx, mode.clone()).await
-                            }
-                        };
-                        if let Err(e) = result {
-                            tracing::error!(
-                                mode = %mode.id,
-                                kind = ?kind,
-                                error = %e,
-                                "Pipeline-Fehler (Wayland-Hotkey)"
-                            );
+                        if let Err(e) = handle_menu_hotkey(app.clone(), ctx).await {
+                            tracing::error!(error = %e, "Menue-Hotkey-Handler-Fehler (Wayland)");
                         }
                     });
                 }
@@ -460,8 +456,6 @@ pub fn spawn_wayland_hotkey_session(app: AppHandle, ctx: Arc<AppContext>) {
         }
     });
 
-    // Sender lebt im Session-Task; wir lassen die Variable hier im Scope
-    // sterben, weil receiver bereits den Kanal-Lifetime sichert.
     drop(sender);
 }
 

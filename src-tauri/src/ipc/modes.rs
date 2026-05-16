@@ -25,16 +25,9 @@ pub async fn reload_modes(state: tauri::State<'_, Arc<AppContext>>) -> IpcResult
 pub async fn create_mode(state: tauri::State<'_, Arc<AppContext>>, mode: Mode) -> IpcResult<()> {
     mode.validate().map_err(|e| e.to_string())?;
 
-    // Doppelte ID oder Hotkey gegen aktuelle Liste pruefen.
     let current = state.modes.current();
     if current.iter().any(|m| m.id == mode.id) {
         return Err(format!("Modus mit id '{}' existiert bereits", mode.id));
-    }
-    if let Some(conflict) = current.iter().find(|m| m.hotkey == mode.hotkey) {
-        return Err(format!(
-            "Hotkey '{}' bereits durch '{}' belegt",
-            mode.hotkey, conflict.name
-        ));
     }
 
     let path = state
@@ -56,15 +49,6 @@ pub async fn update_mode(state: tauri::State<'_, Arc<AppContext>>, mode: Mode) -
     let current = state.modes.current();
     if !current.iter().any(|m| m.id == mode.id) {
         return Err(format!("Modus '{}' existiert nicht", mode.id));
-    }
-    if let Some(conflict) = current
-        .iter()
-        .find(|m| m.hotkey == mode.hotkey && m.id != mode.id)
-    {
-        return Err(format!(
-            "Hotkey '{}' bereits durch '{}' belegt",
-            mode.hotkey, conflict.name
-        ));
     }
 
     let path = find_mode_file(&state.modes_dir, &mode.id).unwrap_or_else(|| {

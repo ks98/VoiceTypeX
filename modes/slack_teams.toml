@@ -1,7 +1,6 @@
 id = "chat"
 name = "Slack/Teams Nachricht"
 description = "Diktat -> kurze, lockere Chat-Nachricht ohne Anrede oder Grussformel."
-hotkey = "CommandOrControl+Alt+S"
 transcription = "cloud"
 processing = "cloud"
 cloud_stt_provider = "xai"

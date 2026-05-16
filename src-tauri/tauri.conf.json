@@ -43,6 +43,25 @@
         "transparent": true,
         "shadow": false,
         "focus": false
+      },
+      {
+        "label": "menu",
+        "title": "VoiceTypeX Menü",
+        "url": "index.html?window=menu",
+        "width": 480,
+        "height": 360,
+        "minWidth": 320,
+        "minHeight": 120,
+        "x": 24,
+        "y": 24,
+        "resizable": false,
+        "fullscreen": false,
+        "visible": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "decorations": false,
+        "transparent": true,
+        "shadow": true
       }
     ],
     "security": {

@@ -1,7 +1,6 @@
 id = "email"
 name = "Foermliche E-Mail"
 description = "Diktat -> formell ausformulierte E-Mail, ohne Floskeln zu erfinden."
-hotkey = "CommandOrControl+Alt+E"
 transcription = "cloud"
 processing = "cloud"
 cloud_stt_provider = "xai"
