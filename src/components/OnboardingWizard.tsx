@@ -20,6 +20,13 @@ interface OnboardingWizardProps {
   onClose: () => void;
 }
 
+const inputCls =
+  "bg-surface border border-outline rounded-md px-3 py-2 text-sm text-fg placeholder:text-fg-faint focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/40";
+const primaryBtn =
+  "inline-flex items-center px-4 py-2 rounded-md bg-brand text-brand-contrast text-sm font-medium hover:bg-brand-hover transition-colors disabled:bg-elevated disabled:text-fg-faint disabled:cursor-not-allowed";
+const secondaryBtn =
+  "inline-flex items-center px-4 py-2 rounded-md bg-elevated text-fg text-sm hover:bg-outline-strong/40 transition-colors";
+
 export default function OnboardingWizard({
   onClose,
 }: OnboardingWizardProps): JSX.Element {
@@ -106,225 +113,62 @@ export default function OnboardingWizard({
       : null;
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-950 border border-slate-700 rounded-lg max-w-2xl w-full overflow-auto">
-        <div className="p-6 border-b border-slate-800 flex justify-between items-center">
-          <div>
-            <h2 className="text-xl font-semibold text-brand-500">
-              Willkommen bei VoiceTypeX
-            </h2>
-            <div className="text-xs text-slate-500 mt-1">
-              Schritt {step} von 4
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => void skipAll()}
-            className="text-xs text-slate-500 hover:text-slate-300"
-          >
-            Setup ueberspringen
-          </button>
-        </div>
-
-        <div className="p-6 min-h-[320px]">
-          {step === 1 ? (
-            <div className="flex flex-col gap-4">
-              <h3 className="text-lg font-medium text-slate-100">
-                Was ist VoiceTypeX?
-              </h3>
-              <p className="text-sm text-slate-300">
-                VoiceTypeX nimmt deine Stimme per Hotkey auf, transkribiert sie
-                (lokal oder via Cloud) und fuegt den Text an der aktuellen
-                Cursor-Position ein.
-              </p>
-              <ul className="text-sm text-slate-400 list-disc pl-5 flex flex-col gap-1">
-                <li>
-                  <strong className="text-slate-200">Lokal:</strong> 100 %
-                  offline via whisper.cpp — kostenlos, deine Audio-Daten
-                  verlassen niemals den Rechner.
-                </li>
-                <li>
-                  <strong className="text-slate-200">Cloud:</strong> xAI &amp;
-                  andere Provider (BYOK) — hoehere Qualitaet, du bringst deinen
-                  eigenen API-Key mit.
-                </li>
-                <li>
-                  Sechs Standard-Modi vorinstalliert (E-Mail, Slack, Issue …),
-                  beliebig viele eigene moeglich.
-                </li>
-              </ul>
-              <p className="text-xs text-slate-500">
-                Das Setup dauert &lt; 5 Minuten. Du kannst Schritte
-                ueberspringen und spaeter aus den Einstellungen nachholen.
-              </p>
-            </div>
-          ) : null}
-
-          {step === 2 ? (
-            <div className="flex flex-col gap-4">
-              <h3 className="text-lg font-medium text-slate-100">
-                Lokales Whisper-Modell
-              </h3>
-              <p className="text-sm text-slate-300">
-                Default ist{" "}
-                <code className="text-brand-500">
-                  ggml-large-v3-turbo-q5_0.bin
-                </code>{" "}
-                (~547 MB). Beste Balance aus deutscher Erkennung und CPU-Latenz.
-                Wird einmalig nach{" "}
-                <code className="text-brand-500">app_data_dir/models/</code>{" "}
-                heruntergeladen.
-              </p>
-              <button
-                type="button"
-                onClick={() => void onDownload()}
-                disabled={downloading}
-                className="self-start px-4 py-2 rounded bg-brand-700 hover:bg-brand-500 disabled:bg-slate-800 disabled:text-slate-500 text-sm"
-              >
-                {downloading
-                  ? "Lade Modell…"
-                  : "Default-Modell jetzt herunterladen"}
-              </button>
-              {downloadProgress ? (
-                <div className="flex flex-col gap-1 text-xs text-slate-400">
-                  <div>
-                    {fmtMb(downloadProgress.downloaded)}
-                    {downloadProgress.total
-                      ? ` von ${fmtMb(downloadProgress.total)}`
-                      : ""}
-                    {progressPct !== null ? ` (${progressPct} %)` : ""}
-                  </div>
-                  {progressPct !== null ? (
-                    <div className="h-2 bg-slate-800 rounded overflow-hidden">
-                      <div
-                        className="h-full bg-brand-500 transition-all"
-                        style={{ width: `${progressPct}%` }}
-                      />
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-              {downloadError ? (
-                <div className="text-xs text-red-400">{downloadError}</div>
-              ) : null}
-              {settings?.whisper_model_path ? (
-                <div className="text-xs text-emerald-400">
-                  ✓ Modell konfiguriert: {settings.whisper_model_path}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-
-          {step === 3 ? (
-            <div className="flex flex-col gap-4">
-              <h3 className="text-lg font-medium text-slate-100">
-                xAI-API-Key (optional)
-              </h3>
-              <p className="text-sm text-slate-300">
-                xAI bietet hochwertige Cloud-STT (Grok-STT) und LLM (Grok-4) mit
-                demselben Key. Fuer die Modi „E-Mail", „Slack", „Issue" und
-                „Claude-Code-Anweisung" benoetigt. Account und Key:{" "}
-                <code className="text-brand-500">console.x.ai</code>.
-              </p>
-              <p className="text-xs text-slate-500">
-                Der Key wird im OS-Keychain gespeichert, niemals als Klartext
-                auf Disk. Du kannst diesen Schritt ueberspringen und nur die
-                lokalen Modi nutzen.
-              </p>
-              <input
-                type="password"
-                value={xaiKey}
-                onChange={(e) => setXaiKey(e.target.value)}
-                placeholder="xai-…"
-                className="bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm font-mono"
-              />
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => void onSaveKey()}
-                  disabled={
-                    !xaiKey ||
-                    (keyStatus !== null && keyStatus.kind === "saving")
-                  }
-                  className="px-4 py-2 rounded bg-brand-700 hover:bg-brand-500 disabled:bg-slate-800 disabled:text-slate-500 text-sm"
-                >
-                  {keyStatus?.kind === "saving"
-                    ? "Speichere + teste…"
-                    : "Speichern + Verbindung testen"}
-                </button>
-                {keyStatus?.kind === "ok" ? (
-                  <span className="text-xs text-emerald-400">
-                    ✓ Verbindung erfolgreich
-                  </span>
-                ) : null}
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-surface border border-outline rounded-xl max-w-2xl w-full overflow-auto shadow-2xl">
+        <div className="px-6 pt-6 pb-4 border-b border-outline">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <h2 className="text-xl font-semibold text-fg tracking-tight">
+                Willkommen bei VoiceTypeX
+              </h2>
+              <div className="text-xs text-fg-faint mt-0.5">
+                Setup in {4} kurzen Schritten
               </div>
-              {keyStatus?.kind === "error" ? (
-                <div className="text-xs text-red-400">{keyStatus.msg}</div>
-              ) : null}
             </div>
-          ) : null}
-
-          {step === 4 ? (
-            <div className="flex flex-col gap-4">
-              <h3 className="text-lg font-medium text-slate-100">
-                System-Check &amp; Fertig
-              </h3>
-              {backend ? (
-                <div className="rounded-md bg-slate-900 border border-slate-700 p-3 text-sm">
-                  <div className="text-slate-400 text-xs mb-1">
-                    Whisper-Backend dieser Variante
-                  </div>
-                  <div className="text-emerald-400 font-mono text-base">
-                    {backend.backend} (~{backend.expected_speedup.toFixed(1)}×)
-                  </div>
-                  <div className="text-xs text-slate-500 mt-1">
-                    {backend.description}
-                  </div>
-                </div>
-              ) : null}
-              {hardware && backend ? (
-                <HardwareRecommendation
-                  hardware={hardware}
-                  active={backend.backend}
-                />
-              ) : null}
-              <p className="text-sm text-slate-300">
-                Du kannst jetzt diktieren. Drueck{" "}
-                <kbd className="px-2 py-0.5 rounded bg-slate-800 font-mono text-xs">
-                  Ctrl+Alt+Space
-                </kbd>
-                , waehle mit den Pfeiltasten einen Modus und bestaetige mit{" "}
-                <kbd className="px-2 py-0.5 rounded bg-slate-800 font-mono text-xs">
-                  Enter
-                </kbd>
-                . Derselbe Hotkey stoppt die Aufnahme.
-              </p>
-              <ul className="text-sm text-slate-400 list-disc pl-5 flex flex-col gap-1">
-                <li>
-                  Modus-Liste anpassen: Tab{" "}
-                  <strong className="text-slate-200">Modi</strong>.
-                </li>
-                <li>
-                  Eigene Modi: UI oder TOML in{" "}
-                  <code className="text-brand-500">app_config_dir/modes/</code>.
-                </li>
-                <li>
-                  Diagnose-Logs: Tab{" "}
-                  <strong className="text-slate-200">Logs</strong>.
-                </li>
-              </ul>
-            </div>
-          ) : null}
+            <button
+              type="button"
+              onClick={() => void skipAll()}
+              className="text-xs text-fg-faint hover:text-fg-muted transition-colors"
+            >
+              überspringen
+            </button>
+          </div>
+          <StepIndicator current={step} total={4} />
         </div>
 
-        <div className="p-5 border-t border-slate-800 flex justify-between gap-2">
+        <div className="px-6 py-8 min-h-[360px]">
+          {step === 1 ? (
+            <StepWelcome />
+          ) : step === 2 ? (
+            <StepDownload
+              onDownload={onDownload}
+              downloading={downloading}
+              progressPct={progressPct}
+              downloadProgress={downloadProgress}
+              downloadError={downloadError}
+              fmtMb={fmtMb}
+              modelPath={settings?.whisper_model_path ?? null}
+            />
+          ) : step === 3 ? (
+            <StepApiKey
+              xaiKey={xaiKey}
+              setXaiKey={setXaiKey}
+              keyStatus={keyStatus}
+              onSaveKey={onSaveKey}
+            />
+          ) : (
+            <StepFinish backend={backend} hardware={hardware} />
+          )}
+        </div>
+
+        <div className="px-6 py-4 border-t border-outline flex justify-between gap-2">
           <button
             type="button"
             onClick={() => setStep((s) => Math.max(1, (s - 1) as Step) as Step)}
             disabled={step === 1}
-            className="text-xs text-slate-400 hover:text-slate-200 disabled:opacity-30"
+            className="text-xs text-fg-muted hover:text-fg disabled:opacity-30 transition-colors"
           >
-            ← Zurueck
+            ← Zurück
           </button>
           {step < 4 ? (
             <button
@@ -332,7 +176,7 @@ export default function OnboardingWizard({
               onClick={() =>
                 setStep((s) => Math.min(4, (s + 1) as Step) as Step)
               }
-              className="px-4 py-2 rounded bg-slate-800 hover:bg-slate-700 text-sm"
+              className={secondaryBtn}
             >
               Weiter →
             </button>
@@ -340,13 +184,256 @@ export default function OnboardingWizard({
             <button
               type="button"
               onClick={() => void onFinish()}
-              className="px-4 py-2 rounded bg-brand-700 hover:bg-brand-500 text-sm"
+              className={primaryBtn}
             >
-              Setup abschliessen
+              Setup abschließen
             </button>
           )}
         </div>
       </div>
+    </div>
+  );
+
+  function StepDownload({
+    onDownload,
+    downloading,
+    progressPct,
+    downloadProgress,
+    downloadError,
+    fmtMb,
+    modelPath,
+  }: {
+    onDownload: () => Promise<void>;
+    downloading: boolean;
+    progressPct: number | null;
+    downloadProgress: ModelDownloadProgress | null;
+    downloadError: string | null;
+    fmtMb: (bytes: number) => string;
+    modelPath: string | null;
+  }): JSX.Element {
+    return (
+      <div className="flex flex-col gap-4">
+        <Hero icon={<CloudDownloadIcon />} />
+        <div>
+          <h3 className="text-lg font-semibold text-fg">
+            Lokales Whisper-Modell
+          </h3>
+          <p className="text-sm text-fg-muted mt-1">
+            Default ist{" "}
+            <code className="text-brand font-mono">
+              ggml-large-v3-turbo-q5_0.bin
+            </code>{" "}
+            (~547 MB). Beste Balance aus deutscher Erkennung und CPU-Latenz.
+            Wird einmalig nach{" "}
+            <code className="text-brand font-mono">app_data_dir/models/</code>{" "}
+            heruntergeladen.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void onDownload()}
+          disabled={downloading}
+          className={`${primaryBtn} self-start`}
+        >
+          {downloading
+            ? "Lade Modell…"
+            : "Default-Modell jetzt herunterladen"}
+        </button>
+        {downloadProgress ? (
+          <div className="flex flex-col gap-1.5 text-xs text-fg-muted">
+            <div>
+              {fmtMb(downloadProgress.downloaded)}
+              {downloadProgress.total
+                ? ` von ${fmtMb(downloadProgress.total)}`
+                : ""}
+              {progressPct !== null ? ` (${progressPct} %)` : ""}
+            </div>
+            {progressPct !== null ? (
+              <div className="h-2 bg-elevated rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-brand transition-all"
+                  style={{ width: `${progressPct}%` }}
+                />
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+        {downloadError ? (
+          <div className="text-xs text-status-error">{downloadError}</div>
+        ) : null}
+        {modelPath ? (
+          <div className="text-xs text-status-done">
+            ✓ Modell konfiguriert: {modelPath}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  function StepApiKey({
+    xaiKey,
+    setXaiKey,
+    keyStatus,
+    onSaveKey,
+  }: {
+    xaiKey: string;
+    setXaiKey: (v: string) => void;
+    keyStatus:
+      | null
+      | { kind: "saving" }
+      | { kind: "ok" }
+      | { kind: "error"; msg: string };
+    onSaveKey: () => Promise<void>;
+  }): JSX.Element {
+    return (
+      <div className="flex flex-col gap-4">
+        <Hero icon={<KeyIcon />} />
+        <div>
+          <h3 className="text-lg font-semibold text-fg">
+            xAI-API-Key (optional)
+          </h3>
+          <p className="text-sm text-fg-muted mt-1">
+            xAI bietet hochwertige Cloud-STT (Grok-STT) und LLM (Grok-4)
+            mit demselben Key. Für die Modi „E-Mail", „Slack",
+            „Issue" und „Claude-Code-Anweisung" benötigt. Account und
+            Key:{" "}
+            <code className="text-brand font-mono">console.x.ai</code>.
+          </p>
+          <p className="text-xs text-fg-faint mt-1">
+            Der Key wird im OS-Keychain gespeichert, niemals als Klartext
+            auf Disk. Du kannst diesen Schritt überspringen und nur die
+            lokalen Modi nutzen.
+          </p>
+        </div>
+        <input
+          type="password"
+          value={xaiKey}
+          onChange={(e) => setXaiKey(e.target.value)}
+          placeholder="xai-…"
+          className={`${inputCls} font-mono`}
+        />
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => void onSaveKey()}
+            disabled={
+              !xaiKey ||
+              (keyStatus !== null && keyStatus.kind === "saving")
+            }
+            className={primaryBtn}
+          >
+            {keyStatus?.kind === "saving"
+              ? "Speichere + teste…"
+              : "Speichern + Verbindung testen"}
+          </button>
+          {keyStatus?.kind === "ok" ? (
+            <span className="text-xs text-status-done">
+              ✓ Verbindung erfolgreich
+            </span>
+          ) : null}
+        </div>
+        {keyStatus?.kind === "error" ? (
+          <div className="text-xs text-status-error">{keyStatus.msg}</div>
+        ) : null}
+      </div>
+    );
+  }
+
+  function StepFinish({
+    backend,
+    hardware,
+  }: {
+    backend: WhisperBackendInfo | null;
+    hardware: HardwareReport | null;
+  }): JSX.Element {
+    return (
+      <div className="flex flex-col gap-4">
+        <Hero icon={<CheckIcon />} accent="done" />
+        <div>
+          <h3 className="text-lg font-semibold text-fg">
+            System-Check &amp; Fertig
+          </h3>
+          {backend ? (
+            <div className="mt-3 rounded-md bg-elevated border border-outline p-3 text-sm">
+              <div className="text-fg-muted text-xs mb-1">
+                Whisper-Backend dieser Variante
+              </div>
+              <div className="text-status-done font-mono text-base">
+                {backend.backend} (~{backend.expected_speedup.toFixed(1)}×)
+              </div>
+              <div className="text-xs text-fg-faint mt-1">
+                {backend.description}
+              </div>
+            </div>
+          ) : null}
+          {hardware && backend ? (
+            <HardwareRecommendation
+              hardware={hardware}
+              active={backend.backend}
+            />
+          ) : null}
+        </div>
+        <p className="text-sm text-fg-muted">
+          Du kannst jetzt diktieren. Drück{" "}
+          <kbd className="px-2 py-0.5 rounded-md bg-elevated border border-outline font-mono text-xs text-fg">
+            Ctrl+Alt+Space
+          </kbd>
+          , wähle mit den Pfeiltasten einen Modus und bestätige mit{" "}
+          <kbd className="px-2 py-0.5 rounded-md bg-elevated border border-outline font-mono text-xs text-fg">
+            Enter
+          </kbd>
+          . Derselbe Hotkey stoppt die Aufnahme.
+        </p>
+        <ul className="text-sm text-fg-muted list-disc pl-5 flex flex-col gap-1">
+          <li>
+            Modus-Liste anpassen: Tab{" "}
+            <strong className="text-fg">Modi</strong>.
+          </li>
+          <li>
+            Eigene Modi: UI oder TOML in{" "}
+            <code className="text-brand font-mono">app_config_dir/modes/</code>.
+          </li>
+          <li>
+            Diagnose-Logs: Tab <strong className="text-fg">Logs</strong>.
+          </li>
+        </ul>
+      </div>
+    );
+  }
+}
+
+function StepWelcome(): JSX.Element {
+  return (
+    <div className="flex flex-col gap-4">
+      <Hero icon={<MicIcon />} />
+      <div>
+        <h3 className="text-lg font-semibold text-fg">Was ist VoiceTypeX?</h3>
+        <p className="text-sm text-fg-muted mt-1">
+          VoiceTypeX nimmt deine Stimme per Hotkey auf, transkribiert sie
+          (lokal oder via Cloud) und fügt den Text an der aktuellen
+          Cursor-Position ein.
+        </p>
+      </div>
+      <ul className="text-sm text-fg-muted list-disc pl-5 flex flex-col gap-1.5">
+        <li>
+          <strong className="text-fg">Lokal:</strong> 100 % offline via
+          whisper.cpp — kostenlos, deine Audio-Daten verlassen niemals den
+          Rechner.
+        </li>
+        <li>
+          <strong className="text-fg">Cloud:</strong> xAI &amp; andere
+          Provider (BYOK) — höhere Qualität, du bringst deinen eigenen
+          API-Key mit.
+        </li>
+        <li>
+          Sechs Standard-Modi vorinstalliert (E-Mail, Slack, Issue …),
+          beliebig viele eigene möglich.
+        </li>
+      </ul>
+      <p className="text-xs text-fg-faint">
+        Das Setup dauert &lt; 5 Minuten. Du kannst Schritte überspringen
+        und später aus den Einstellungen nachholen.
+      </p>
     </div>
   );
 }
@@ -363,8 +450,8 @@ function HardwareRecommendation({
   const { recommended_variant, recommended_speedup } = hardware;
   if (recommended_variant === active) {
     return (
-      <div className="rounded-md bg-emerald-900/20 border border-emerald-700/40 p-3 text-xs text-emerald-200">
-        ✓ Diese Variante ist optimal fuer deine Hardware. Kein Upgrade noetig.
+      <div className="mt-3 rounded-md bg-status-done/10 border border-status-done/40 p-3 text-xs text-status-done">
+        ✓ Diese Variante ist optimal für deine Hardware. Kein Upgrade nötig.
       </div>
     );
   }
@@ -377,24 +464,144 @@ function HardwareRecommendation({
     coreml: "CoreML (Apple Silicon)",
   };
   return (
-    <div className="rounded-md bg-amber-900/20 border border-amber-700/40 p-3 text-xs text-amber-200 flex flex-col gap-1.5">
+    <div className="mt-3 rounded-md bg-status-processing/10 border border-status-processing/40 p-3 text-xs text-status-processing flex flex-col gap-1.5">
       <div>
-        <strong>Empfehlung:</strong> deine Hardware unterstuetzt{" "}
-        <span className="font-mono">{variantLabel[recommended_variant]}</span> —
-        eine separate Variante koennte hier ~{recommended_speedup.toFixed(1)}×
-        schneller transkribieren.
+        <strong>Empfehlung:</strong> deine Hardware unterstützt{" "}
+        <span className="font-mono">
+          {variantLabel[recommended_variant]}
+        </span>{" "}
+        — eine separate Variante könnte hier ~
+        {recommended_speedup.toFixed(1)}× schneller transkribieren.
       </div>
-      <div className="text-amber-300/70">
+      <div className="text-fg-faint">
         Detected: CPU {hardware.cpu_logical_cores} Cores
         {hardware.has_vulkan ? ", Vulkan" : ""}
         {hardware.has_nvidia_gpu ? ", NVIDIA-GPU" : ""}
         {hardware.has_amd_gpu ? ", AMD-GPU" : ""}
         {hardware.is_apple_silicon ? ", Apple-Silicon" : ""}.
       </div>
-      <div className="text-slate-400">
+      <div className="text-fg-muted">
         Ab dem ersten offiziellen Release wird die {recommended_variant}-
         Variante als separater Bundle-Download bereitstehen.
       </div>
     </div>
+  );
+}
+
+function StepIndicator({
+  current,
+  total,
+}: {
+  current: number;
+  total: number;
+}): JSX.Element {
+  return (
+    <div className="flex items-center gap-1.5" aria-label="Fortschritt">
+      {Array.from({ length: total }, (_, i) => i + 1).map((n) => {
+        const state =
+          n < current ? "done" : n === current ? "active" : "pending";
+        return (
+          <div
+            key={n}
+            className={
+              "h-1 flex-1 rounded-full transition-colors " +
+              (state === "done"
+                ? "bg-brand/60"
+                : state === "active"
+                  ? "bg-brand"
+                  : "bg-elevated")
+            }
+            aria-current={state === "active" ? "step" : undefined}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function Hero({
+  icon,
+  accent = "brand",
+}: {
+  icon: JSX.Element;
+  accent?: "brand" | "done";
+}): JSX.Element {
+  const bg = accent === "done" ? "bg-status-done/10" : "bg-brand/10";
+  const fg = accent === "done" ? "text-status-done" : "text-brand";
+  return (
+    <div
+      className={`self-start inline-flex items-center justify-center h-14 w-14 rounded-xl ${bg} ${fg}`}
+      aria-hidden
+    >
+      {icon}
+    </div>
+  );
+}
+
+function MicIcon(): JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-7 w-7"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="9" y="3" width="6" height="12" rx="3" />
+      <path d="M5 11a7 7 0 0 0 14 0M12 19v3M8 22h8" />
+    </svg>
+  );
+}
+
+function CloudDownloadIcon(): JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-7 w-7"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M6 17a4 4 0 1 1 .5-7.97A6 6 0 0 1 18 9a4 4 0 0 1 .5 8" />
+      <path d="M12 13v8M8 17l4 4 4-4" />
+    </svg>
+  );
+}
+
+function KeyIcon(): JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-7 w-7"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="8" cy="14" r="4" />
+      <path d="M11 11l9-9M16 6l3 3M14 8l3 3" />
+    </svg>
+  );
+}
+
+function CheckIcon(): JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-7 w-7"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8 12l3 3 5-5" />
+    </svg>
   );
 }
