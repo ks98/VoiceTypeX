@@ -370,6 +370,24 @@ React 18 + TypeScript strict + Tailwind v3 + Zustand.
   fallen auf "system" zurück. Bewusste Design-Entscheidung —
   ambient Notifications integrieren sich in den Desktop.
 
+### Logo & Icons
+
+- **Source-of-Truth**: SVG-Dateien in `src-tauri/icons/source/`. Das
+  Markenzeichen ist Wave-to-Caret (4 Audio-Bars → I-Beam-Cursor) in
+  Brand-Indigo (`#3D5AFE`). Tray-States bestehen aus 7 SVGs (logo +
+  idle/recording/recording_pulse/processing/done/error).
+- **Render-Pipeline** (manuell beim Icon-Update auszuführen):
+  - `rsvg-convert -w N -h N source/logo.svg -o icon.png` für die
+    Bundle-PNGs (32/128/256/512).
+  - `magick PNG-Frames icon.ico` für `.ico` mit 16/32/48/256.
+  - `rsvg-convert -w 64 -h 64 source/tray-X.svg -o tray/X.png` für
+    jede der sechs Tray-States.
+- **Web-Pendant**: `src/components/Logo.tsx` ist eine React-Komponente
+  mit identischer Geometrie und `fill="currentColor"` — theme-aware
+  via Tailwind, eingebunden im Sidebar-Header und im
+  OnboardingWizard-Step-1-Hero. Bei Geometry-Anpassung
+  beide Stellen (SVG-Source + Logo.tsx) synchron halten.
+
 ## Hardware-Detection
 
 [`core/hardware.rs`](../src-tauri/src/core/hardware.rs) detektiert beim
