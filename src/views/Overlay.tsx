@@ -3,38 +3,26 @@ import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 
-type StatePayload = {
-  state:
-    | "idle"
-    | "recording"
-    | "transcribing"
-    | "postprocessing"
-    | "injecting"
-    | "error";
-  error?: string;
-};
+type Phase =
+  | "idle"
+  | "recording"
+  | "transcribing"
+  | "postprocessing"
+  | "injecting"
+  | "error";
+
+type StatePayload = { state: Phase; error?: string };
 
 /**
- * Live-Overlay-Fenster — zeigt waehrend Recording/Transcribe/… den
- * Pipeline-Phasen-Indikator.
+ * Live-Overlay-Fenster — zeigt während Recording/Transcribe/… den
+ * Pipeline-Phasen-Indikator. Sichtbarkeit wird vom Backend gesteuert.
  *
- * Sichtbarkeit wird **vom Backend** ueber `webview_window.show()` /
- * `webview_window.hide()` gesteuert (siehe `pipeline/mod.rs`):
- *   - `start_recording` → `overlay.show()`
- *   - direkt vor libei-Inject → `overlay.hide()` + 80 ms Pause, damit der
- *     Tastatur-Fokus zur Ziel-App zurueckspringt
- *   - State-Listener → bei Idle / Error → `overlay.hide()` (Cleanup)
- *
- * Die Modus-Auswahl-UI laeuft im separaten `menu`-Window (Menu.tsx) —
- * dieses Overlay hat keine Tastatur-Interaktion und kein Pointer-Events
- * (CSS-Schutz, falls es mal unerwartet sichtbar bleibt).
- *
- * Phase-Default ist `"recording"`, weil das Window vom Backend nur
- * sichtbar gemacht wird, *wenn* die Pipeline gerade in Recording wechselt.
+ * Phase-Default ist "recording", weil das Window vom Backend nur
+ * sichtbar gemacht wird, wenn die Pipeline gerade in Recording wechselt.
  * Damit ist der erste sichtbare Frame schon "Höre zu …" statt leer.
  */
-export default function Overlay() {
-  const [phase, setPhase] = useState<StatePayload["state"]>("recording");
+export default function Overlay(): JSX.Element {
+  const [phase, setPhase] = useState<Phase>("recording");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -49,38 +37,131 @@ export default function Overlay() {
     };
   }, []);
 
-  const phaseLabel = (() => {
-    switch (phase) {
-      case "recording":
-        return "Höre zu …";
-      case "transcribing":
-        return "Transkribiere …";
-      case "postprocessing":
-        return "Verarbeite …";
-      case "injecting":
-        return "Füge ein …";
-      case "error":
-        return errorMsg ? `Fehler: ${errorMsg}` : "Fehler";
-      default:
-        return "Höre zu …";
-    }
-  })();
-
-  const dotAnim = phase === "recording" ? "animate-pulse" : "";
+  const meta = phaseMeta(phase, errorMsg);
 
   return (
     <div className="h-screen w-screen overflow-hidden p-2 select-none pointer-events-none">
-      <div className="h-full w-full rounded-lg bg-black/75 backdrop-blur-md border border-white/10 shadow-2xl px-4 py-3 flex items-center">
-        <div className="flex items-center gap-3 w-full min-w-0">
-          <span
-            className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 bg-red-500 ${dotAnim}`}
-            aria-hidden
-          />
-          <p className="text-white text-sm leading-snug font-medium overflow-hidden text-ellipsis whitespace-nowrap">
-            <span className="text-white/80 italic">{phaseLabel}</span>
-          </p>
-        </div>
+      <div className="h-full w-full rounded-lg bg-canvas/80 backdrop-blur-xl border border-fg/10 shadow-2xl px-4 py-3 flex items-center gap-3">
+        <span
+          className={`shrink-0 inline-flex items-center justify-center h-7 w-7 rounded-md ${meta.iconBg} ${meta.iconColor}`}
+          aria-hidden
+        >
+          {meta.icon}
+        </span>
+        <p className="flex-1 text-fg text-sm leading-snug font-medium overflow-hidden text-ellipsis whitespace-nowrap">
+          {meta.label}
+        </p>
+        {phase === "recording" ? <Equalizer /> : null}
       </div>
     </div>
+  );
+}
+
+function Equalizer(): JSX.Element {
+  const bar =
+    "w-1 h-4 bg-status-recording rounded-sm origin-bottom animate-[vtx-eq_700ms_ease-in-out_infinite]";
+  return (
+    <div className="shrink-0 flex items-end gap-0.5 h-5 pr-1" aria-hidden>
+      <span className={bar} />
+      <span className={`${bar} [animation-delay:120ms]`} />
+      <span className={`${bar} [animation-delay:240ms]`} />
+    </div>
+  );
+}
+
+interface PhaseMeta {
+  label: string;
+  icon: JSX.Element;
+  iconBg: string;
+  iconColor: string;
+}
+
+function phaseMeta(phase: Phase, errorMsg: string | null): PhaseMeta {
+  switch (phase) {
+    case "recording":
+      return {
+        label: "Höre zu …",
+        icon: <MicIcon />,
+        iconBg: "bg-status-recording/15",
+        iconColor: "text-status-recording",
+      };
+    case "transcribing":
+      return {
+        label: "Transkribiere …",
+        icon: <WaveIcon />,
+        iconBg: "bg-brand/15",
+        iconColor: "text-brand",
+      };
+    case "postprocessing":
+      return {
+        label: "Verarbeite …",
+        icon: <SparkleIcon />,
+        iconBg: "bg-status-processing/15",
+        iconColor: "text-status-processing",
+      };
+    case "injecting":
+      return {
+        label: "Füge ein …",
+        icon: <ArrowRightIcon />,
+        iconBg: "bg-brand/15",
+        iconColor: "text-brand",
+      };
+    case "error":
+      return {
+        label: errorMsg ? `Fehler: ${errorMsg}` : "Fehler",
+        icon: <AlertIcon />,
+        iconBg: "bg-status-error/15",
+        iconColor: "text-status-error",
+      };
+    case "idle":
+    default:
+      return {
+        label: "Höre zu …",
+        icon: <MicIcon />,
+        iconBg: "bg-status-recording/15",
+        iconColor: "text-status-recording",
+      };
+  }
+}
+
+function MicIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="3" width="6" height="12" rx="3" />
+      <path d="M5 11a7 7 0 0 0 14 0M12 19v3" />
+    </svg>
+  );
+}
+
+function WaveIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 12h2l2-6 4 12 4-9 2 3h2" />
+    </svg>
+  );
+}
+
+function SparkleIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8" />
+    </svg>
+  );
+}
+
+function ArrowRightIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 12h14M13 5l7 7-7 7" />
+    </svg>
+  );
+}
+
+function AlertIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 8v5M12 16h.01" />
+    </svg>
   );
 }

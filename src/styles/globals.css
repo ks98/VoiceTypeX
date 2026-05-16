@@ -82,3 +82,19 @@
       "Liberation Mono", Menlo, monospace;
   }
 }
+
+/*
+ * Equalizer-Animation für das Aufnahme-Overlay. Drei Bars mit
+ * unterschiedlichem animation-delay erzeugen einen Live-Audio-Eindruck,
+ * ohne tatsächlich vom Audio-Pegel abzuhängen — der Renderer hat den
+ * Pegel nicht, das wäre eine eigene IPC-Schiene.
+ */
+@keyframes vtx-eq {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}

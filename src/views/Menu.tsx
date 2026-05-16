@@ -2,24 +2,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useModesStore, useSettingsStore } from "../store";
 import { ipcCancelMenu, ipcStartRecording } from "../lib/tauri";
+import type { Mode } from "../lib/types";
 
 /**
  * Modus-Auswahl-Menü.
  *
- * Eigenes Tauri-Window (`label: "menu"`), wird vom Backend per
- * `menu.show() + set_focus()` sichtbar gemacht, sobald der globale
- * Menue-Hotkey im Idle-State gedrueckt wurde.
+ * Eigenes Tauri-Window (label: "menu"), wird vom Backend per
+ * menu.show() + set_focus() sichtbar gemacht, sobald der globale
+ * Menue-Hotkey im Idle-State gedrückt wurde.
  *
- * - `↑` / `↓` navigieren den Cursor, `Home` / `End` springen an die Enden.
- * - `Enter` ruft `start_recording` mit dem ausgewaehlten Modus — das
- *   Backend versteckt das Menue und zeigt das Status-Overlay.
- * - `Esc` ruft `cancel_menu` — Backend versteckt das Menue ohne State-
- *   Wechsel.
+ * - ↑ / ↓ navigieren den Cursor, Home / End springen an die Enden.
+ * - Enter ruft start_recording mit dem ausgewählten Modus.
+ * - Esc ruft cancel_menu — Backend versteckt das Menü ohne State-Wechsel.
  *
- * Der Cursor steht initial auf `Settings.last_selected_mode_id`, sodass
- * die haeufigste Aktion ein einzelner Enter-Druck ist.
+ * Der Cursor steht initial auf Settings.last_selected_mode_id, sodass
+ * die häufigste Aktion ein einzelner Enter-Druck ist.
  */
-export default function Menu() {
+export default function Menu(): JSX.Element {
   const modes = useModesStore((s) => s.modes);
   const loadModes = useModesStore((s) => s.load);
   const settings = useSettingsStore((s) => s.settings);
@@ -30,15 +29,12 @@ export default function Menu() {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const itemRefs = useRef<Array<HTMLLIElement | null>>([]);
 
-  // Beim Mount: Stores hydrieren + Fokus ans Root-Element.
   useEffect(() => {
     void loadModes();
     void loadSettings();
     rootRef.current?.focus();
   }, [loadModes, loadSettings]);
 
-  // Sobald Modi + Settings geladen sind: Cursor auf zuletzt gewaehlten
-  // Modus setzen.
   useEffect(() => {
     if (modes.length === 0) return;
     const lastId = settings?.last_selected_mode_id ?? null;
@@ -46,8 +42,6 @@ export default function Menu() {
     setCursor(idx >= 0 ? idx : 0);
   }, [modes, settings?.last_selected_mode_id]);
 
-  // Bei Cursor-Bewegung den aktiven Eintrag in den sichtbaren Bereich
-  // scrollen — bei langen Modus-Listen sonst nicht erreichbar.
   useEffect(() => {
     itemRefs.current[cursor]?.scrollIntoView({ block: "nearest" });
   }, [cursor]);
@@ -96,58 +90,106 @@ export default function Menu() {
       onKeyDown={(e) => void onKeyDown(e)}
       className="h-screen w-screen overflow-hidden p-2 select-none outline-none"
     >
-      <div className="h-full w-full rounded-lg bg-black/85 backdrop-blur-md border border-white/15 shadow-2xl flex flex-col overflow-hidden">
-        <div className="px-4 py-2 border-b border-white/10 flex items-center justify-between shrink-0">
-          <span className="text-white/90 text-xs font-semibold tracking-wide">
-            Modus waehlen
+      <div className="h-full w-full rounded-lg bg-canvas/85 backdrop-blur-xl border border-fg/10 shadow-2xl flex flex-col overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-fg/10 flex items-center justify-between shrink-0">
+          <span className="text-fg text-xs font-semibold tracking-wide uppercase">
+            Modus wählen
           </span>
-          <span className="text-white/40 text-[10px] font-mono">
+          <span className="text-fg-faint text-[10px] font-mono">
             ↑ ↓ Enter · Esc
           </span>
         </div>
         {modes.length === 0 ? (
           <div className="flex-1 flex items-center justify-center px-4 py-3">
-            <p className="text-white/70 text-sm italic">
+            <p className="text-fg-muted text-sm italic">
               Keine Modi geladen — leg eine TOML unter modes/ an.
             </p>
           </div>
         ) : (
           <ul className="flex-1 overflow-y-auto py-1">
-            {modes.map((m, i) => {
-              const active = i === cursor;
-              return (
-                <li
-                  key={m.id}
-                  ref={(el) => {
-                    itemRefs.current[i] = el;
-                  }}
-                  className={`px-4 py-1.5 flex flex-col gap-0.5 ${
-                    active ? "bg-white/15" : ""
-                  }`}
-                >
-                  <span
-                    className={`text-sm ${
-                      active ? "text-white font-medium" : "text-white/85"
-                    }`}
-                  >
-                    {m.name}
-                  </span>
-                  {m.description ? (
-                    <span className="text-[11px] text-white/40 truncate">
-                      {m.description}
-                    </span>
-                  ) : null}
-                </li>
-              );
-            })}
+            {modes.map((m, i) => (
+              <ModeRow
+                key={m.id}
+                mode={m}
+                active={i === cursor}
+                refCb={(el) => {
+                  itemRefs.current[i] = el;
+                }}
+              />
+            ))}
           </ul>
         )}
         {errorMsg ? (
-          <div className="px-4 py-1.5 border-t border-red-700/40 bg-red-900/30 text-xs text-red-200 truncate shrink-0">
+          <div className="px-4 py-1.5 border-t border-status-error/40 bg-status-error/10 text-xs text-status-error truncate shrink-0">
             {errorMsg}
           </div>
         ) : null}
       </div>
     </div>
   );
+}
+
+function ModeRow({
+  mode,
+  active,
+  refCb,
+}: {
+  mode: Mode;
+  active: boolean;
+  refCb: (el: HTMLLIElement | null) => void;
+}): JSX.Element {
+  return (
+    <li
+      ref={refCb}
+      className={
+        "relative px-4 py-2 flex items-center gap-3 transition-colors " +
+        (active ? "bg-elevated" : "")
+      }
+    >
+      <span
+        className={
+          "absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r " +
+          (active ? "bg-brand" : "bg-transparent")
+        }
+        aria-hidden
+      />
+      <span
+        className={
+          "shrink-0 inline-flex items-center justify-center h-7 w-7 rounded-md text-[10px] font-mono font-semibold tracking-wide " +
+          (active
+            ? "bg-brand text-brand-contrast"
+            : "bg-elevated text-fg-muted")
+        }
+        aria-hidden
+      >
+        {initialsFor(mode)}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div
+          className={
+            "text-sm truncate " +
+            (active ? "text-fg font-medium" : "text-fg")
+          }
+        >
+          {mode.name}
+        </div>
+        {mode.description ? (
+          <div className="text-[11px] text-fg-faint truncate">
+            {mode.description}
+          </div>
+        ) : null}
+      </div>
+    </li>
+  );
+}
+
+function initialsFor(mode: Mode): string {
+  const parts = mode.name
+    .split(/[\s/\-_]+/)
+    .filter((w) => w.length > 0)
+    .slice(0, 2);
+  if (parts.length === 0) {
+    return mode.id.slice(0, 2).toUpperCase();
+  }
+  return parts.map((w) => w[0]?.toUpperCase() ?? "").join("") || "·";
 }
