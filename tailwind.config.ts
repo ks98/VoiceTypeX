@@ -1,27 +1,58 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import type { Config } from "tailwindcss";
 
+// Tokens kommen als CSS-Custom-Properties aus src/styles/globals.css
+// (Light unter :root, Dark unter html.dark). Die Mapping-Funktion gibt
+// rgb(var(...) / <alpha-value>) zurück, damit Tailwind's Opacity-
+// Modifier (bg-canvas/80) weiter funktionieren.
+const v = (name: string) => `rgb(var(--${name}-rgb) / <alpha-value>)`;
+
 const config: Config = {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   darkMode: "class",
   theme: {
     extend: {
       colors: {
+        canvas: v("canvas"),
+        surface: v("surface"),
+        elevated: v("elevated"),
+        outline: {
+          DEFAULT: v("outline"),
+          strong: v("outline-strong"),
+        },
+        fg: {
+          DEFAULT: v("fg"),
+          muted: v("fg-muted"),
+          faint: v("fg-faint"),
+        },
         brand: {
-          DEFAULT: "#5B21B6",
-          50: "#F5F3FF",
-          100: "#EDE9FE",
-          500: "#8B5CF6",
-          700: "#6D28D9",
-          900: "#4C1D95",
+          DEFAULT: v("brand"),
+          hover: v("brand-hover"),
+          contrast: v("brand-contrast"),
+          // Backward-Compat (entfernt sich in Welle 2, sobald die Views
+          // auf brand/brand-hover migriert sind).
+          500: v("brand"),
+          700: v("brand-hover"),
         },
         status: {
-          idle: "#94A3B8",
-          recording: "#DC2626",
-          processing: "#F59E0B",
-          done: "#10B981",
-          error: "#991B1B",
+          idle: v("status-idle"),
+          recording: v("status-recording"),
+          processing: v("status-processing"),
+          done: v("status-done"),
+          error: v("status-error"),
         },
+      },
+      fontFamily: {
+        mono: [
+          "JetBrains Mono",
+          "SF Mono",
+          "Cascadia Mono",
+          "Roboto Mono",
+          "Consolas",
+          "Liberation Mono",
+          "Menlo",
+          "monospace",
+        ],
       },
     },
   },

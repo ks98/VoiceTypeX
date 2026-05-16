@@ -3,16 +3,82 @@
 @tailwind components;
 @tailwind utilities;
 
-html,
-body,
-#root {
-  height: 100%;
-}
+/*
+ * Design-Tokens — "Editorial Calm".
+ *
+ * Tokens leben als CSS-Custom-Properties (RGB-Triplets ohne Kommas, damit
+ * sie sich mit Tailwinds `<alpha-value>`-Modifier kombinieren lassen).
+ * Tailwind mapt diese Variablen in tailwind.config.ts auf semantische
+ * Klassen (bg-canvas, text-fg, border-outline, …).
+ *
+ * Light ist der Default; .dark auf <html> aktiviert das Dunkel-Theme.
+ * Die Klasse wird in src/lib/theme.ts synchron vor React-Render gesetzt,
+ * damit kein Flash-of-Wrong-Theme entsteht.
+ */
+@layer base {
+  :root {
+    --canvas-rgb:          251 251 253;   /* #FBFBFD */
+    --surface-rgb:         255 255 255;   /* #FFFFFF */
+    --elevated-rgb:        244 245 248;   /* #F4F5F8 */
+    --outline-rgb:         229 231 236;   /* #E5E7EC */
+    --outline-strong-rgb:  200 204 212;   /* #C8CCD4 */
+    --fg-rgb:              21 24 29;      /* #15181D */
+    --fg-muted-rgb:        92 100 112;    /* #5C6470 */
+    --fg-faint-rgb:        138 146 160;   /* #8A92A0 */
+    --brand-rgb:           61 90 254;     /* #3D5AFE */
+    --brand-hover-rgb:     46 72 224;     /* #2E48E0 */
+    --brand-contrast-rgb:  255 255 255;
+    --status-idle-rgb:        138 146 160;
+    --status-recording-rgb:   229 72 77;
+    --status-processing-rgb:  245 165 36;
+    --status-done-rgb:        34 197 94;
+    --status-error-rgb:       192 41 46;
+    color-scheme: light;
+  }
 
-body {
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
-    Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  html.dark {
+    --canvas-rgb:          11 13 16;      /* #0B0D10 */
+    --surface-rgb:         20 23 28;      /* #14171C */
+    --elevated-rgb:        27 31 38;      /* #1B1F26 */
+    --outline-rgb:         38 43 51;      /* #262B33 */
+    --outline-strong-rgb:  58 64 73;      /* #3A4049 */
+    --fg-rgb:              232 235 240;   /* #E8EBF0 */
+    --fg-muted-rgb:        154 161 172;   /* #9AA1AC */
+    --fg-faint-rgb:        94 101 113;    /* #5E6571 */
+    --brand-rgb:           124 140 255;   /* #7C8CFF */
+    --brand-hover-rgb:     148 162 255;   /* #94A2FF */
+    --brand-contrast-rgb:  11 13 16;
+    --status-idle-rgb:        94 101 113;
+    --status-recording-rgb:   255 99 105;
+    --status-processing-rgb:  245 165 36;
+    --status-done-rgb:        46 190 107;
+    --status-error-rgb:       255 99 105;
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background-color: rgb(var(--canvas-rgb));
+    color: rgb(var(--fg-rgb));
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-family:
+      ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+      "Segoe UI Variable", "Segoe UI", "Inter", Roboto, Oxygen, Ubuntu,
+      Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+  }
+
+  code,
+  kbd,
+  pre,
+  .font-mono {
+    font-family:
+      "JetBrains Mono", "SF Mono", "Cascadia Mono", "Roboto Mono", Consolas,
+      "Liberation Mono", Menlo, monospace;
+  }
 }

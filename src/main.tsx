@@ -4,7 +4,17 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import Menu from "./views/Menu";
 import Overlay from "./views/Overlay";
+import { initTheme, subscribeSystemTheme } from "./lib/theme";
 import "./styles/globals.css";
+
+// Theme synchron VOR React-Render setzen — sonst flackert beim Mount
+// kurz das falsche Theme ("FOUC"). subscribeSystemTheme reagiert auf
+// OS-Theme-Wechsel, aber nur wenn die User-Wahl "system" ist.
+initTheme();
+subscribeSystemTheme(() => {
+  // Re-apply ist bereits im Listener selbst; hier nur als Hook für
+  // zukünftige Store-Synchronisation, falls nötig.
+});
 
 const rootEl = document.getElementById("root");
 if (!rootEl) {

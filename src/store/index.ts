@@ -10,17 +10,31 @@ import {
   ipcListAudioDevices,
   ipcSetSettings,
 } from "../lib/tauri";
+import {
+  applyTheme,
+  readStoredChoice,
+  storeChoice,
+  type ThemeChoice,
+} from "../lib/theme";
 
 type Tab = "settings" | "modes" | "logs";
 
 interface UIState {
   activeTab: Tab;
   setActiveTab: (tab: Tab) => void;
+  theme: ThemeChoice;
+  setTheme: (theme: ThemeChoice) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
   activeTab: "settings",
   setActiveTab: (activeTab) => set({ activeTab }),
+  theme: readStoredChoice(),
+  setTheme: (theme) => {
+    storeChoice(theme);
+    applyTheme(theme);
+    set({ theme });
+  },
 }));
 
 interface SettingsState {
