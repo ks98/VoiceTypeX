@@ -14,6 +14,7 @@ import {
 } from "../lib/tauri";
 import { useSettingsStore } from "../store";
 import Button from "./Button";
+import Logo from "./Logo";
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -393,7 +394,7 @@ export default function OnboardingWizard({
 function StepWelcome(): JSX.Element {
   return (
     <div className="flex flex-col gap-4">
-      <Hero icon={<MicIcon />} />
+      <Hero icon={<Logo className="h-7 w-7" />} />
       <div>
         <h3 className="text-lg font-semibold text-fg">Was ist VoiceTypeX?</h3>
         <p className="text-sm text-fg-muted mt-1">
@@ -523,23 +524,6 @@ function Hero({
     >
       {icon}
     </div>
-  );
-}
-
-function MicIcon(): JSX.Element {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className="h-7 w-7"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect x="9" y="3" width="6" height="12" rx="3" />
-      <path d="M5 11a7 7 0 0 0 14 0M12 19v3M8 22h8" />
-    </svg>
   );
 }
 
