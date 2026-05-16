@@ -343,13 +343,32 @@ bestehenden filtern.
 
 React 18 + TypeScript strict + Tailwind v3 + Zustand.
 
-- **Views (`src/views/`):** Settings, Modes, Logs, Overlay
-- **Components (`src/components/`):** ModeEditor, OnboardingWizard,
-  TestTranscriptionSection, AutoPasteTestSection, ApiKeysSection
-- **Stores (`src/store/index.ts`):** UI (Tab-State), Settings,
-  Modes — mit async Actions, einer pro IPC-Command
+- **Views (`src/views/`):** Settings, Modes, Logs, Overlay, Menu
+  (Menu und Overlay sind eigene Tauri-Windows aus derselben
+  `index.html`, unterschieden per `?window=`-Query in `main.tsx`).
+- **Components (`src/components/`):** Sidebar, ThemeToggle,
+  Field, OnboardingWizard, ModeEditor, TestTranscriptionSection,
+  AutoPasteTestSection, ApiKeysSection
+- **Stores (`src/store/index.ts`):** UI (Tab-State + Theme-Choice),
+  Settings, Modes — mit async Actions, einer pro IPC-Command
 - **IPC-Wrapper (`src/lib/tauri.ts`):** einzige Stelle, die `invoke()`
   direkt benutzt; alle Commands namentlich exportiert
+
+### Design-Tokens & Theme
+
+- **Tokens leben als CSS-Custom-Properties** (RGB-Triplets) in
+  `src/styles/globals.css` unter `:root` (Light) und `html.dark`
+  (Dark). Tailwind mapt sie in `tailwind.config.ts` auf semantische
+  Klassen: `bg-canvas/surface/elevated`, `text-fg/muted/faint`,
+  `border-outline/strong`, `brand/brand-hover`, `status-*`.
+- **Theme-Choice** (system/light/dark) lebt in `src/lib/theme.ts`,
+  wird in localStorage persistiert und synchron vor React-Render in
+  `main.tsx` angewendet (FOUC-Prevention). matchMedia-Listener
+  reagiert auf OS-Theme-Wechsel, wenn die User-Wahl "system" ist.
+- **Floating Windows** (Menu, Overlay) folgen System-Theme statt
+  App-Setting: separate Tauri-Renderer haben eigenes localStorage,
+  fallen auf "system" zurück. Bewusste Design-Entscheidung —
+  ambient Notifications integrieren sich in den Desktop.
 
 ## Hardware-Detection
 
