@@ -255,12 +255,26 @@ async fn streaming_worker(
                     text_len = curr_text.len(),
                     "Streaming-Pass fertig"
                 );
+
+                // LocalAgreement-2 zur Telemetrie behalten (zeigt wie stabil
+                // die Decodes konvergieren), aber NICHT als Emit-Gate benutzen.
+                // Begruendung: auf CPU-only-Hardware dauert ein Pass 8-12 s;
+                // ein zweiter Pass kommt vor dem Stop-Hotkey selten durch,
+                // wodurch LA-2 alle Emits blockiert. Pragmatisch emittieren
+                // wir jeden Decode direkt — Text kann "wabern" wenn ein
+                // spaeterer Pass den ersten revidiert, aber das ist besser
+                // als gar nichts. Der Final-Pass nach Stop ueberschreibt
+                // sowieso autoritativ.
                 let stable = stable_prefix(&prev_text, &curr_text);
-                // Nur emittieren wenn der stable Prefix gewachsen ist —
-                // verhindert Event-Spam mit identischer Payload und
-                // garantiert dem Overlay monoton wachsenden Text.
-                if stable.len() > committed.len() {
-                    committed = stable.clone();
+                tracing::debug!(
+                    iteration,
+                    stable_len = stable.len(),
+                    curr_len = curr_text.len(),
+                    "LA-2-Konvergenz (Telemetrie)"
+                );
+
+                if !curr_text.is_empty() && curr_text != committed {
+                    committed = curr_text.clone();
                     let emit_result = app.emit(
                         "app://partial-transcript",
                         PartialTranscriptPayload {
@@ -271,17 +285,12 @@ async fn streaming_worker(
                         tracing::warn!(error = %e, "Partial-Emit fehlgeschlagen");
                     } else {
                         tracing::info!(
+                            iteration,
                             len = committed.len(),
                             preview = %committed.chars().take(40).collect::<String>(),
-                            "Partial-Prefix emittiert"
+                            "Partial emittiert"
                         );
                     }
-                } else {
-                    tracing::debug!(
-                        committed_len = committed.len(),
-                        stable_len = stable.len(),
-                        "Kein Wachstum, nicht emittiert"
-                    );
                 }
                 prev_text = curr_text;
             }
