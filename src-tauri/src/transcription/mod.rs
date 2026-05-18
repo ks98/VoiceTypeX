@@ -13,6 +13,7 @@ use async_trait::async_trait;
 pub mod backend;
 pub mod cloud;
 pub mod local;
+pub mod local_agreement;
 pub mod model_downloader;
 
 use crate::core::error::VoiceTypeError;

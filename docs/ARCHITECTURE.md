@@ -237,6 +237,65 @@ Modell-Pfad aus `settings.whisper_model_path` (Vorrang) bzw.
 `ModelSlot::from_setting(&settings.whisper_default_slot).filename()`.
 Vorher war der Pfad hardkodiert; User-Settings wurden ignoriert.
 
+### Streaming (Phase 2)
+
+Bei `mode.transcription = "local"` spawnt `start_recording` einen
+parallelen Streaming-Decode-Worker. Dieser läuft während des
+`Recording`-States parallel zur Aufnahme und liefert dem Overlay einen
+live-aktualisierten Partial-Text, damit der User schon während des
+Sprechens sieht, was Whisper versteht.
+
+```
+[Hold-to-record]──────────────────────────────[Release]
+[Recorder cpal-Buffer waechst kontinuierlich]
+[Streaming-Worker]
+   ├─ t+1.5s: Snapshot → Convert 16k Mono → transcribe_streaming_pass → "Heute"
+   ├─ t+2.3s: Snapshot → ...                                          → "Heute scheint"
+   ├─ LocalAgreement-2 stabilisiert Prefix → emit app://partial-transcript
+   └─ Overlay zeigt "Heute scheint" unter "Hoere zu ..."
+                                                       [Release]
+                                                       └─►abort()
+                                                       └─►Final-Pass (BeamSearch=5, kein audio_ctx)
+                                                          ueberschreibt alles
+```
+
+**Gating**: Worker spawnt nur, wenn `mode.transcription ==
+TranscriptionTarget::Local`. Cloud-Modi laufen weiter One-Shot nach
+Stop-Hotkey — deren REST-Endpoints (xAI/OpenAI/Groq/Deepgram) haben
+keine vergleichbare Streaming-Schnittstelle.
+
+**Decode-Profil**: Streaming-Pässe nutzen `DecodeProfile::Streaming`:
+Greedy-Sampling statt BeamSearch (3× schneller) plus `set_audio_ctx`
+mit dynamisch-berechneter Frame-Zahl (`dynamic_audio_ctx_frames`)
+für kurzes Audio (<30 s). Bei Audio ≥30 s wird der Trick weggelassen,
+damit der Mel-Encoder nichts abschneidet. Der Final-Pass nach Stop
+nutzt `DecodeProfile::Final` (BeamSearch + voller audio_ctx) — er
+liefert den definitiven Text und überschreibt jede Partial-Ausgabe.
+
+**LocalAgreement-2** (`transcription/local_agreement.rs`,
+Machacek et al. arXiv 2307.14743): nur Wort-Prefixe, die in zwei
+aufeinanderfolgenden Decodes identisch sind, gelten als "stabil" und
+werden ins Overlay emittiert. Verhindert das "Zurückspringen" der
+Anzeige, wenn Whisper später eine Position revidiert. Tokenisierung
+auf Whitespace, Interpunktion bleibt am Wort haften.
+
+**Abort und State-Übergang**: `finish_recording_and_inject` ruft
+`JoinHandle::abort()` auf den Streaming-Handle, bevor der Final-Pass
+läuft. Das unterbricht den Loop am nächsten `.await`; CPU-Arbeit
+innerhalb `spawn_blocking` läuft noch zu Ende, blockiert die Pipeline
+aber nicht. Direkt nach `abort()` wird ein leerer
+`app://partial-transcript`-Event geschickt, der das Overlay-Partial
+löscht. Die State-Machine selbst ändert sich gegenüber Phase 1 nicht
+— Streaming ist eine parallele Hilfs-Schleife, kein neuer State.
+
+**Konfiguration** (alle Konstanten in `pipeline/mod.rs`):
+
+| Konstante | Wert | Wirkung |
+|---|---|---|
+| `STREAMING_INITIAL_WAIT_MS` | 1500 | Warte vor erstem Decode, damit der Buffer Substanz hat |
+| `STREAMING_INTERVAL_MS` | 800 | Decode-Frequenz |
+| `STREAMING_MIN_AUDIO_SAMPLES` | 8000 | Decodes erst ab 0.5 s Audio (16 kHz) |
+
 ## Lokales LLM (Ollama, Phase 1)
 
 [`processing/local.rs`](../src-tauri/src/processing/local.rs):

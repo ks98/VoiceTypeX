@@ -12,6 +12,7 @@ type Phase =
   | "error";
 
 type StatePayload = { state: Phase; error?: string };
+type PartialTranscriptPayload = { text: string };
 
 /**
  * Live-Overlay-Fenster — zeigt während Recording/Transcribe/… den
@@ -20,16 +21,34 @@ type StatePayload = { state: Phase; error?: string };
  * Phase-Default ist "recording", weil das Window vom Backend nur
  * sichtbar gemacht wird, wenn die Pipeline gerade in Recording wechselt.
  * Damit ist der erste sichtbare Frame schon "Höre zu …" statt leer.
+ *
+ * Phase 2: Während Recording mit lokalem STT emittiert das Backend
+ * `app://partial-transcript`-Events mit stabilen Wort-Prefixen aus
+ * LocalAgreement-2. Wir zeigen den jeweils letzten Stand in einer
+ * zweiten Zeile unter dem Status-Header. Bei Phasen-Wechsel weg von
+ * Recording (Transcribing/Postprocessing/Injecting/Idle) wird der
+ * Partial implizit geleert — entweder durch einen leeren Event vom
+ * Backend oder durch unseren lokalen Phase-Reset.
  */
 export default function Overlay(): JSX.Element {
   const [phase, setPhase] = useState<Phase>("recording");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [partial, setPartial] = useState<string>("");
 
   useEffect(() => {
     const unlistens: UnlistenFn[] = [];
     listen<StatePayload>("app://state", (event) => {
       setPhase(event.payload.state);
       setErrorMsg(event.payload.error ?? null);
+      // Phase verlaesst Recording → Partial loeschen, damit der naechste
+      // Recording-Zyklus mit leerer Anzeige startet.
+      if (event.payload.state !== "recording") {
+        setPartial("");
+      }
+    }).then((u) => unlistens.push(u));
+
+    listen<PartialTranscriptPayload>("app://partial-transcript", (event) => {
+      setPartial(event.payload.text ?? "");
     }).then((u) => unlistens.push(u));
 
     return () => {
@@ -38,23 +57,45 @@ export default function Overlay(): JSX.Element {
   }, []);
 
   const meta = phaseMeta(phase, errorMsg);
+  const visiblePartial = truncateStart(partial, 65);
 
   return (
     <div className="h-screen w-screen overflow-hidden p-2 select-none pointer-events-none">
-      <div className="h-full w-full rounded-lg bg-canvas/80 backdrop-blur-xl border border-fg/10 shadow-2xl px-4 py-3 flex items-center gap-3">
-        <span
-          className={`shrink-0 inline-flex items-center justify-center h-7 w-7 rounded-md ${meta.iconBg} ${meta.iconColor}`}
-          aria-hidden
-        >
-          {meta.icon}
-        </span>
-        <p className="flex-1 text-fg text-sm leading-snug font-medium overflow-hidden text-ellipsis whitespace-nowrap">
-          {meta.label}
-        </p>
-        {phase === "recording" ? <Equalizer /> : null}
+      <div className="h-full w-full rounded-lg bg-canvas/80 backdrop-blur-xl border border-fg/10 shadow-2xl px-4 py-2.5 flex flex-col justify-center gap-1">
+        <div className="flex items-center gap-3">
+          <span
+            className={`shrink-0 inline-flex items-center justify-center h-7 w-7 rounded-md ${meta.iconBg} ${meta.iconColor}`}
+            aria-hidden
+          >
+            {meta.icon}
+          </span>
+          <p className="flex-1 text-fg text-sm leading-snug font-medium overflow-hidden text-ellipsis whitespace-nowrap">
+            {meta.label}
+          </p>
+          {phase === "recording" ? <Equalizer /> : null}
+        </div>
+        {phase === "recording" && visiblePartial ? (
+          <p
+            className="text-fg/60 text-xs leading-snug pl-10 overflow-hidden text-ellipsis whitespace-nowrap"
+            title={partial}
+          >
+            {visiblePartial}
+          </p>
+        ) : null}
       </div>
     </div>
   );
+}
+
+/**
+ * Wenn der Text laenger als `max` ist, zeig nur das Ende mit
+ * Ellipsis am Anfang — fuehlt sich live an ("…was gerade gesagt wird"),
+ * passt zur fest-breiten Overlay-Box ohne Umbruch.
+ */
+function truncateStart(text: string, max: number): string {
+  if (!text) return "";
+  if (text.length <= max) return text;
+  return `…${text.slice(text.length - max)}`;
 }
 
 function Equalizer(): JSX.Element {

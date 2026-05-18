@@ -141,10 +141,15 @@ pub fn run() {
             // VAD-Download noch nicht lief), laeuft Whisper transparent
             // ohne VAD, mit einer WARN-Log-Zeile pro Aufruf.
             let vad_model_path = Some(model_dir.join("ggml-silero-v6.2.0.bin"));
-            let transcriber: Arc<dyn Transcriber> = Arc::new(LocalTranscriber::new(
+            // Phase 2: zwei Arcs auf dieselbe LocalTranscriber-Instanz. Der
+            // dyn-Trait-Arc geht an die Trait-basierten Pipeline-Stellen,
+            // der konkrete Arc an den Streaming-Worker (braucht die nicht-
+            // trait-Methode transcribe_streaming_pass).
+            let local_transcriber = Arc::new(LocalTranscriber::new(
                 model_path.clone(),
                 vad_model_path,
             ));
+            let transcriber: Arc<dyn Transcriber> = local_transcriber.clone();
             let wayland_token_path = config_dir.join("wayland_session.json");
             let injector_box = make_default_injector(app_handle.clone(), wayland_token_path);
             let injector: Arc<dyn TextInjector> = Arc::from(injector_box);
@@ -156,6 +161,8 @@ pub fn run() {
                 active_mode: Arc::new(Mutex::new(None)),
                 effective_menu_hotkey: Arc::new(RwLock::new(None)),
                 transcriber,
+                local_transcriber,
+                active_streaming_handle: Arc::new(Mutex::new(None)),
                 injector,
                 settings: Arc::new(RwLock::new(initial_settings)),
                 settings_path,

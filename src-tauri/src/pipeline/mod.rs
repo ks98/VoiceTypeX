@@ -14,11 +14,27 @@ use crate::core::state::AppState;
 use crate::core::AppContext;
 use crate::injection::{InjectOptions, InjectionStrategy};
 use crate::processing::{make_cloud_processor, make_local_processor, ProcessOpts, Processor};
+use crate::transcription::local_agreement::stable_prefix;
 use crate::transcription::{make_cloud_transcriber, TranscribeOpts, Transcriber};
+use serde::Serialize;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use tauri_plugin_notification::NotificationExt;
+
+/// Payload fuer das `app://partial-transcript`-Event. Frontend zeigt den
+/// Text im Overlay an, jedes Event ersetzt den bisherigen Stand (kein
+/// Append). Leerer String = "Partial loeschen" (vor/nach Streaming).
+#[derive(Clone, Serialize)]
+struct PartialTranscriptPayload {
+    text: String,
+}
+
+/// Konfiguration des Streaming-Decode-Loops. Steht hier zentral, damit
+/// die Latenz/CPU-Trade-offs an einer Stelle sichtbar sind.
+const STREAMING_INITIAL_WAIT_MS: u64 = 1_500;
+const STREAMING_INTERVAL_MS: u64 = 800;
+const STREAMING_MIN_AUDIO_SAMPLES: usize = 8_000; // 0.5 s bei 16 kHz
 
 /// Toggle-Logik fuer den IPC-Pfad (UI-Trigger-Button in der Modi-Liste,
 /// `stop_recording`-Command).
@@ -114,7 +130,7 @@ async fn start_recording(app: &AppHandle, ctx: &Arc<AppContext>, mode: &Mode) ->
         tracing::warn!(error = %e, "Start-Cue fehlgeschlagen (nicht fatal)");
     }
 
-    let recorder = RecorderHandle::start(RecorderConfig::default()).inspect_err(|e| {
+    let mut recorder = RecorderHandle::start(RecorderConfig::default()).inspect_err(|e| {
         // Bei Fehler State zurueck auf Idle, damit kein Deadlock entsteht.
         // active_mode auch raeumen, sonst sieht der Menue-Hotkey einen
         // veralteten Eintrag.
@@ -123,9 +139,124 @@ async fn start_recording(app: &AppHandle, ctx: &Arc<AppContext>, mode: &Mode) ->
         let _ = ctx.state_bus.transition(AppState::Idle);
     })?;
 
+    // Streaming-Worker nur bei lokalem STT spawnen. Cloud-Modi (xAI,
+    // OpenAI, Groq, Deepgram) haben keine Streaming-Schnittstelle, dort
+    // bleibt der One-Shot-Pfad nach Stop-Hotkey aktiv. Wir holen jetzt
+    // samples_handle + meta vom Recorder, bevor er in den Slot gelegt
+    // wird — danach ist er hinter einem Mutex, den wir ueber `.await`
+    // hinweg nicht halten duerfen.
+    if mode.transcription == TranscriptionTarget::Local {
+        let samples_arc = recorder.samples_handle();
+        match recorder.await_meta().await {
+            Ok(meta) => {
+                let app_clone = app.clone();
+                let ctx_clone = Arc::clone(ctx);
+                let language = mode.language.clone();
+                let n_threads = ctx.settings.read().whisper_n_threads;
+                let handle = tauri::async_runtime::spawn(async move {
+                    streaming_worker(app_clone, ctx_clone, samples_arc, meta, language, n_threads)
+                        .await;
+                });
+                *ctx.active_streaming_handle.lock() = Some(handle);
+                tracing::info!("Streaming-Worker gespawnt");
+            }
+            Err(e) => {
+                // Streaming-Worker-Start fehlgeschlagen ist nicht fatal —
+                // der Final-Pass nach Stop-Hotkey laeuft weiter, der User
+                // bekommt nur kein Live-Partial. WARN, kein Abort.
+                tracing::warn!(error = %e, "await_meta vor Streaming-Worker fehlgeschlagen — laufe ohne Live-Partial");
+            }
+        }
+    }
+
     *ctx.recorder_slot.lock() = Some(recorder);
     tracing::info!(mode = %mode.id, "Aufnahme gestartet");
     Ok(())
+}
+
+/// Streaming-Decode-Loop. Laeuft solange `State::Recording`; emittiert
+/// stabile Prefixes ueber `app://partial-transcript`. Wird in
+/// `finish_recording_and_inject` per `JoinHandle::abort()` beendet, bevor
+/// der Final-Pass startet.
+async fn streaming_worker(
+    app: AppHandle,
+    ctx: Arc<AppContext>,
+    samples_arc: Arc<parking_lot::Mutex<Vec<f32>>>,
+    meta: crate::audio::recorder::StreamMeta,
+    language: Option<String>,
+    n_threads: Option<u32>,
+) {
+    use tokio::time::{sleep, Duration};
+
+    // Erste Wartezeit, damit das Mikrofon ueberhaupt etwas Substanzielles
+    // im Buffer hat. <1.5 s deutsches Sprach-Audio liefert sonst leere
+    // Decodes oder Whisper halluziniert.
+    sleep(Duration::from_millis(STREAMING_INITIAL_WAIT_MS)).await;
+
+    let mut prev_text = String::new();
+    let mut committed = String::new();
+
+    loop {
+        // Bail wenn State nicht mehr Recording (Pipeline finalisiert).
+        if !matches!(ctx.state_bus.current(), AppState::Recording) {
+            break;
+        }
+
+        // Buffer kurz locken, klonen, freigeben — CPU-Arbeit lockfrei.
+        let raw = samples_arc.lock().clone();
+        if raw.len() < STREAMING_MIN_AUDIO_SAMPLES {
+            sleep(Duration::from_millis(STREAMING_INTERVAL_MS)).await;
+            continue;
+        }
+
+        let f16k = match crate::audio::recorder::to_16k_mono(&raw, meta) {
+            Ok(s) if !s.is_empty() => s,
+            Ok(_) => {
+                sleep(Duration::from_millis(STREAMING_INTERVAL_MS)).await;
+                continue;
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "Streaming: Resampling fehlgeschlagen");
+                sleep(Duration::from_millis(STREAMING_INTERVAL_MS)).await;
+                continue;
+            }
+        };
+
+        let opts = TranscribeOpts {
+            language: language.clone(),
+            initial_prompt: None,
+            n_threads,
+        };
+
+        match ctx
+            .local_transcriber
+            .transcribe_streaming_pass(f16k, opts)
+            .await
+        {
+            Ok(curr_text) => {
+                let stable = stable_prefix(&prev_text, &curr_text);
+                // Nur emittieren wenn der stable Prefix gewachsen ist —
+                // verhindert Event-Spam mit identischer Payload und
+                // garantiert dem Overlay monoton wachsenden Text.
+                if stable.len() > committed.len() {
+                    committed = stable.clone();
+                    let _ = app.emit(
+                        "app://partial-transcript",
+                        PartialTranscriptPayload {
+                            text: committed.clone(),
+                        },
+                    );
+                    tracing::debug!(len = committed.len(), "Partial-Prefix emittiert");
+                }
+                prev_text = curr_text;
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "Streaming-Pass fehlgeschlagen");
+            }
+        }
+
+        sleep(Duration::from_millis(STREAMING_INTERVAL_MS)).await;
+    }
 }
 
 /// Spawnt eine Pulsing-Animation: alle 600 ms wechselt das Tray-Icon
@@ -192,6 +323,21 @@ async fn finish_recording_and_inject(
     // (State ist schon Transcribing/Postprocessing/Injecting). Wir
     // vermeiden, dass eine Pipeline-Exception den Eintrag stehen laesst.
     *ctx.active_mode.lock() = None;
+
+    // Phase-2-Streaming-Worker abbrechen, bevor der Final-Pass laeuft.
+    // abort() unterbricht den Loop am naechsten await — CPU-Arbeit
+    // innerhalb spawn_blocking laeuft noch zu Ende, blockiert uns aber
+    // nicht. Anschliessend Partial-Anzeige im Overlay loeschen.
+    if let Some(handle) = ctx.active_streaming_handle.lock().take() {
+        handle.abort();
+        tracing::debug!("Streaming-Worker abortet");
+    }
+    let _ = app.emit(
+        "app://partial-transcript",
+        PartialTranscriptPayload {
+            text: String::new(),
+        },
+    );
 
     let recorder = ctx
         .recorder_slot

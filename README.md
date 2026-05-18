@@ -54,9 +54,12 @@ Menü-Hotkey*.
   gleich schnell wie Q5 bei sichtbar besserer DE-Qualität. Wählbare Slots
   inkl. `large-v3-turbo-german-q5_0` (primeline-Fine-tune, ~28 % rel.
   WER-Reduktion auf Deutsch) und `small-q5_1` für 4-GB-Geräte.
-  BeamSearch (size=5) mit temperature-Fallback. Cargo-Feature-Backends
-  (`fast-cpu`/OpenBLAS = Default, `gpu-vulkan`/`gpu-cuda`/`gpu-metal`/
-  `gpu-coreml` opt-in)
+  BeamSearch (size=5) mit temperature-Fallback. **Phase-2-Streaming**:
+  parallel zur Aufnahme läuft ein Greedy-Decode mit LocalAgreement-2-
+  Stabilisierung, das Overlay zeigt mitlaufenden Partial-Text. Final-
+  Pass nach Stop-Hotkey überschreibt mit voller Qualität.
+  Cargo-Feature-Backends (`fast-cpu`/OpenBLAS = Default,
+  `gpu-vulkan`/`gpu-cuda`/`gpu-metal`/`gpu-coreml` opt-in)
 - **Lokales LLM:** Ollama via HTTP
 - **Cloud-Provider (BYOK):** xAI (STT + Grok, Default `grok-4-fast-non-reasoning`),
   OpenAI Whisper + GPT, Groq Whisper, Deepgram, Anthropic Claude

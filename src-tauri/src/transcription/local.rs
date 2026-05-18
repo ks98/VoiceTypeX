@@ -21,6 +21,35 @@ use whisper_rs::{
     FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters, WhisperVadParams,
 };
 
+/// Welche Sampling- und Latenz-Charakteristik der aktuelle Pass haben soll.
+/// Steuert: Sampling-Strategie (Beam vs. Greedy), audio_ctx-Trick,
+/// Log-Verbosity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DecodeProfile {
+    /// Finaler Pass nach Stop-Hotkey — Quality first. BeamSearch (size=5),
+    /// kein audio_ctx-Trick. ~3x langsamer als Streaming, aber definitiver
+    /// Output.
+    Final,
+    /// Live-Pass waehrend der Aufnahme — Latenz first. Greedy-Sampling,
+    /// dynamischer audio_ctx (kuerzt den Mel-Encoder bei kurzem Audio).
+    /// Wird vom Streaming-Worker alle ~800 ms aufgerufen.
+    Streaming,
+}
+
+/// Whisper-Encoder verarbeitet immer eine 30-s-Mel-Spec mit 1500 Frames.
+/// Bei kuerzerem Audio koennen wir `audio_ctx` reduzieren — Whisper
+/// processiert dann effektiv nur die relevanten Frames. Schwellwert:
+/// 50 Frames/Sek. + Sicherheits-Padding. Bei Audio >= 30 s `None`,
+/// damit nichts abgeschnitten wird.
+fn dynamic_audio_ctx_frames(samples_len_16k: usize) -> Option<i32> {
+    let frames_estimate = ((samples_len_16k as f64 / 16_000.0) * 50.0).ceil() as i32 + 128;
+    if frames_estimate >= 1500 {
+        None
+    } else {
+        Some(frames_estimate.max(256))
+    }
+}
+
 pub struct LocalTranscriber {
     model_path: PathBuf,
     /// Optionaler Pfad auf das Silero-VAD-Modell. Wenn gesetzt UND die Datei
@@ -94,6 +123,7 @@ impl Transcriber for LocalTranscriber {
                 language,
                 initial_prompt,
                 n_threads_override,
+                DecodeProfile::Final,
             )
         })
         .await
@@ -101,6 +131,53 @@ impl Transcriber for LocalTranscriber {
     }
 }
 
+impl LocalTranscriber {
+    /// Streaming-Pass: nimmt bereits konvertierte 16-kHz-Mono-f32-Samples,
+    /// laeuft mit Greedy + dynamischem audio_ctx, gibt den aktuellen Decode
+    /// als String zurueck. Idempotent — der WhisperContext bleibt zwischen
+    /// Aufrufen warm; nur der WhisperState (Decoder-Buffer) wird pro Pass
+    /// neu erstellt. VAD bleibt aktiv.
+    ///
+    /// Wird vom Streaming-Worker (`pipeline/`) alle ~800 ms waehrend der
+    /// Aufnahme aufgerufen. Das Ergebnis geht durch LocalAgreement-2,
+    /// nur der stabile Prefix wird ins Overlay emittiert.
+    pub async fn transcribe_streaming_pass(
+        &self,
+        samples: Vec<f32>,
+        opts: TranscribeOpts,
+    ) -> Result<String> {
+        let ctx = Arc::clone(&self.context);
+        let model_path = self.model_path.clone();
+        let vad_model_path = self.vad_model_path.clone();
+
+        self.ensure_loaded()?;
+
+        let language = opts.language.clone();
+        let initial_prompt = opts.initial_prompt.clone();
+        let n_threads_override = opts.n_threads;
+
+        tokio::task::spawn_blocking(move || -> Result<String> {
+            run_whisper_blocking(
+                &ctx,
+                &model_path,
+                vad_model_path.as_deref(),
+                &samples,
+                language,
+                initial_prompt,
+                n_threads_override,
+                DecodeProfile::Streaming,
+            )
+        })
+        .await
+        .map_err(|e| VoiceTypeError::Transcription(format!("spawn_blocking: {e}")))?
+    }
+}
+
+// 8 Argumente sind hier vertretbar, weil sie verschiedene Concerns
+// kapseln (Context, Audio, Sprache, Threads, Profile). Eine Konfig-
+// Struct waere nur "8 Argumente in einer anderen Verpackung" — der
+// Helper wird nur von zwei Stellen gerufen und ist privat.
+#[allow(clippy::too_many_arguments)]
 fn run_whisper_blocking(
     ctx: &Arc<RwLock<Option<WhisperContext>>>,
     model_path: &Path,
@@ -109,6 +186,7 @@ fn run_whisper_blocking(
     language: Option<String>,
     initial_prompt: Option<String>,
     n_threads_override: Option<u32>,
+    profile: DecodeProfile,
 ) -> Result<String> {
     let guard = ctx.read();
     let context = guard.as_ref().ok_or_else(|| {
@@ -122,19 +200,34 @@ fn run_whisper_blocking(
         .create_state()
         .map_err(|e| VoiceTypeError::Transcription(format!("create_state: {e}")))?;
 
-    // BeamSearch statt Greedy: ~2-3 % WER-Verbesserung auf deutschem
-    // Mehr-Satz-Diktat, ~3x langsamer pro Decode-Step. Phase 2 (Streaming)
-    // kompensiert das durch Overlap; im Oneshot-Pfad ist der Latenz-Hit
-    // kleiner als der Quality-Gewinn rechtfertigt. patience=1.0 ist der
-    // OpenAI-Original-Default.
-    let mut params = FullParams::new(SamplingStrategy::BeamSearch {
-        beam_size: 5,
-        patience: 1.0,
-    });
+    // Sampling-Wahl haengt am Profil:
+    // - Final: BeamSearch (size=5, patience=1.0) — ~2-3 % WER-Verbesserung
+    //   gegenueber Greedy, ~3x langsamer pro Decode-Step. OK fuer Oneshot.
+    // - Streaming: Greedy mit best_of=1 — schnellste Variante, weil
+    //   Partials sowieso ueberschrieben werden, sobald der naechste Pass
+    //   stabilen Prefix liefert. Quality wird im Final-Pass eingeholt.
+    let sampling = match profile {
+        DecodeProfile::Final => SamplingStrategy::BeamSearch {
+            beam_size: 5,
+            patience: 1.0,
+        },
+        DecodeProfile::Streaming => SamplingStrategy::Greedy { best_of: 1 },
+    };
+    let mut params = FullParams::new(sampling);
     params.set_print_special(false);
     params.set_print_progress(false);
     params.set_print_realtime(false);
     params.set_print_timestamps(false);
+
+    // audio_ctx-Trick nur im Streaming-Profil: bei kurzem Audio (<30 s)
+    // kuerzt das den Mel-Encoder, ~2x Speedup. Bei langem Audio kein-op
+    // (None), damit nichts abgeschnitten wird.
+    if profile == DecodeProfile::Streaming {
+        if let Some(ctx_frames) = dynamic_audio_ctx_frames(samples.len()) {
+            params.set_audio_ctx(ctx_frames);
+            tracing::debug!(audio_ctx = ctx_frames, "Streaming-Pass audio_ctx gesetzt");
+        }
+    }
 
     // Quality-Hardening:
     // - suppress_blank: keine "leeren" Tokens am Segment-Anfang. Wichtig

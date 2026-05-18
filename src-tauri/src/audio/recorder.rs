@@ -35,10 +35,13 @@ pub struct RecorderConfig {
     pub device_name: Option<String>,
 }
 
+/// Capture-Stream-Metadaten (vom cpal-Worker einmalig nach Geraete-Open
+/// gesendet). `pub` damit der Streaming-Worker in `pipeline/` die
+/// Conversion ohne `RecorderHandle`-Lock machen kann.
 #[derive(Debug, Clone, Copy)]
-struct StreamMeta {
-    sample_rate: u32,
-    channels: u16,
+pub struct StreamMeta {
+    pub sample_rate: u32,
+    pub channels: u16,
 }
 
 /// Send-fester Handle zum Recorder-Thread.
@@ -136,6 +139,34 @@ impl RecorderHandle {
         self.meta = Some(meta);
         Ok(meta)
     }
+
+    /// Cheap-Clone des Sample-Buffer-Arcs fuer Live-Snapshots waehrend der
+    /// Aufnahme. Der Streaming-Worker in `pipeline/` haelt damit nur kurz
+    /// den Buffer-Mutex (Clone der bisherigen Samples), waehrend die
+    /// CPU-Arbeit (Mono-Mix + Resampling + Whisper-Decode) lockfrei laeuft.
+    pub fn samples_handle(&self) -> Arc<Mutex<Vec<f32>>> {
+        Arc::clone(&self.samples)
+    }
+
+    /// Warte einmalig auf die `StreamMeta` vom Worker-Thread, cache sie.
+    /// Folgeaufrufe geben den gecachten Wert sofort zurueck. Wird vom
+    /// Streaming-Worker direkt nach `start()` aufgerufen, sodass im Loop
+    /// keine Async-Waits mehr noetig sind.
+    pub async fn await_meta(&mut self) -> Result<StreamMeta> {
+        self.resolve_meta().await
+    }
+}
+
+/// Konvertiere Roh-Samples (cpal-native: f32, je Channels verschachtelt) auf
+/// die Whisper-Erwartung 16-kHz-Mono-f32. Wird sowohl im Final-Pfad
+/// (`stop_and_finalize`) als auch im Streaming-Worker benutzt, deshalb
+/// hier als freie Funktion exponiert.
+pub fn to_16k_mono(raw: &[f32], meta: StreamMeta) -> Result<Vec<f32>> {
+    if raw.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mono = stereo_to_mono(raw, meta.channels);
+    resample_to_16k(&mono, meta.sample_rate)
 }
 
 /// Worker-Thread: baut den cpal-Stream, fuettert Samples in den Buffer,

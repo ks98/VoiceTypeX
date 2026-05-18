@@ -10,6 +10,7 @@ use crate::core::log_buffer::LogRingBuffer;
 use crate::core::modes::{Mode, ModesRegistry};
 use crate::core::state::StateBus;
 use crate::injection::TextInjector;
+use crate::transcription::local::LocalTranscriber;
 use crate::transcription::Transcriber;
 use parking_lot::{Mutex, RwLock};
 use std::path::PathBuf;
@@ -35,6 +36,18 @@ pub struct AppContext {
     /// `Settings.menu_hotkey` die Wahrheit.
     pub effective_menu_hotkey: Arc<RwLock<Option<String>>>,
     pub transcriber: Arc<dyn Transcriber>,
+    /// Direkter Handle auf den `LocalTranscriber` — wird vom Streaming-
+    /// Worker (Phase 2) gebraucht, der die nicht-trait-Methode
+    /// `transcribe_streaming_pass` aufruft. Zeigt auf die gleiche
+    /// Instanz wie `transcriber`, wenn der App-Default lokal ist;
+    /// sonst eigene LocalTranscriber-Instanz parallel.
+    pub local_transcriber: Arc<LocalTranscriber>,
+    /// Handle des aktuell laufenden Streaming-Decode-Workers (Phase 2,
+    /// nur bei `transcription = "local"`). Wird in `start_recording`
+    /// gespawnt, in `finish_recording_and_inject` abortet, bevor der
+    /// Final-Pass laeuft. `None` = kein Streaming aktiv. Typ matched die
+    /// projektweite Konvention `tauri::async_runtime::spawn(...)`.
+    pub active_streaming_handle: Arc<Mutex<Option<tauri::async_runtime::JoinHandle<()>>>>,
     pub injector: Arc<dyn TextInjector>,
     pub settings: Arc<RwLock<Settings>>,
     /// Persistenz-Pfad fuer Settings (`~/.config/.../settings.json`).
