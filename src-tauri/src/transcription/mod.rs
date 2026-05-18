@@ -41,8 +41,13 @@ pub fn make_cloud_transcriber(provider: &str) -> Result<Arc<dyn Transcriber>> {
 }
 
 /// Factory: liefert den lokalen Whisper-Transcriber fuer einen Modellpfad.
-pub fn make_local_transcriber(model_path: PathBuf) -> Arc<dyn Transcriber> {
-    Arc::new(local::LocalTranscriber::new(model_path))
+/// `vad_model_path` ist optional — wenn gesetzt UND vorhanden, aktiviert
+/// LocalTranscriber den whisper.cpp-Built-in-VAD (Silero).
+pub fn make_local_transcriber(
+    model_path: PathBuf,
+    vad_model_path: Option<PathBuf>,
+) -> Arc<dyn Transcriber> {
+    Arc::new(local::LocalTranscriber::new(model_path, vad_model_path))
 }
 
 #[derive(Debug, Clone, Default)]

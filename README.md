@@ -48,8 +48,13 @@ Menü-Hotkey*.
 - **Frontend:** React 18 + TypeScript strict + Vite + TailwindCSS +
   shadcn/ui + Zustand
 - **Audio:** cpal + hound (WAV) + rubato (Sinc-Resampling auf 16 kHz)
-- **Lokales STT:** whisper-rs mit `ggml-large-v3-turbo-q5_0` (~547 MB,
-  ~5–7 % WER auf deutschen Diktaten); Cargo-Feature-Backends
+- **Lokales STT:** whisper-rs 0.16 mit Silero-VAD v6 (verhindert
+  Stille-Halluzinationen). Default-Modell ab Mai 2026:
+  `ggml-large-v3-turbo-q8_0` (~874 MB) — Q8 ist auf modernen Backends
+  gleich schnell wie Q5 bei sichtbar besserer DE-Qualität. Wählbare Slots
+  inkl. `large-v3-turbo-german-q5_0` (primeline-Fine-tune, ~28 % rel.
+  WER-Reduktion auf Deutsch) und `small-q5_1` für 4-GB-Geräte.
+  BeamSearch (size=5) mit temperature-Fallback. Cargo-Feature-Backends
   (`fast-cpu`/OpenBLAS = Default, `gpu-vulkan`/`gpu-cuda`/`gpu-metal`/
   `gpu-coreml` opt-in)
 - **Lokales LLM:** Ollama via HTTP
@@ -91,8 +96,11 @@ Details, Output-Pfade und Installations-Anleitung in
 2. **Hauptfenster öffnen:** Linksklick aufs Tray-Icon, oder Rechtsklick →
    *„Einstellungen öffnen"*.
 3. **Whisper-Modell laden:** Tab *Einstellungen* → *„Default-Modell
-   herunterladen"*. Lädt `ggml-large-v3-turbo-q5_0` (~547 MB) mit
-   SHA-Verifikation aus Hugging Face nach `app_data_dir/models/`.
+   herunterladen"*. Lädt das im `whisper_default_slot` konfigurierte
+   Modell (Default ab Mai 2026: `ggml-large-v3-turbo-q8_0`, ~874 MB) plus
+   Silero-VAD v6.2.0 (~885 kB) mit SHA-256-Verifikation aus Hugging Face
+   nach `app_data_dir/models/`. Existierende User mit Q5-Setup behalten
+   Q5; nur frische Installs starten direkt mit Q8.
 4. **Optional — Cloud-STT/LLM einrichten:** Tab *Einstellungen* →
    *„Cloud-API-Keys (BYOK)"* → Key bei xAI / OpenAI / etc. einfügen.
    Button *„Verbindung testen"* prüft den Key direkt.

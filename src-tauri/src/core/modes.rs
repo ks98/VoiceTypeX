@@ -36,7 +36,10 @@ pub enum InjectionMethod {
     Keystrokes,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+// Eq entfaellt, weil f32-Sampling-Felder (temperature/top_p/repeat_penalty)
+// kein Eq implementieren (NaN != NaN). PartialEq reicht — Mode wird nirgends
+// als HashMap/HashSet-Key benutzt.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Mode {
     pub id: String,
     pub name: String,
@@ -67,6 +70,22 @@ pub struct Mode {
     pub language: Option<String>,
     #[serde(default)]
     pub system_prompt: Option<String>,
+
+    // Sampling-Parameter pro Modus. Greift fuer lokales (Ollama) UND
+    // Cloud-LLM (OpenAI-Chat-Completions / Anthropic Messages, soweit der
+    // jeweilige Provider die Parameter respektiert). Bei `None` benutzt der
+    // Provider seinen Server-Default.
+    //
+    // Empfohlene Defaults fuer "faithful rewrite, do not extend":
+    //   temperature = 0.2, top_p = 0.8, repeat_penalty = 1.05
+    // Diese Werte stehen in den default_modes-TOMLs der Modi, die lokales
+    // LLM benutzen (siehe Task #8).
+    #[serde(default)]
+    pub temperature: Option<f32>,
+    #[serde(default)]
+    pub top_p: Option<f32>,
+    #[serde(default)]
+    pub repeat_penalty: Option<f32>,
 }
 
 impl Mode {

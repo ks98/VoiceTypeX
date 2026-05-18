@@ -17,8 +17,8 @@ Festgelegt — Alternativen werden nicht ohne Rücksprache eingeführt.
 | Frontend-State | Zustand |
 | Async-Runtime | tokio |
 | Audio | cpal + hound (WAV) + rubato (Sinc-Resampling) |
-| Lokales STT | whisper-rs mit Cargo-Feature-Backends (`fast-cpu`/OpenBLAS = Default; `gpu-vulkan`/`gpu-cuda`/`gpu-metal`/`gpu-coreml` opt-in) |
-| Lokales LLM | Ollama via HTTP |
+| Lokales STT | whisper-rs 0.16 + Silero-VAD v6 mit Cargo-Feature-Backends (`fast-cpu`/OpenBLAS = Default; `gpu-vulkan`/`gpu-cuda`/`gpu-metal`/`gpu-coreml` opt-in) |
+| Lokales LLM | Ollama via HTTP, Default-Modell `gemma3:4b` (Phase 1 Mai 2026, vorher `qwen2.5:7b`) |
 | Cloud-STT | xAI (One-Shot REST), OpenAI Whisper, Groq Whisper, Deepgram |
 | Cloud-LLM | xAI Grok (Default `grok-4-fast-non-reasoning`), OpenAI GPT, Anthropic Claude |
 | HTTP-Client | reqwest (rustls-tls) |
@@ -196,6 +196,64 @@ Audio wird als f32 gesammelt, beim Stop:
 
 Der WAV-Buffer geht direkt zu `Transcriber::transcribe_oneshot`.
 
+## Lokale STT-Pipeline (Phase 1, Mai 2026)
+
+[`transcription/local.rs`](../src-tauri/src/transcription/local.rs) und
+[`transcription/model_downloader.rs`](../src-tauri/src/transcription/model_downloader.rs):
+
+**Whisper-Sampling (Default ab Phase 1):**
+- `SamplingStrategy::BeamSearch { beam_size: 5, patience: 1.0 }` —
+  ~2–3 % WER-Verbesserung auf deutschem Mehr-Satz-Diktat gegenüber
+  Greedy, ~3× langsamer pro Decode-Step.
+- `suppress_blank=true`, `no_speech_thold=0.6`, `temperature=0.0`
+  mit `temperature_inc=0.2` als Fallback bei `logprob_thold`-Reissern.
+
+**Silero-VAD v6.2.0:**
+- Pfad: `app_data_dir/models/ggml-silero-v6.2.0.bin` (~885 kB).
+- Wird beim ersten Whisper-Modell-Download als Best-effort
+  mit-gezogen — fehlt das File, läuft Whisper transparent ohne VAD
+  und loggt eine WARN-Zeile pro Aufruf.
+- Defaults bewusst konservativer als upstream:
+  `min_silence_duration_ms=500` (vs. 100), `speech_pad_ms=200`
+  (vs. 30) — keine Mid-Sentence-Cuts, kein Konsonanten-Klipp.
+
+**Modell-Slots** (`ModelSlot::from_setting`):
+
+| Slot-String | Datei | Größe | Quelle |
+|---|---|---|---|
+| `large-v3-turbo-q8_0` *(Default)* | `ggml-large-v3-turbo-q8_0.bin` | ~874 MB | ggerganov/whisper.cpp |
+| `large-v3-turbo-german-q5_0` | `ggml-model-q5_0.bin` | ~574 MB | cstr/whisper-large-v3-turbo-german-ggml (primeline-Fine-tune, Apache 2.0) |
+| `large-v3-turbo-q5_0` | `ggml-large-v3-turbo-q5_0.bin` | ~547 MB | ggerganov/whisper.cpp |
+| `small-q5_1` | `ggml-small-q5_1.bin` | ~181 MB | ggerganov/whisper.cpp |
+| `large-v3-turbo` | `ggml-large-v3-turbo.bin` | ~1624 MB | ggerganov/whisper.cpp (F16) |
+
+Alle Slots haben gepinte SHA-256-Hashes; Mismatch löst einen
+Re-Download aus, akzeptiert nie ein verfälschtes File. Hashes stammen
+aus den HF-Git-LFS-Pointern (`curl .../raw/main/<file> | head -3`).
+
+**Bootstrap-Reihenfolge** (`lib.rs`): Settings werden vor der
+Pipeline-Konstruktion geladen, der `LocalTranscriber` baut seinen
+Modell-Pfad aus `settings.whisper_model_path` (Vorrang) bzw.
+`ModelSlot::from_setting(&settings.whisper_default_slot).filename()`.
+Vorher war der Pfad hardkodiert; User-Settings wurden ignoriert.
+
+## Lokales LLM (Ollama, Phase 1)
+
+[`processing/local.rs`](../src-tauri/src/processing/local.rs):
+
+- Default-Modell für `processing="local"`: `gemma3:4b` (DeepMind, Mar
+  2025) — 140+ Sprachen, ~3 GB Footprint, Sweet-Spot für 8–16-GB-
+  Geräte. Vorher `qwen2.5:7b`.
+- **Sampling pro Modus** über `ProcessOpts.{temperature, top_p,
+  repeat_penalty}`, gefüllt aus `Mode.temperature/top_p/
+  repeat_penalty` (TOML-Felder). Default für "faithful rewrite, do
+  not extend": 0.2 / 0.8 / 1.05.
+- **`keep_alive` pro Request** aus `Settings.ollama_keep_alive`
+  (Default `"5m"`, `"0"` für sofortiges Unload auf Memory-Pressure-
+  Profilen, `"-1"` für unbegrenztes Warmhalten).
+- Cloud-Processors (xAI/OpenAI/Anthropic) bekommen dieselben Sampling-
+  Felder durchgereicht, soweit der Provider sie respektiert.
+
 ## Wayland Auto-Paste
 
 [`injection/linux_wayland.rs`](../src-tauri/src/injection/linux_wayland.rs)
@@ -321,7 +379,8 @@ Settings, auf X11 / Windows bleibt das Feld editierbar.
 | API-Keys (BYOK) | `~/.config/.../secrets.json` (Source of Truth) + OS-Keychain (Mirror) | JSON, chmod 0600 |
 | Wayland `restore_token` | `~/.config/.../wayland_session.json` | JSON, chmod 0600 |
 | Modi (Hot-Reload) | `~/.config/.../modes/*.toml` | TOML |
-| Whisper-Modelle | `~/.config/.../models/*.bin` | GGML |
+| Whisper-Modelle | `~/.config/.../models/*.bin` | GGML, SHA-256-verifiziert |
+| Silero-VAD | `~/.config/.../models/ggml-silero-v6.2.0.bin` | GGML, SHA-256-verifiziert |
 
 Settings + Token werden beim App-Start gelesen, nach jedem
 Mutations-IPC geschrieben (siehe `Settings::load_or_default` /

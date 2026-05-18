@@ -323,12 +323,19 @@ async fn run_local_processing(
             mode.id
         ))
     })?;
-    let ollama_url = ctx.settings.read().ollama_url.clone();
-    let processor = make_local_processor(ollama_url, model);
+    let (ollama_url, keep_alive) = {
+        let s = ctx.settings.read();
+        (s.ollama_url.clone(), s.ollama_keep_alive.clone())
+    };
+    let processor = make_local_processor(ollama_url, model, keep_alive);
     let system_prompt = mode.system_prompt.as_deref().unwrap_or("");
-    processor
-        .process(transcript, system_prompt, ProcessOpts::default())
-        .await
+    let opts = ProcessOpts {
+        temperature: mode.temperature,
+        top_p: mode.top_p,
+        repeat_penalty: mode.repeat_penalty,
+        ..Default::default()
+    };
+    processor.process(transcript, system_prompt, opts).await
 }
 
 async fn run_cloud_processing(mode: &Mode, transcript: &str) -> Result<String> {
@@ -342,6 +349,9 @@ async fn run_cloud_processing(mode: &Mode, transcript: &str) -> Result<String> {
     let system_prompt = mode.system_prompt.as_deref().unwrap_or("");
     let opts = ProcessOpts {
         model: mode.cloud_llm_model.clone(),
+        temperature: mode.temperature,
+        top_p: mode.top_p,
+        repeat_penalty: mode.repeat_penalty,
         ..Default::default()
     };
     processor.process(transcript, system_prompt, opts).await

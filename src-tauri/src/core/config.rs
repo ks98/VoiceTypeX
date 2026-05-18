@@ -17,13 +17,19 @@ pub struct Settings {
     pub audio_input_device: Option<String>,
 
     /// Pfad zum lokalen Whisper-GGML-Modell. Leer = Default-Auswahl
-    /// (`ggml-large-v3-turbo-q5_0.bin` aus app_data_dir/models/).
+    /// (Datei laut `whisper_default_slot` aus app_data_dir/models/).
     #[serde(default)]
     pub whisper_model_path: Option<String>,
 
     /// Welches Default-Modell heruntergeladen werden soll, falls keins
-    /// vorhanden ist. Erlaubte Werte: "large-v3-turbo-q5_0",
-    /// "small-q5_1", "large-v3-turbo".
+    /// vorhanden ist. Erlaubte Werte:
+    /// - "large-v3-turbo-q8_0" — **Default ab Phase 1** (Q8 statt Q5 fuer
+    ///   bessere DE-Qualitaet bei gleicher Latenz auf modernen Backends).
+    /// - "large-v3-turbo-german-q5_0" — **DE Pro**, primeline-Fine-tune
+    ///   (Apache 2.0), ~28 % rel. WER-Reduktion auf Deutsch.
+    /// - "large-v3-turbo-q5_0" — Light-Hardware (~halber Disk-Bedarf).
+    /// - "small-q5_1" — 4-GB-Geraete ohne GPU.
+    /// - "large-v3-turbo" — F16, Power-User mit ueppigem VRAM.
     #[serde(default = "default_whisper_slot")]
     pub whisper_default_slot: String,
 
@@ -39,6 +45,14 @@ pub struct Settings {
     /// Ollama-HTTP-Endpunkt (lokales LLM).
     #[serde(default = "default_ollama_url")]
     pub ollama_url: String,
+
+    /// Wie lange Ollama das Modell nach einem Aufruf im RAM/VRAM haelt.
+    /// Format laut Ollama-FAQ: Duration-String (`"5m"`, `"30s"`, `"1h"`),
+    /// `"0"` = sofortiges Unload nach Antwort (Memory-Pressure-Profile auf
+    /// 8-GB-Geraeten), Default `"5m"`. Negativwert (`"-1"`) haelt das Modell
+    /// unbegrenzt warm.
+    #[serde(default = "default_ollama_keep_alive")]
+    pub ollama_keep_alive: String,
 
     /// Wird beim ersten erfolgreichen Onboarding-Wizard-Durchlauf auf
     /// `true` gesetzt. Steuert, ob der Wizard beim Start automatisch
@@ -79,6 +93,7 @@ impl Default for Settings {
             diagnostic_logging: false,
             autostart: false,
             ollama_url: default_ollama_url(),
+            ollama_keep_alive: default_ollama_keep_alive(),
             onboarding_done: false,
             whisper_n_threads: None,
             menu_hotkey: default_menu_hotkey(),
@@ -131,8 +146,15 @@ impl Settings {
     }
 }
 
+fn default_ollama_keep_alive() -> String {
+    "5m".to_string()
+}
+
 fn default_whisper_slot() -> String {
-    "large-v3-turbo-q5_0".to_string()
+    // Phase 1: Default von Q5_0 (547 MB) auf Q8_0 (874 MB) verschoben.
+    // Q8 ist auf modernen Backends gleich schnell und qualitativ deutlich
+    // naeher an F16 — Q5 bleibt als Light-Hardware-Option waehlbar.
+    "large-v3-turbo-q8_0".to_string()
 }
 
 fn default_ollama_url() -> String {

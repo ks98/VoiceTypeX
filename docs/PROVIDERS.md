@@ -113,7 +113,11 @@ Anthropic nutzt die Messages-API, nicht Chat-Completions:
 
 - **Endpoint (Default):** `POST http://127.0.0.1:11434/api/chat`
 - **Auth:** keine (lokaler HTTP-Server)
-- **Body:** Chat-Format analog zu OpenAI:
+- **Default-Modell (ab Mai 2026):** `gemma3:4b` (vorher `qwen2.5:7b`)
+  — Gemma 3 4B-IT von DeepMind, ~3 GB Footprint, 140+ Sprachen, sehr
+  stark auf Deutsch. Wechsel über `Mode.local_llm_model` pro Modus.
+- **Body:** Chat-Format analog zu OpenAI, plus Ollama-spezifische
+  Felder:
   ```json
   {
     "model": "...",
@@ -122,9 +126,21 @@ Anthropic nutzt die Messages-API, nicht Chat-Completions:
       { "role": "user",   "content": "<transcript>" }
     ],
     "stream": false,
-    "options": { "temperature": 0.2 }
+    "keep_alive": "5m",
+    "options": {
+      "temperature": 0.2,
+      "top_p": 0.8,
+      "repeat_penalty": 1.05
+    }
   }
   ```
+- **`keep_alive`:** Duration-String, steuert wie lange Ollama das
+  Modell nach dem Call im RAM/VRAM hält. Aus
+  `Settings.ollama_keep_alive` (Default `"5m"`). `"0"` = sofortiges
+  Unload (Memory-Pressure-Profil), `"-1"` = unbegrenzt warm halten.
+- **`options.{temperature,top_p,repeat_penalty}`:** alle aus dem
+  Mode-TOML; `None` = Ollama-Server-Default. Empfehlung für "faithful
+  rewrite, do not extend": 0.2 / 0.8 / 1.05.
 - **Response-Pfad:** `message.content`
 - **Timeout:** 300 s (lokale Inferenz kann auf CPU dauern)
 - **Endpoint überschreibbar:** Settings-Feld `ollama_url`.

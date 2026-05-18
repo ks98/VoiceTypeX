@@ -17,17 +17,25 @@ use async_trait::async_trait;
 use parking_lot::RwLock;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
+use whisper_rs::{
+    FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters, WhisperVadParams,
+};
 
 pub struct LocalTranscriber {
     model_path: PathBuf,
+    /// Optionaler Pfad auf das Silero-VAD-Modell. Wenn gesetzt UND die Datei
+    /// existiert, aktiviert `run_whisper_blocking` den whisper.cpp-Built-in-
+    /// VAD-Pfad. Fehlt die Datei (z.B. weil der Download noch nicht lief),
+    /// laeuft Whisper wie bisher ohne VAD und loggt einmalig eine Warnung.
+    vad_model_path: Option<PathBuf>,
     context: Arc<RwLock<Option<WhisperContext>>>,
 }
 
 impl LocalTranscriber {
-    pub fn new(model_path: PathBuf) -> Self {
+    pub fn new(model_path: PathBuf, vad_model_path: Option<PathBuf>) -> Self {
         Self {
             model_path,
+            vad_model_path,
             context: Arc::new(RwLock::new(None)),
         }
     }
@@ -68,6 +76,7 @@ impl Transcriber for LocalTranscriber {
         let samples = decode_wav_to_f32_mono_16k(audio)?;
         let ctx = Arc::clone(&self.context);
         let model_path = self.model_path.clone();
+        let vad_model_path = self.vad_model_path.clone();
 
         // ensure_loaded auf dem aktuellen Thread vor dem spawn_blocking.
         self.ensure_loaded()?;
@@ -80,6 +89,7 @@ impl Transcriber for LocalTranscriber {
             run_whisper_blocking(
                 &ctx,
                 &model_path,
+                vad_model_path.as_deref(),
                 &samples,
                 language,
                 initial_prompt,
@@ -94,6 +104,7 @@ impl Transcriber for LocalTranscriber {
 fn run_whisper_blocking(
     ctx: &Arc<RwLock<Option<WhisperContext>>>,
     model_path: &Path,
+    vad_model_path: Option<&Path>,
     samples: &[f32],
     language: Option<String>,
     initial_prompt: Option<String>,
@@ -111,11 +122,34 @@ fn run_whisper_blocking(
         .create_state()
         .map_err(|e| VoiceTypeError::Transcription(format!("create_state: {e}")))?;
 
-    let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+    // BeamSearch statt Greedy: ~2-3 % WER-Verbesserung auf deutschem
+    // Mehr-Satz-Diktat, ~3x langsamer pro Decode-Step. Phase 2 (Streaming)
+    // kompensiert das durch Overlap; im Oneshot-Pfad ist der Latenz-Hit
+    // kleiner als der Quality-Gewinn rechtfertigt. patience=1.0 ist der
+    // OpenAI-Original-Default.
+    let mut params = FullParams::new(SamplingStrategy::BeamSearch {
+        beam_size: 5,
+        patience: 1.0,
+    });
     params.set_print_special(false);
     params.set_print_progress(false);
     params.set_print_realtime(false);
     params.set_print_timestamps(false);
+
+    // Quality-Hardening:
+    // - suppress_blank: keine "leeren" Tokens am Segment-Anfang. Wichtig
+    //   vor allem fuer Streaming (Phase 2), schadet im Oneshot nicht.
+    // - no_speech_thold 0.6: Segmente mit no_speech-Prob > 0.6 fallen
+    //   weg (verhindert Stille-Halluzinationen, additiv zu VAD).
+    // - temperature 0.0 fix + temperature_inc 0.2 als Fallback: wenn
+    //   logprob_thold (Default -1.0) reisst, dreht Whisper temperature
+    //   in 0.2er Schritten hoch und versucht erneut — gibt
+    //   deterministische Outputs auf einfachem Audio, retten auf
+    //   schwierigem.
+    params.set_suppress_blank(true);
+    params.set_no_speech_thold(0.6);
+    params.set_temperature(0.0);
+    params.set_temperature_inc(0.2);
 
     // n_threads: User-Override aus Settings hat Vorrang. Sonst Auto-Detect
     // via available_parallelism (logical cores), gedeckelt bei 8 wegen
@@ -140,19 +174,55 @@ fn run_whisper_blocking(
         params.set_initial_prompt(prompt);
     }
 
+    // VAD-Aktivierung (whisper.cpp Silero-Pfad). Defaults bewusst
+    // konservativer als upstream:
+    // - min_silence_duration 500 ms (vs. 100 ms): keine Mid-Sentence-Cuts
+    //   bei Diktaten mit kurzen Atempausen.
+    // - speech_pad 200 ms (vs. 30 ms): Puffer reicht fuer harte
+    //   Konsonanten-Onsets ("k", "t", "p"), die sonst geklippt wuerden.
+    // Wenn das VAD-Modell-File fehlt (z.B. weil der User noch keinen
+    // Download getriggert hat), faellt der Pfad lautlos auf "ohne VAD"
+    // zurueck — nur ein WARN-Log, kein Fehler.
+    let vad_path_str: Option<&str> = vad_model_path.and_then(|p| {
+        if p.exists() {
+            p.to_str()
+        } else {
+            tracing::warn!(
+                vad_model = %p.display(),
+                "VAD-Modell-Datei fehlt — laufe ohne VAD"
+            );
+            None
+        }
+    });
+    if let Some(vad_path_str) = vad_path_str {
+        let mut vad_params = WhisperVadParams::default();
+        vad_params.set_min_silence_duration(500);
+        vad_params.set_speech_pad(200);
+        params.set_vad_params(vad_params);
+        params.set_vad_model_path(Some(vad_path_str));
+        params.enable_vad(true);
+        tracing::debug!(vad_model = vad_path_str, "Silero-VAD aktiv");
+    }
+
     state
         .full(params, samples)
         .map_err(|e| VoiceTypeError::Transcription(format!("whisper full: {e}")))?;
 
-    let n_segments = state
-        .full_n_segments()
-        .map_err(|e| VoiceTypeError::Transcription(format!("n_segments: {e}")))?;
+    // whisper-rs 0.16: full_n_segments gibt direkt i32 zurueck (kein Result);
+    // get_segment(i) gibt Option<WhisperSegment> mit eigenen Text-Accessoren.
+    // to_str_lossy ersetzt ungueltige UTF-8-Bytes durch U+FFFD statt zu
+    // crashen — relevant, weil Whisper-Output gelegentlich Multi-Byte-
+    // Sequenzen an Segment-Grenzen zerschneidet.
+    let n_segments = state.full_n_segments();
     let mut text = String::new();
     for i in 0..n_segments {
-        let segment = state
-            .full_get_segment_text(i)
-            .map_err(|e| VoiceTypeError::Transcription(format!("segment {i}: {e}")))?;
-        text.push_str(&segment);
+        let segment = state.get_segment(i).ok_or_else(|| {
+            VoiceTypeError::Transcription(format!("get_segment({i}) lieferte None"))
+        })?;
+        let segment_text = segment
+            .to_str_lossy()
+            .map_err(|e| VoiceTypeError::Transcription(format!("segment {i} to_str: {e}")))?;
+        text.push_str(&segment_text);
     }
     Ok(text.trim().to_string())
 }

@@ -29,8 +29,10 @@ use crate::pipeline::{
     spawn_tray_recording_pulse, spawn_tray_state_listener,
 };
 use crate::transcription::local::LocalTranscriber;
+use crate::transcription::model_downloader::ModelSlot;
 use crate::transcription::Transcriber;
 use parking_lot::{Mutex, RwLock};
+use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::Manager;
 use tauri_plugin_autostart::MacosLauncher;
@@ -112,18 +114,40 @@ pub fn run() {
                 .start_watching(modes_dir.clone())
                 .map_err(|e| format!("start_watching: {e}"))?;
 
+            // Settings VOR der Pipeline-Konstruktion laden — sonst wuerde
+            // der Modell-Pfad hartkodiert sein und User-Settings (Custom-
+            // Pfad oder anderer Default-Slot) wuerden beim Bootstrap
+            // ignoriert. Bei korruptem JSON fallen Defaults rein
+            // (load_or_default loggt eine Warnung).
+            let initial_settings = Settings::load_or_default(&settings_path);
+
             // Pipeline-Komponenten
             let state_bus = StateBus::new();
-            let model_path = model_dir.join("ggml-large-v3-turbo-q5_0.bin");
-            let transcriber: Arc<dyn Transcriber> =
-                Arc::new(LocalTranscriber::new(model_path.clone()));
+
+            // Modell-Pfad: Vorrang hat ein explizit gesetzter Custom-Pfad
+            // (settings.whisper_model_path). Sonst Slot-basierter Default-
+            // Name im model_dir.
+            let model_path: PathBuf = initial_settings
+                .whisper_model_path
+                .as_ref()
+                .map(PathBuf::from)
+                .unwrap_or_else(|| {
+                    let slot = ModelSlot::from_setting(&initial_settings.whisper_default_slot);
+                    model_dir.join(slot.filename())
+                });
+
+            // VAD-Pfad zeigt auf die Standard-Silero-Datei. LocalTranscriber
+            // prueft selbst, ob sie existiert — wenn nicht (z.B. weil der
+            // VAD-Download noch nicht lief), laeuft Whisper transparent
+            // ohne VAD, mit einer WARN-Log-Zeile pro Aufruf.
+            let vad_model_path = Some(model_dir.join("ggml-silero-v6.2.0.bin"));
+            let transcriber: Arc<dyn Transcriber> = Arc::new(LocalTranscriber::new(
+                model_path.clone(),
+                vad_model_path,
+            ));
             let wayland_token_path = config_dir.join("wayland_session.json");
             let injector_box = make_default_injector(app_handle.clone(), wayland_token_path);
             let injector: Arc<dyn TextInjector> = Arc::from(injector_box);
-
-            // Settings persistent laden — fehlt die Datei, kommen Defaults
-            // (siehe core/config.rs::Settings::load_or_default).
-            let initial_settings = Settings::load_or_default(&settings_path);
 
             let ctx = Arc::new(AppContext {
                 state_bus,

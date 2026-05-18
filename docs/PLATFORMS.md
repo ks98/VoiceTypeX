@@ -53,7 +53,25 @@ sudo apt-get install -y \
     libasound2-dev          # cpal (Audio-Aufnahme) \
     libxdo-dev              # enigo (X11-Keystroke; auf reinem Wayland nicht laufzeit-relevant) \
     libclang-dev cmake      # whisper-rs (bindgen + whisper.cpp Build)
+    libopenblas-dev         # fast-cpu-Feature (Default), siehe BLAS_INCLUDE_DIRS unten
 ```
+
+**BLAS_INCLUDE_DIRS (seit whisper-rs 0.16 / whisper-rs-sys 0.15):**
+Der `fast-cpu`-Feature (Default-Build) linkt gegen OpenBLAS und braucht
+seit Mai 2026 `BLAS_INCLUDE_DIRS` explizit. Auf Debian/Ubuntu liegt der
+Pfad bei `/usr/include/x86_64-linux-gnu/openblas-pthread` —
+`src-tauri/.cargo/config.toml` setzt diesen Default mit `force = false`,
+so dass eine User-Shell-Variable gewinnt. Auf anderen Distros:
+
+```bash
+# Fedora (libopenblas-devel):
+export BLAS_INCLUDE_DIRS=/usr/include/openblas
+# Arch (openblas):
+export BLAS_INCLUDE_DIRS=/usr/include
+```
+
+Wer ohne BLAS bauen will: `cargo build --no-default-features --features
+custom-protocol` (langsamerer CPU-Pfad, kein Library-Dependency).
 
 **Hinweis Wayland:** `reis` ist eine pure-Rust-Implementierung des
 EI-Protokolls und braucht keine separate System-Library. Es kommuniziert
@@ -93,6 +111,12 @@ dem Tauri-Installer).
 
 - `cargo` zieht `whisper-rs-sys` ein, das whisper.cpp's C++-Code mit
   cmake/MSVC kompiliert. Erstmaliger Build ~5–10 min.
+- **`BLAS_INCLUDE_DIRS` muss vor dem Build gesetzt sein**, wenn das
+  `fast-cpu`-Feature aktiv ist (Default). Auf Windows üblicherweise
+  über die OpenBLAS-Windows-Distribution (z.B.
+  `set BLAS_INCLUDE_DIRS=C:\OpenBLAS\include`). Wer ohne OpenBLAS
+  bauen will: `cargo build --no-default-features --features
+  custom-protocol`.
 - `enigo` nutzt `SendInput` — funktioniert in den meisten Anwendungen,
   aber einige UWP-/WinUI-Apps haben restriktive Input-Pfade. Workaround
   mit Clipboard-Fallback (Standard).

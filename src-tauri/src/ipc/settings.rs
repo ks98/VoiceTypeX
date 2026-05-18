@@ -4,7 +4,7 @@
 use crate::audio;
 use crate::core::config::Settings;
 use crate::core::AppContext;
-use crate::transcription::model_downloader::{download_model, ModelSlot};
+use crate::transcription::model_downloader::{download_model, download_vad, ModelSlot, VadModel};
 use serde::Serialize;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
@@ -79,11 +79,15 @@ pub async fn download_default_model(
         )
     };
 
-    let slot = match slot_name.as_str() {
-        "small-q5_1" => ModelSlot::SmallQ51,
-        "large-v3-turbo" => ModelSlot::LargeV3Turbo,
-        _ => ModelSlot::LargeV3TurboQ5,
-    };
+    let slot = ModelSlot::from_setting(&slot_name);
+
+    // VAD-Modell parallel ziehen (~885 kB, sub-Sekunde). Best-effort —
+    // wenn der Download scheitert, faellt der Whisper-Pfad transparent
+    // auf "ohne VAD" zurueck und der User kriegt im Whisper-Log nur eine
+    // WARN-Zeile. Wir wollen den Whisper-Download deswegen nicht killen.
+    if let Err(e) = download_vad(VadModel::SileroV6_2_0, &dest_dir, |_| {}).await {
+        tracing::warn!(error = %e, "VAD-Modell-Download fehlgeschlagen, Whisper-Pfad ohne VAD");
+    }
 
     let app_for_progress = app.clone();
     let result = download_model(slot, &dest_dir, move |progress| {

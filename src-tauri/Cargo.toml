@@ -61,8 +61,11 @@ rubato = "0.16"
 # Audio-Wiedergabe der Recording-Cues
 rodio = { version = "0.20", default-features = false, features = ["wav"] }
 
-# Lokales STT via whisper.cpp (Rust-Bindings)
-whisper-rs = "0.13"
+# Lokales STT via whisper.cpp (Rust-Bindings).
+# 0.16 bringt Silero-VAD-API (enable_vad / set_vad_model_path /
+# set_vad_params) und Streaming-Callbacks, beides Pflicht-Bausteine
+# fuer die Local-Pipeline-Modernisierung.
+whisper-rs = "0.16"
 
 # HTTP-Client + Streaming + Hashing fuer Modell-Download
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream", "json", "multipart"] }

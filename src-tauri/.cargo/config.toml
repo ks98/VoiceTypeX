@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# whisper-rs-sys 0.15 (durch whisper-rs 0.16 ueber uns gezogen) verlangt
+# BLAS_INCLUDE_DIRS explizit, wenn das `openblas`-Feature aktiv ist —
+# vorher hat whisper-rs-sys den Pfad selbst gesucht.
+#
+# Standard-Pfad auf Debian / Ubuntu (`apt install libopenblas-dev`):
+# /usr/include/x86_64-linux-gnu/openblas-pthread
+#
+# `force = false` heisst: wenn der User die Variable in seiner Shell setzt
+# (z.B. fuer Fedora: /usr/include/openblas, oder fuer eine vendored
+# Installation), gewinnt seine Wahl. Windows-Builds muessen die Variable
+# vor `cargo build` setzen — siehe docs/PLATFORMS.md.
+
+[env]
+BLAS_INCLUDE_DIRS = { value = "/usr/include/x86_64-linux-gnu/openblas-pthread", force = false }

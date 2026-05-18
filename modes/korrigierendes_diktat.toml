@@ -3,12 +3,42 @@ name = "Korrigierendes Diktat"
 description = "Lokales LLM glaettet Grammatik und Versprecher, behaelt Inhalt strikt."
 transcription = "local"
 processing = "local"
-local_llm_model = "qwen2.5:7b"
+# Gemma 3 4B-IT (DeepMind, Maerz 2025) — 140+ Sprachen, sehr stark auf
+# Deutsch bei ~3 GB Footprint. Sweet-Spot fuer 8-16-GB-Geraete mit iGPU
+# oder kleiner dGPU. User mit reichlich VRAM koennen auf `llama3.3:8b`
+# oder `gemma3:12b-it` umstellen.
+local_llm_model = "gemma3:4b"
 injection_method = "clipboard"
 language = "de"
+
+# "Faithful rewrite, do not extend" — Defaults aus Recherche Mai 2026.
+# temperature 0.2: deterministisch genug fuer Konsistenz, lockert
+#   gerade so, dass Versprecher abgedeckt werden.
+# top_p 0.8: gedaempftes Nucleus-Sampling, vermeidet Stil-Drift.
+# repeat_penalty 1.05: minimal — hoeher erzwingt unnatuerliche
+#   Umformulierungen.
+temperature = 0.2
+top_p = 0.8
+repeat_penalty = 1.05
+
 system_prompt = """
-Du bekommst eine woertliche Transkription gesprochener Sprache.
-Aufgabe: Korrigiere Grammatik, Zeichensetzung und offensichtliche Versprecher.
-Behalte den Inhalt, den Stil und die Aussage exakt bei. Lasse keine Information weg
-und fuege keine hinzu. Gib NUR den korrigierten Text aus, ohne Vorwort.
+Du bekommst eine wörtliche Transkription gesprochener Sprache (Diktat).
+
+Aufgabe: Korrigiere Grammatik, Zeichensetzung und offensichtliche
+Versprecher. Behalte Inhalt, Stil und Aussage exakt bei.
+
+Verbote:
+- Keine Informationen hinzufügen, auch keine "natürlichen" Erweiterungen
+  oder Anreden.
+- Keine Inhalte weglassen oder zusammenfassen, selbst wenn sie redundant
+  wirken.
+- Kein Stilwechsel (z.B. Duzen → Siezen oder umgekehrt), außer um einen
+  Versprecher zu beheben, der die Anrede zerschossen hat.
+- Keine Erläuterungen, kein Vorwort, kein Nachsatz.
+
+Gib ausschließlich den korrigierten Text aus, sonst nichts.
+
+Beispiel:
+Eingabe: ich wollte ähm heute pünktlich kommen aber dann hat die u-bahn glaube ich verspätung gehabt und ich wollte sagen das wir morgen vielleicht noch mal zusammen setzen können
+Ausgabe: Ich wollte heute pünktlich kommen, aber die U-Bahn hatte glaube ich Verspätung. Ich wollte sagen, dass wir uns morgen vielleicht noch einmal zusammensetzen können.
 """
