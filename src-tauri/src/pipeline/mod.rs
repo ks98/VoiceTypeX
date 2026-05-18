@@ -32,9 +32,16 @@ struct PartialTranscriptPayload {
 
 /// Konfiguration des Streaming-Decode-Loops. Steht hier zentral, damit
 /// die Latenz/CPU-Trade-offs an einer Stelle sichtbar sind.
-const STREAMING_INITIAL_WAIT_MS: u64 = 1_500;
+///
+/// Werte sind defensiv fuer CPU-only-Builds (`fast-cpu` ohne GPU-Backend)
+/// gewaehlt. Auf Vulkan/CUDA-Builds koennte man INITIAL_WAIT halbieren
+/// und INTERVAL auf 500 ms reduzieren — Phase-3-Thema.
+const STREAMING_INITIAL_WAIT_MS: u64 = 2_000;
 const STREAMING_INTERVAL_MS: u64 = 800;
-const STREAMING_MIN_AUDIO_SAMPLES: usize = 8_000; // 0.5 s bei 16 kHz
+/// Erste Pass startet erst, wenn 1 s Audio im Buffer ist — kuerzere Audios
+/// landen oft im "single timestamp ending - skip entire chunk"-Fall von
+/// whisper.cpp, was leere Outputs erzeugt.
+const STREAMING_MIN_AUDIO_SAMPLES: usize = 16_000; // 1 s bei 16 kHz
 
 /// Toggle-Logik fuer den IPC-Pfad (UI-Trigger-Button in der Modi-Liste,
 /// `stop_recording`-Command).
@@ -191,20 +198,25 @@ async fn streaming_worker(
     // Erste Wartezeit, damit das Mikrofon ueberhaupt etwas Substanzielles
     // im Buffer hat. <1.5 s deutsches Sprach-Audio liefert sonst leere
     // Decodes oder Whisper halluziniert.
+    tracing::info!("Streaming-Worker laeuft (initial_wait={STREAMING_INITIAL_WAIT_MS}ms)");
     sleep(Duration::from_millis(STREAMING_INITIAL_WAIT_MS)).await;
 
     let mut prev_text = String::new();
     let mut committed = String::new();
+    let mut iteration: u32 = 0;
 
     loop {
+        iteration += 1;
         // Bail wenn State nicht mehr Recording (Pipeline finalisiert).
         if !matches!(ctx.state_bus.current(), AppState::Recording) {
+            tracing::info!(iteration, "Streaming-Worker: State != Recording, Exit");
             break;
         }
 
         // Buffer kurz locken, klonen, freigeben — CPU-Arbeit lockfrei.
         let raw = samples_arc.lock().clone();
         if raw.len() < STREAMING_MIN_AUDIO_SAMPLES {
+            tracing::debug!(iteration, raw_len = raw.len(), "Audio zu kurz, skip");
             sleep(Duration::from_millis(STREAMING_INTERVAL_MS)).await;
             continue;
         }
@@ -212,11 +224,12 @@ async fn streaming_worker(
         let f16k = match crate::audio::recorder::to_16k_mono(&raw, meta) {
             Ok(s) if !s.is_empty() => s,
             Ok(_) => {
+                tracing::warn!(iteration, "to_16k_mono lieferte leeres Ergebnis");
                 sleep(Duration::from_millis(STREAMING_INTERVAL_MS)).await;
                 continue;
             }
             Err(e) => {
-                tracing::warn!(error = %e, "Streaming: Resampling fehlgeschlagen");
+                tracing::warn!(iteration, error = %e, "Streaming: Resampling fehlgeschlagen");
                 sleep(Duration::from_millis(STREAMING_INTERVAL_MS)).await;
                 continue;
             }
@@ -228,30 +241,52 @@ async fn streaming_worker(
             n_threads,
         };
 
+        let started = std::time::Instant::now();
         match ctx
             .local_transcriber
             .transcribe_streaming_pass(f16k, opts)
             .await
         {
             Ok(curr_text) => {
+                let elapsed_ms = started.elapsed().as_millis() as u64;
+                tracing::info!(
+                    iteration,
+                    elapsed_ms,
+                    text_len = curr_text.len(),
+                    "Streaming-Pass fertig"
+                );
                 let stable = stable_prefix(&prev_text, &curr_text);
                 // Nur emittieren wenn der stable Prefix gewachsen ist —
                 // verhindert Event-Spam mit identischer Payload und
                 // garantiert dem Overlay monoton wachsenden Text.
                 if stable.len() > committed.len() {
                     committed = stable.clone();
-                    let _ = app.emit(
+                    let emit_result = app.emit(
                         "app://partial-transcript",
                         PartialTranscriptPayload {
                             text: committed.clone(),
                         },
                     );
-                    tracing::debug!(len = committed.len(), "Partial-Prefix emittiert");
+                    if let Err(e) = emit_result {
+                        tracing::warn!(error = %e, "Partial-Emit fehlgeschlagen");
+                    } else {
+                        tracing::info!(
+                            len = committed.len(),
+                            preview = %committed.chars().take(40).collect::<String>(),
+                            "Partial-Prefix emittiert"
+                        );
+                    }
+                } else {
+                    tracing::debug!(
+                        committed_len = committed.len(),
+                        stable_len = stable.len(),
+                        "Kein Wachstum, nicht emittiert"
+                    );
                 }
                 prev_text = curr_text;
             }
             Err(e) => {
-                tracing::warn!(error = %e, "Streaming-Pass fehlgeschlagen");
+                tracing::warn!(iteration, error = %e, "Streaming-Pass fehlgeschlagen");
             }
         }
 

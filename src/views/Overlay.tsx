@@ -48,6 +48,10 @@ export default function Overlay(): JSX.Element {
     }).then((u) => unlistens.push(u));
 
     listen<PartialTranscriptPayload>("app://partial-transcript", (event) => {
+      // Hilfreich im DevTools-Konsolen-Log waehrend Phase-2-Diagnose:
+      // bestaetigt, dass das Backend-Event durchkommt.
+      // eslint-disable-next-line no-console
+      console.log("[overlay] partial received:", event.payload.text?.length, "chars");
       setPartial(event.payload.text ?? "");
     }).then((u) => unlistens.push(u));
 
@@ -76,7 +80,7 @@ export default function Overlay(): JSX.Element {
         </div>
         {phase === "recording" && visiblePartial ? (
           <p
-            className="text-fg/60 text-xs leading-snug pl-10 overflow-hidden text-ellipsis whitespace-nowrap"
+            className="text-fg text-xs italic leading-snug pl-10 pr-1 overflow-hidden text-ellipsis whitespace-nowrap"
             title={partial}
           >
             {visiblePartial}

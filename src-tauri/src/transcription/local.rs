@@ -38,12 +38,18 @@ pub enum DecodeProfile {
 
 /// Whisper-Encoder verarbeitet immer eine 30-s-Mel-Spec mit 1500 Frames.
 /// Bei kuerzerem Audio koennen wir `audio_ctx` reduzieren — Whisper
-/// processiert dann effektiv nur die relevanten Frames. Schwellwert:
-/// 50 Frames/Sek. + Sicherheits-Padding. Bei Audio >= 30 s `None`,
-/// damit nichts abgeschnitten wird.
+/// processiert dann effektiv nur die relevanten Frames.
+///
+/// Aggressive Defaults fuer CPU-only-Hardware: Untergrenze 256 Frames
+/// (5 s Kontext). Auf CPU+BLAS dominiert der Encoder die Latenz; ein
+/// kleinerer audio_ctx halbiert oder drittelt die Decode-Zeit. Ab 25 s
+/// Audio gibt's `None` zurueck, damit nichts abgeschnitten wird.
+///
+/// 50 Frames/Sek. + 64 Frames Padding fuer Whisper's interne
+/// Token-Buffer-Reserve.
 fn dynamic_audio_ctx_frames(samples_len_16k: usize) -> Option<i32> {
-    let frames_estimate = ((samples_len_16k as f64 / 16_000.0) * 50.0).ceil() as i32 + 128;
-    if frames_estimate >= 1500 {
+    let frames_estimate = ((samples_len_16k as f64 / 16_000.0) * 50.0).ceil() as i32 + 64;
+    if frames_estimate >= 1250 {
         None
     } else {
         Some(frames_estimate.max(256))
@@ -231,18 +237,29 @@ fn run_whisper_blocking(
 
     // Quality-Hardening:
     // - suppress_blank: keine "leeren" Tokens am Segment-Anfang. Wichtig
-    //   vor allem fuer Streaming (Phase 2), schadet im Oneshot nicht.
-    // - no_speech_thold 0.6: Segmente mit no_speech-Prob > 0.6 fallen
-    //   weg (verhindert Stille-Halluzinationen, additiv zu VAD).
+    //   vor allem fuer Streaming, schadet im Oneshot nicht.
+    // - no_speech_thold 0.6 **nur Final**: Segmente mit no_speech-Prob
+    //   > 0.6 fallen weg (verhindert Stille-Halluzinationen, additiv zu
+    //   VAD). Im Streaming wuerden zu viele unsichere Partials geskipped,
+    //   "single timestamp ending - skip entire chunk"-Falle — wir wollen
+    //   im Streaming AUCH unsichere Outputs sehen, weil sie spaeter eh
+    //   ueberschrieben werden.
     // - temperature 0.0 fix + temperature_inc 0.2 als Fallback: wenn
     //   logprob_thold (Default -1.0) reisst, dreht Whisper temperature
-    //   in 0.2er Schritten hoch und versucht erneut — gibt
-    //   deterministische Outputs auf einfachem Audio, retten auf
-    //   schwierigem.
+    //   in 0.2er Schritten hoch und versucht erneut. Im Streaming ohne
+    //   temperature_inc, weil Fallback-Retries den Pass verdoppeln.
     params.set_suppress_blank(true);
-    params.set_no_speech_thold(0.6);
     params.set_temperature(0.0);
-    params.set_temperature_inc(0.2);
+    match profile {
+        DecodeProfile::Final => {
+            params.set_no_speech_thold(0.6);
+            params.set_temperature_inc(0.2);
+        }
+        DecodeProfile::Streaming => {
+            // no_speech_thold default (1.0 = nie skipped), kein temp_inc
+            params.set_temperature_inc(0.0);
+        }
+    }
 
     // n_threads: User-Override aus Settings hat Vorrang. Sonst Auto-Detect
     // via available_parallelism (logical cores), gedeckelt bei 8 wegen
