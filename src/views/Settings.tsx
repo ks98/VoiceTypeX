@@ -13,9 +13,13 @@ import { useSettingsStore } from "../store";
 import {
   ipcDownloadDefaultModel,
   ipcGetEffectiveMenuHotkey,
+  ipcGetHardwareReport,
   ipcGetSessionInfo,
+  ipcGetWhisperBackend,
+  type HardwareReport,
   type ModelDownloadProgress,
   type SessionInfo,
+  type WhisperBackendInfo,
 } from "../lib/tauri";
 
 const inputCls =
@@ -35,6 +39,10 @@ export default function Settings(): JSX.Element {
   const [progress, setProgress] = useState<ModelDownloadProgress | null>(null);
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [effectiveHotkey, setEffectiveHotkey] = useState<string | null>(null);
+  const [hardware, setHardware] = useState<HardwareReport | null>(null);
+  const [activeBackend, setActiveBackend] = useState<WhisperBackendInfo | null>(
+    null,
+  );
 
   useEffect(() => {
     void load();
@@ -44,6 +52,12 @@ export default function Settings(): JSX.Element {
       .catch(() => null);
     void ipcGetEffectiveMenuHotkey()
       .then(setEffectiveHotkey)
+      .catch(() => null);
+    void ipcGetHardwareReport()
+      .then(setHardware)
+      .catch(() => null);
+    void ipcGetWhisperBackend()
+      .then(setActiveBackend)
       .catch(() => null);
   }, [load, loadAudioDevices]);
 
@@ -128,6 +142,8 @@ export default function Settings(): JSX.Element {
         </select>
       </Field>
 
+      <HardwareStatusField hardware={hardware} activeBackend={activeBackend} />
+
       <Field
         label="Lokales Whisper-Modell"
         hint="Default-Slot wird beim ersten Start nach app_data_dir/models/ heruntergeladen. Eigener Pfad ueberschreibt das."
@@ -153,12 +169,18 @@ export default function Settings(): JSX.Element {
             void update({ whisper_default_slot: e.target.value })
           }
         >
-          <option value="large-v3-turbo-q5_0">
-            large-v3-turbo-q5_0 (~547 MB, empfohlen)
+          <option value="large-v3-turbo-q8_0">
+            large-v3-turbo-q8_0 (~874 MB, Default Mai 2026)
           </option>
-          <option value="small-q5_1">small-q5_1 (~181 MB, sparsam)</option>
+          <option value="large-v3-turbo-german-q5_0">
+            large-v3-turbo-german-q5_0 (~574 MB, DE Pro · primeline)
+          </option>
+          <option value="large-v3-turbo-q5_0">
+            large-v3-turbo-q5_0 (~547 MB, Light-Hardware)
+          </option>
+          <option value="small-q5_1">small-q5_1 (~181 MB, 4-GB-Geraete)</option>
           <option value="large-v3-turbo">
-            large-v3-turbo (unquantisiert, ~1.6 GB)
+            large-v3-turbo (~1.6 GB, F16 Power-User)
           </option>
         </select>
         <div className="flex flex-col gap-1.5">
@@ -315,6 +337,101 @@ function MenuHotkeyField({
         onChange={(e) => onChange(e.target.value)}
         placeholder="CommandOrControl+Alt+Space"
       />
+    </Field>
+  );
+}
+
+/**
+ * Hardware-Status — read-only Info-Panel zwischen Audio-Geraet und
+ * Whisper-Modell. Zeigt was die App ueber die Hardware weiss, welchen
+ * Compute-Backend sie im aktuellen Build verwendet, und ob ein anderer
+ * Backend-Build mehr Speedup braechte.
+ *
+ * Quelle: `get_hardware_report` (Runtime-Detection von libvulkan,
+ * libcuda, /proc/meminfo) + `get_whisper_backend` (Compile-Time-Feature).
+ */
+function HardwareStatusField({
+  hardware,
+  activeBackend,
+}: {
+  hardware: HardwareReport | null;
+  activeBackend: WhisperBackendInfo | null;
+}): JSX.Element {
+  if (!hardware && !activeBackend) {
+    return (
+      <Field
+        label="Hardware-Status"
+        hint="Wird beim App-Start ermittelt."
+      >
+        <div className="text-sm text-fg-faint">Lade Hardware-Info…</div>
+      </Field>
+    );
+  }
+
+  const ramText =
+    hardware && hardware.total_ram_gb > 0
+      ? `${hardware.total_ram_gb.toFixed(1)} GB (${hardware.available_ram_gb.toFixed(1)} GB frei)`
+      : "—";
+
+  const gpuFlags: string[] = [];
+  if (hardware?.has_nvidia_gpu) gpuFlags.push("NVIDIA");
+  if (hardware?.has_amd_gpu) gpuFlags.push("AMD");
+  if (hardware?.is_apple_silicon) gpuFlags.push("Apple Silicon");
+  if (gpuFlags.length === 0) gpuFlags.push("keine dedizierte GPU detektiert");
+
+  const libsFlags: string[] = [];
+  if (hardware?.has_vulkan) libsFlags.push("Vulkan");
+  if (hardware?.has_openblas) libsFlags.push("OpenBLAS");
+  if (libsFlags.length === 0) libsFlags.push("keine");
+
+  const showVariantHint =
+    hardware &&
+    activeBackend &&
+    hardware.recommended_variant !== activeBackend.backend &&
+    hardware.recommended_speedup > activeBackend.expected_speedup * 1.2;
+
+  return (
+    <Field
+      label="Hardware-Status"
+      hint="Was die App ueber dein System weiss. Read-only; basiert auf Runtime-Probing und Compile-Time-Feature."
+    >
+      <div className="flex flex-col gap-1.5 text-sm text-fg-muted">
+        <div>
+          <span className="text-fg-faint">Aktiver Backend:</span>{" "}
+          <span className="font-medium text-fg">
+            {activeBackend?.backend ?? "—"}
+          </span>
+          {activeBackend ? (
+            <span className="text-fg-faint">
+              {" "}
+              ({activeBackend.description}, ~{activeBackend.expected_speedup}×
+              CPU)
+            </span>
+          ) : null}
+        </div>
+        <div>
+          <span className="text-fg-faint">CPU-Threads:</span>{" "}
+          {hardware?.cpu_logical_cores ?? "—"}
+        </div>
+        <div>
+          <span className="text-fg-faint">RAM:</span> {ramText}
+        </div>
+        <div>
+          <span className="text-fg-faint">GPU:</span> {gpuFlags.join(", ")}
+        </div>
+        <div>
+          <span className="text-fg-faint">Compute-Libs:</span>{" "}
+          {libsFlags.join(", ")}
+        </div>
+        {showVariantHint ? (
+          <div className="mt-1 text-xs rounded-md bg-brand/10 border border-brand/40 px-2.5 py-1.5 text-fg">
+            Tip: Ein {hardware.recommended_variant}-Build koennte ~
+            {hardware.recommended_speedup}× CPU geben (statt aktuell ~
+            {activeBackend.expected_speedup}×). Phase-3-Bundle-Matrix wird das
+            adressieren.
+          </div>
+        ) : null}
+      </div>
     </Field>
   );
 }

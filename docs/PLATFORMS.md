@@ -50,18 +50,38 @@ sudo apt-get install -y \
     libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev \
     libayatana-appindicator3-dev librsvg2-dev \
     libssl-dev \
-    libasound2-dev          # cpal (Audio-Aufnahme) \
-    libxdo-dev              # enigo (X11-Keystroke; auf reinem Wayland nicht laufzeit-relevant) \
-    libclang-dev cmake      # whisper-rs (bindgen + whisper.cpp Build)
-    libopenblas-dev         # fast-cpu-Feature (Default), siehe BLAS_INCLUDE_DIRS unten
+    libasound2-dev               # cpal (Audio-Aufnahme) \
+    libxdo-dev                   # enigo (X11-Keystroke; auf Wayland nicht runtime-relevant) \
+    libclang-dev cmake           # whisper-rs (bindgen + whisper.cpp-Build) \
+    libvulkan-dev                # gpu-vulkan-Feature (Phase-3a-Default), Headers + Loader \
+    glslc                        # GLSL->SPIR-V Shader-Compiler, von whisper.cpp's Vulkan-Backend zur Build-Zeit gebraucht \
+    mesa-vulkan-drivers          # llvmpipe-Software-Vulkan-Fallback (Systeme ohne Hardware-Vulkan)
 ```
 
-**BLAS_INCLUDE_DIRS (seit whisper-rs 0.16 / whisper-rs-sys 0.15):**
-Der `fast-cpu`-Feature (Default-Build) linkt gegen OpenBLAS und braucht
-seit Mai 2026 `BLAS_INCLUDE_DIRS` explizit. Auf Debian/Ubuntu liegt der
-Pfad bei `/usr/include/x86_64-linux-gnu/openblas-pthread` —
-`src-tauri/.cargo/config.toml` setzt diesen Default mit `force = false`,
-so dass eine User-Shell-Variable gewinnt. Auf anderen Distros:
+**Vulkan-Default (Phase 3a, Mai 2026):**
+Der Default-Build nutzt das `gpu-vulkan`-Feature von `whisper-rs`.
+Vulkan deckt iGPU + AMD + Intel Arc + NVIDIA mit *einem* Binary ab
+(~95 % der Consumer-Hardware). Wenn zur Laufzeit kein Vulkan-Device
+verfuegbar ist, faellt whisper.cpp transparent auf CPU zurueck —
+kein App-Code-Pfad noetig.
+
+`glslc` ist Build-Time-only: whisper.cpp kompiliert seine GLSL-Shader
+zu SPIR-V beim Cargo-Build. Zur Laufzeit ist nur `libvulkan1` +
+GPU-Treiber gefragt.
+
+Wenn du kein Vulkan willst (Server/Container/Headless), explizit:
+```bash
+cargo build --no-default-features --features custom-protocol,fast-cpu
+```
+Das `fast-cpu`-Feature linkt OpenBLAS statt Vulkan. Build-Voraussetzung
+dafuer: `libopenblas-dev` und `BLAS_INCLUDE_DIRS` gesetzt (siehe unten).
+
+**BLAS_INCLUDE_DIRS (nur fuer `fast-cpu`-Feature):**
+Wenn `fast-cpu` aktiv ist, braucht `whisper-rs-sys` 0.15+
+`BLAS_INCLUDE_DIRS` explizit. Auf Debian/Ubuntu liegt der Pfad bei
+`/usr/include/x86_64-linux-gnu/openblas-pthread` —
+`src-tauri/.cargo/config.toml` setzt diesen Default mit `force = false`.
+Auf anderen Distros manuell setzen:
 
 ```bash
 # Fedora (libopenblas-devel):
@@ -69,9 +89,6 @@ export BLAS_INCLUDE_DIRS=/usr/include/openblas
 # Arch (openblas):
 export BLAS_INCLUDE_DIRS=/usr/include
 ```
-
-Wer ohne BLAS bauen will: `cargo build --no-default-features --features
-custom-protocol` (langsamerer CPU-Pfad, kein Library-Dependency).
 
 **Hinweis Wayland:** `reis` ist eine pure-Rust-Implementierung des
 EI-Protokolls und braucht keine separate System-Library. Es kommuniziert
@@ -111,12 +128,14 @@ dem Tauri-Installer).
 
 - `cargo` zieht `whisper-rs-sys` ein, das whisper.cpp's C++-Code mit
   cmake/MSVC kompiliert. Erstmaliger Build ~5–10 min.
-- **`BLAS_INCLUDE_DIRS` muss vor dem Build gesetzt sein**, wenn das
-  `fast-cpu`-Feature aktiv ist (Default). Auf Windows üblicherweise
-  über die OpenBLAS-Windows-Distribution (z.B.
-  `set BLAS_INCLUDE_DIRS=C:\OpenBLAS\include`). Wer ohne OpenBLAS
-  bauen will: `cargo build --no-default-features --features
-  custom-protocol`.
+- **Vulkan-SDK fuer Build-Zeit** (Phase-3a-Default): Lunarg-Vulkan-SDK
+  installieren (https://www.lunarg.com/vulkan-sdk/), Environment-
+  Variable `VULKAN_SDK` muss gesetzt sein. Runtime: aktuelle GPU-
+  Treiber bringen `vulkan-1.dll` automatisch mit (NVIDIA/AMD/Intel).
+- **Wer ohne Vulkan bauen will** (z.B. Headless oder Lizenz-strikt):
+  `cargo build --no-default-features --features custom-protocol,fast-cpu`.
+  Dann gilt `BLAS_INCLUDE_DIRS` (OpenBLAS-Windows-Distribution noetig,
+  z.B. `set BLAS_INCLUDE_DIRS=C:\OpenBLAS\include`).
 - `enigo` nutzt `SendInput` — funktioniert in den meisten Anwendungen,
   aber einige UWP-/WinUI-Apps haben restriktive Input-Pfade. Workaround
   mit Clipboard-Fallback (Standard).

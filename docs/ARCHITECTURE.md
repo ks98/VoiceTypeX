@@ -17,8 +17,8 @@ Festgelegt — Alternativen werden nicht ohne Rücksprache eingeführt.
 | Frontend-State | Zustand |
 | Async-Runtime | tokio |
 | Audio | cpal + hound (WAV) + rubato (Sinc-Resampling) |
-| Lokales STT | whisper-rs 0.16 + Silero-VAD v6 mit Cargo-Feature-Backends (`fast-cpu`/OpenBLAS = Default; `gpu-vulkan`/`gpu-cuda`/`gpu-metal`/`gpu-coreml` opt-in) |
-| Lokales LLM | Ollama via HTTP, Default-Modell `gemma3:4b` (Phase 1 Mai 2026, vorher `qwen2.5:7b`) |
+| Lokales STT | whisper-rs 0.16 + Silero-VAD v6, **Default-Backend `gpu-vulkan`** (Phase 3a, Mai 2026); `gpu-cuda`/`gpu-metal`/`gpu-coreml` opt-in, `fast-cpu` (OpenBLAS) als Headless-Fallback. CPU-Fallback bei fehlendem Vulkan-Device ist whisper.cpp-internal — kein App-Code-Pfad. |
+| Lokales LLM | Phase 1+2: Ollama HTTP, Default `gemma3:4b`. Phase 3b (in Arbeit): embedded llama-cpp-2 mit `dynamic-backends`, Ollama bleibt Legacy-Opt-in. |
 | Cloud-STT | xAI (One-Shot REST), OpenAI Whisper, Groq Whisper, Deepgram |
 | Cloud-LLM | xAI Grok (Default `grok-4-fast-non-reasoning`), OpenAI GPT, Anthropic Claude |
 | HTTP-Client | reqwest (rustls-tls) |

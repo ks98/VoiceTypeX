@@ -86,6 +86,10 @@ export interface HardwareReport {
   has_nvidia_gpu: boolean;
   has_amd_gpu: boolean;
   is_apple_silicon: boolean;
+  /** Gesamt-RAM in GB. 0 = Detection nicht implementiert auf diesem OS. */
+  total_ram_gb: number;
+  /** Aktuell verfügbares RAM in GB. 0 = nicht implementiert. */
+  available_ram_gb: number;
   recommended_variant:
     | "cpu"
     | "openblas"

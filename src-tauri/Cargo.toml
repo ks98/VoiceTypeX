@@ -96,11 +96,24 @@ reis = { version = "=0.6.1", features = ["tokio"] }
 xkbcommon = "0.7"
 
 [features]
-# Default ist 'fast-cpu' (OpenBLAS) — universeller Speedup ohne GPU-Risiko.
-# libopenblas ist auf Linux praktisch ueberall installierbar; auf Windows
-# wird whisper.cpp's interner BLAS-Pfad genutzt. Optionale GPU-Features
-# sind separate Build-Varianten (CI produziert mehrere Bundles).
-default = ["custom-protocol", "fast-cpu"]
+# Default ab Phase 3a: 'gpu-vulkan' — Vulkan deckt iGPU + AMD + Intel
+# Arc + NVIDIA (~95 % der Consumer-Hardware) mit *einem* Binary. Wenn
+# kein Vulkan-Device verfuegbar ist, faellt whisper.cpp automatisch
+# auf CPU zurueck (kein Code-Pfad noetig). Build-Zeit-Voraussetzung
+# auf Linux: libvulkan-dev (Headers). Runtime: libvulkan1 + Treiber
+# (mesa-vulkan-drivers fuer iGPU, vendor-Treiber fuer dGPU).
+#
+# `fast-cpu` (OpenBLAS) bleibt als Opt-in fuer User die kein Vulkan
+# wollen — z.B. Server-Container, headless-Setups, Lizenz-Constraint-
+# Sensitiv. Build via `cargo build --no-default-features --features
+# custom-protocol,fast-cpu`.
+#
+# `gpu-cuda` ist optional fuer NVIDIA-Power-User; produziert ein
+# separates Bundle (CI-Matrix). Phase 3b ergaenzt dlopen-CUDA fuer
+# das LLM via llama-cpp-2 — STT bleibt aber bei Vulkan/CPU im
+# Default-Binary, weil whisper-rs noch kein dynamic-backends-Feature
+# hat.
+default = ["custom-protocol", "gpu-vulkan"]
 custom-protocol = ["tauri/custom-protocol"]
 fast-cpu = ["whisper-rs/openblas"]
 gpu-vulkan = ["whisper-rs/vulkan"]

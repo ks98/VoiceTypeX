@@ -55,11 +55,13 @@ Menü-Hotkey*.
   inkl. `large-v3-turbo-german-q5_0` (primeline-Fine-tune, ~28 % rel.
   WER-Reduktion auf Deutsch) und `small-q5_1` für 4-GB-Geräte.
   BeamSearch (size=5) mit temperature-Fallback. **Phase-2-Streaming**:
-  parallel zur Aufnahme läuft ein Greedy-Decode mit LocalAgreement-2-
-  Stabilisierung, das Overlay zeigt mitlaufenden Partial-Text. Final-
-  Pass nach Stop-Hotkey überschreibt mit voller Qualität.
-  Cargo-Feature-Backends (`fast-cpu`/OpenBLAS = Default,
-  `gpu-vulkan`/`gpu-cuda`/`gpu-metal`/`gpu-coreml` opt-in)
+  parallel zur Aufnahme läuft ein Greedy-Decode, das Overlay zeigt
+  mitlaufenden Partial-Text. Final-Pass nach Stop-Hotkey überschreibt
+  mit voller Qualität. **Phase 3a (ab Mai 2026): Vulkan-Default** —
+  ein Binary deckt iGPU/AMD/Intel/NVIDIA per Vulkan ab; bei fehlendem
+  GPU-Device automatischer CPU-Fallback. `gpu-cuda`/`gpu-metal`/
+  `gpu-coreml` als opt-in Features, `fast-cpu` (OpenBLAS) als
+  Headless-Fallback.
 - **Lokales LLM:** Ollama via HTTP
 - **Cloud-Provider (BYOK):** xAI (STT + Grok, Default `grok-4-fast-non-reasoning`),
   OpenAI Whisper + GPT, Groq Whisper, Deepgram, Anthropic Claude

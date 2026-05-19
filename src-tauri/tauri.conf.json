@@ -85,14 +85,16 @@
     "linux": {
       "deb": {
         "depends": [
-          "libopenblas0",
+          "libvulkan1",
+          "mesa-vulkan-drivers",
           "libasound2",
           "libxdo3"
         ]
       },
       "rpm": {
         "depends": [
-          "openblas-serial",
+          "vulkan-loader",
+          "mesa-vulkan-drivers",
           "alsa-lib",
           "libxdo"
         ]

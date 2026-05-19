@@ -14,3 +14,16 @@
 
 [env]
 BLAS_INCLUDE_DIRS = { value = "/usr/include/x86_64-linux-gnu/openblas-pthread", force = false }
+
+# CMake-Build-Type fuer C++-Dependencies (whisper-rs-sys, llama-cpp-sys
+# in Phase 3b). Cargo's dev-Profil mapped per Default auf CMAKE_BUILD_TYPE
+# = Debug, was bei whisper.cpp's Vulkan-Shader-Bridge-Files (>50 MB
+# SPIR-V als embedded C++-Array) zu OOM beim cc1plus fuehrt — der
+# Compiler braucht 3-4 GB pro Datei mit Debug-Info. Mit Release fallen
+# Debug-Symbols weg, der Peak-RAM beim Compile fluctuiert auf ~1-1.5 GB.
+#
+# `force = false` heisst: wer in der Shell `CMAKE_BUILD_TYPE=Debug
+# cargo build` setzt, gewinnt — Debugging der C++-Internals bleibt
+# moeglich. Standard-User mit knappen RAM kriegen aber den schnellen
+# stabilen Pfad.
+CMAKE_BUILD_TYPE = { value = "Release", force = false }

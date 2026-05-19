@@ -20,7 +20,11 @@ pub struct HardwareReport {
 
     /// libopenblas zur Laufzeit verfuegbar? Linux: pruefe Standard-Pfade.
     pub has_openblas: bool,
-    /// libvulkan zur Laufzeit verfuegbar?
+    /// libvulkan zur Laufzeit verfuegbar? **Achtung**: das prueft nur ob
+    /// der Loader installiert ist, nicht ob ein physisches Device aktiv
+    /// ist. Eine VM mit virtio-gpu hat libvulkan, fallback aber auf
+    /// llvmpipe (Software-Rendering). Echte Device-Enumeration braucht
+    /// die `ash`-Crate — Phase-3c-Thema.
     pub has_vulkan: bool,
     /// NVIDIA-GPU vorhanden? Linux: /dev/nvidia* oder libcuda.so.
     pub has_nvidia_gpu: bool,
@@ -28,6 +32,13 @@ pub struct HardwareReport {
     pub has_amd_gpu: bool,
     /// Apple Silicon (M1/M2/...)?
     pub is_apple_silicon: bool,
+
+    /// Gesamt-RAM in GB (auf 1 Dezimalstelle gerundet). `0.0` =
+    /// Detection nicht implementiert fuer dieses OS (aktuell: Windows).
+    pub total_ram_gb: f32,
+    /// Aktuell verfuegbares RAM in GB (MemAvailable auf Linux). `0.0` =
+    /// Detection nicht implementiert.
+    pub available_ram_gb: f32,
 
     /// Welcher Build-Bundle waere optimal fuer diese Hardware?
     /// Werte: "cpu", "openblas", "vulkan", "cuda", "metal".
@@ -47,6 +58,7 @@ pub fn detect() -> HardwareReport {
     let has_nvidia_gpu = detect_nvidia_gpu();
     let has_amd_gpu = detect_amd_gpu();
     let is_apple_silicon = detect_apple_silicon();
+    let (total_ram_gb, available_ram_gb) = detect_ram_gb();
 
     let (recommended_variant, recommended_speedup) =
         pick_recommendation(has_openblas, has_vulkan, has_nvidia_gpu, is_apple_silicon);
@@ -69,8 +81,51 @@ pub fn detect() -> HardwareReport {
         has_nvidia_gpu,
         has_amd_gpu,
         is_apple_silicon,
+        total_ram_gb,
+        available_ram_gb,
         recommended_variant,
         recommended_speedup,
+    }
+}
+
+/// RAM-Detection. Linux: `/proc/meminfo`-Parser (MemTotal + MemAvailable).
+/// Auf anderen OS aktuell (0.0, 0.0) — Phase 3c wird `sysinfo`-Crate
+/// einbinden fuer Cross-Platform RAM/VRAM-Detection.
+fn detect_ram_gb() -> (f32, f32) {
+    #[cfg(target_os = "linux")]
+    {
+        let content = match std::fs::read_to_string("/proc/meminfo") {
+            Ok(c) => c,
+            Err(_) => return (0.0, 0.0),
+        };
+        let mut total_kb: u64 = 0;
+        let mut available_kb: u64 = 0;
+        for line in content.lines() {
+            if let Some(rest) = line.strip_prefix("MemTotal:") {
+                total_kb = rest
+                    .trim()
+                    .trim_end_matches(" kB")
+                    .trim()
+                    .parse()
+                    .unwrap_or(0);
+            } else if let Some(rest) = line.strip_prefix("MemAvailable:") {
+                available_kb = rest
+                    .trim()
+                    .trim_end_matches(" kB")
+                    .trim()
+                    .parse()
+                    .unwrap_or(0);
+            }
+        }
+        let to_gb = |kb: u64| (kb as f32) / 1024.0 / 1024.0;
+        (
+            (to_gb(total_kb) * 10.0).round() / 10.0,
+            (to_gb(available_kb) * 10.0).round() / 10.0,
+        )
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        (0.0, 0.0)
     }
 }
 
