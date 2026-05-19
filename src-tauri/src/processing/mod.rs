@@ -6,6 +6,7 @@ use crate::core::error::Result;
 use async_trait::async_trait;
 
 pub mod cloud;
+pub mod embedded;
 pub mod local;
 
 use crate::core::error::VoiceTypeError;

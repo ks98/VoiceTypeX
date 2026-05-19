@@ -67,6 +67,22 @@ rodio = { version = "0.20", default-features = false, features = ["wav"] }
 # fuer die Local-Pipeline-Modernisierung.
 whisper-rs = "0.16"
 
+# Lokales LLM via llama.cpp (Rust-Bindings) — Phase 3b.
+# Ersetzt mittelfristig die Ollama-HTTP-Dependency durch embedded
+# Inferenz. Features:
+# - `vulkan`: GPU-Beschleunigung im selben Backend wie unser Whisper,
+#   konsistente Hardware-Anforderungen.
+# - `sampler`: idiomatische Rust-Sampling-API (statt manueller Token-
+#   Loop), wird in `LlamaEmbeddedProcessor` verwendet.
+# - default-features=false: deaktiviert openmp (zusaetzliche libomp-
+#   Build-Dep) und android-shared-stdcxx (irrelevant fuer Desktop).
+#
+# `dynamic-backends` (Runtime-Backend-Dispatch, dlopen-CUDA-Pfad)
+# kommt in einer Folge-Iteration, wenn wir auch GGML-Backends als
+# Shared-Libs bundeln. Aktuell ist Vulkan statisch eingelinkt
+# — Build-Charakteristik identisch zu whisper-rs.
+llama-cpp-2 = { version = "0.1.146", default-features = false, features = ["vulkan", "sampler"] }
+
 # HTTP-Client + Streaming + Hashing fuer Modell-Download
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream", "json", "multipart"] }
 sha2 = "0.10"
