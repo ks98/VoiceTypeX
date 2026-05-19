@@ -74,14 +74,19 @@ whisper-rs = "0.16"
 #   konsistente Hardware-Anforderungen.
 # - `sampler`: idiomatische Rust-Sampling-API (statt manueller Token-
 #   Loop), wird in `LlamaEmbeddedProcessor` verwendet.
+# - `dynamic-link`: llama.cpp wird als Shared-Lib (libllama.so) gelinkt,
+#   nicht statisch in unsere Binary einkompiliert. **Pflicht-Feature**:
+#   sonst kollidieren llama-cpp-sys-2 und whisper-rs-sys beim Linken,
+#   weil beide ihre eigene statische ggml bundlen (gguf_get_val_*
+#   duplicate symbols). Mit dynamic-link liegen die ggml-Symbole in
+#   einer separaten .so und kollidieren nicht.
 # - default-features=false: deaktiviert openmp (zusaetzliche libomp-
 #   Build-Dep) und android-shared-stdcxx (irrelevant fuer Desktop).
 #
 # `dynamic-backends` (Runtime-Backend-Dispatch, dlopen-CUDA-Pfad)
 # kommt in einer Folge-Iteration, wenn wir auch GGML-Backends als
-# Shared-Libs bundeln. Aktuell ist Vulkan statisch eingelinkt
-# — Build-Charakteristik identisch zu whisper-rs.
-llama-cpp-2 = { version = "0.1.146", default-features = false, features = ["vulkan", "sampler"] }
+# Shared-Libs bundeln.
+llama-cpp-2 = { version = "0.1.146", default-features = false, features = ["vulkan", "sampler", "dynamic-link"] }
 
 # HTTP-Client + Streaming + Hashing fuer Modell-Download
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream", "json", "multipart"] }
