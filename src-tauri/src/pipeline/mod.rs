@@ -507,9 +507,42 @@ async fn run_local_processing(
     mode: &Mode,
     transcript: &str,
 ) -> Result<String> {
+    let system_prompt = mode.system_prompt.as_deref().unwrap_or("");
+    let opts = ProcessOpts {
+        temperature: mode.temperature,
+        top_p: mode.top_p,
+        repeat_penalty: mode.repeat_penalty,
+        ..Default::default()
+    };
+
+    // Phase 3b: Engine-Wahl pro Modus. `None` faellt auf Ollama zurueck
+    // (Backward-Compat fuer Modi aus Phase 1/2). `"embedded"` aktiviert
+    // den `LlamaEmbeddedProcessor` aus dem AppContext — kein externer
+    // Daemon noetig.
+    let engine = mode.local_engine.as_deref().unwrap_or("ollama");
+    match engine {
+        "embedded" => {
+            let processor: Arc<dyn Processor> = ctx.local_llm_processor.clone();
+            processor.process(transcript, system_prompt, opts).await
+        }
+        "ollama" => run_local_processing_ollama(ctx, mode, transcript, system_prompt, opts).await,
+        other => Err(VoiceTypeError::Mode(format!(
+            "Modus '{}': unbekannte local_engine '{other}' (erlaubt: \"embedded\" | \"ollama\")",
+            mode.id
+        ))),
+    }
+}
+
+async fn run_local_processing_ollama(
+    ctx: &Arc<AppContext>,
+    mode: &Mode,
+    transcript: &str,
+    system_prompt: &str,
+    opts: ProcessOpts,
+) -> Result<String> {
     let model = mode.local_llm_model.clone().ok_or_else(|| {
         VoiceTypeError::Mode(format!(
-            "Modus '{}': processing=local, aber kein local_llm_model gesetzt",
+            "Modus '{}': processing=local engine=ollama, aber kein local_llm_model gesetzt",
             mode.id
         ))
     })?;
@@ -518,13 +551,6 @@ async fn run_local_processing(
         (s.ollama_url.clone(), s.ollama_keep_alive.clone())
     };
     let processor = make_local_processor(ollama_url, model, keep_alive);
-    let system_prompt = mode.system_prompt.as_deref().unwrap_or("");
-    let opts = ProcessOpts {
-        temperature: mode.temperature,
-        top_p: mode.top_p,
-        repeat_penalty: mode.repeat_penalty,
-        ..Default::default()
-    };
     processor.process(transcript, system_prompt, opts).await
 }
 

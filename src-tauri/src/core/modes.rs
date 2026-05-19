@@ -63,6 +63,19 @@ pub struct Mode {
     #[serde(default)]
     pub local_llm_model: Option<String>,
 
+    /// Welche lokale LLM-Engine soll diesen Modus bedienen, wenn
+    /// `processing == "local"`?
+    /// - `"ollama"` (Default-Fallback) — bestehender Pfad ueber den
+    ///   externen Ollama-Daemon. `local_llm_model` ist dann ein
+    ///   Ollama-Tag (`gemma3:4b`, `qwen2.5:7b`).
+    /// - `"embedded"` (Phase 3b) — interner llama-cpp-2-Pfad ohne
+    ///   externen Daemon. `local_llm_model` ist dann ein Slot-Slug
+    ///   (`gemma3-4b-it-q5_k_m`) oder leer fuer `settings.llm_default_slot`.
+    ///
+    /// `None` = Ollama (Backward-Compat fuer existierende Modi).
+    #[serde(default)]
+    pub local_engine: Option<String>,
+
     #[serde(default)]
     pub injection_method: InjectionMethod,
 

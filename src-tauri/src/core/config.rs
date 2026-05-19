@@ -54,6 +54,27 @@ pub struct Settings {
     #[serde(default = "default_ollama_keep_alive")]
     pub ollama_keep_alive: String,
 
+    /// **Phase 3b — Embedded LLM**. Welcher GGUF-Slot wird beim ersten
+    /// Start nach `app_data_dir/models/` heruntergeladen, wenn ein Modus
+    /// mit `local_engine = "embedded"` zum Einsatz kommt. Erlaubte Werte:
+    /// - `"gemma3-1b-it-q5_k_m"` — **Default**, ~850 MB, passt auf 4-GB-RAM-
+    ///   Geraete (Light-Tier).
+    /// - `"gemma3-4b-it-q5_k_m"` — ~2.8 GB, Standard fuer ≥16-GB-Setups
+    ///   (Empfehlung aus Phase 1, deutsche Qualitaet stark).
+    /// - `"llama3.2-1b-instruct-q5_k_m"` — Alternative Light-Tier,
+    ///   staerker auf Englisch.
+    /// - `"qwen2.5-1.5b-instruct-q5_k_m"` — Mittlere Groesse,
+    ///   strukturierter Output (Code/Markdown).
+    #[serde(default = "default_llm_slot")]
+    pub llm_default_slot: String,
+
+    /// Optionaler expliziter Pfad zu einem GGUF-LLM-Modell. Wenn gesetzt,
+    /// ueberschreibt es `llm_default_slot`-basierte Pfad-Konstruktion.
+    /// Format: absoluter Pfad zu einer `.gguf`-Datei. Empfohlen nur fuer
+    /// Power-User mit eigenen Modellen.
+    #[serde(default)]
+    pub llm_model_path: Option<String>,
+
     /// Wird beim ersten erfolgreichen Onboarding-Wizard-Durchlauf auf
     /// `true` gesetzt. Steuert, ob der Wizard beim Start automatisch
     /// erscheint.
@@ -94,6 +115,8 @@ impl Default for Settings {
             autostart: false,
             ollama_url: default_ollama_url(),
             ollama_keep_alive: default_ollama_keep_alive(),
+            llm_default_slot: default_llm_slot(),
+            llm_model_path: None,
             onboarding_done: false,
             whisper_n_threads: None,
             menu_hotkey: default_menu_hotkey(),
@@ -148,6 +171,13 @@ impl Settings {
 
 fn default_ollama_keep_alive() -> String {
     "5m".to_string()
+}
+
+fn default_llm_slot() -> String {
+    // Light-Tier-Default: passt auf 4-GB-Geraete und liefert auf 16-GB-
+    // Setups Sub-Sekunden-Latenz. Power-User koennen in Settings auf
+    // "gemma3-4b-it-q5_k_m" wechseln, sobald sie 16+ GB RAM haben.
+    "gemma3-1b-it-q5_k_m".to_string()
 }
 
 fn default_whisper_slot() -> String {

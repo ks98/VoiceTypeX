@@ -28,8 +28,9 @@ use crate::pipeline::{
     register_menu_hotkey, spawn_overlay_state_listener, spawn_state_event_emitter,
     spawn_tray_recording_pulse, spawn_tray_state_listener,
 };
+use crate::processing::embedded::LlamaEmbeddedProcessor;
 use crate::transcription::local::LocalTranscriber;
-use crate::transcription::model_downloader::ModelSlot;
+use crate::transcription::model_downloader::{LlmModelSlot, ModelSlot};
 use crate::transcription::Transcriber;
 use parking_lot::{Mutex, RwLock};
 use std::path::PathBuf;
@@ -150,6 +151,20 @@ pub fn run() {
                 vad_model_path,
             ));
             let transcriber: Arc<dyn Transcriber> = local_transcriber.clone();
+
+            // Phase 3b: Embedded-LLM-Processor. Pfad: User-Override hat
+            // Vorrang, sonst Slot-basierter Default. Modell wird LAZY beim
+            // ersten `process()`-Aufruf geladen — wenn der User Embedded
+            // nicht benutzt, bleibt die Datei optional.
+            let llm_model_path: PathBuf = initial_settings
+                .llm_model_path
+                .as_ref()
+                .map(PathBuf::from)
+                .unwrap_or_else(|| {
+                    let slot = LlmModelSlot::from_setting(&initial_settings.llm_default_slot);
+                    model_dir.join(slot.filename())
+                });
+            let local_llm_processor = Arc::new(LlamaEmbeddedProcessor::new(llm_model_path));
             let wayland_token_path = config_dir.join("wayland_session.json");
             let injector_box = make_default_injector(app_handle.clone(), wayland_token_path);
             let injector: Arc<dyn TextInjector> = Arc::from(injector_box);
@@ -162,6 +177,7 @@ pub fn run() {
                 effective_menu_hotkey: Arc::new(RwLock::new(None)),
                 transcriber,
                 local_transcriber,
+                local_llm_processor,
                 active_streaming_handle: Arc::new(Mutex::new(None)),
                 injector,
                 settings: Arc::new(RwLock::new(initial_settings)),

@@ -119,6 +119,114 @@ impl ModelSlot {
     }
 }
 
+// GGUF-Quellen fuer Embedded-LLM-Pfad (Phase 3b). Bevorzugt
+// `unsloth/*` weil deren GGUF-Re-Packs oeffentlich zugaenglich sind
+// (im Gegensatz zu `bartowski/gemma-3-*` und originalen `google/*`,
+// die ein Lizenz-Gate haben).
+const LLM_UNSLOTH_GEMMA3_4B: &str =
+    "https://huggingface.co/unsloth/gemma-3-4b-it-GGUF/resolve/main";
+const LLM_UNSLOTH_GEMMA3_1B: &str =
+    "https://huggingface.co/unsloth/gemma-3-1b-it-GGUF/resolve/main";
+const LLM_UNSLOTH_LLAMA32_1B: &str =
+    "https://huggingface.co/unsloth/Llama-3.2-1B-Instruct-GGUF/resolve/main";
+const LLM_QWEN25_15B: &str = "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main";
+
+/// GGUF-LLM-Modelle, die der `LlamaEmbeddedProcessor` laden kann.
+/// Auswahl ist auf Consumer-Hardware-Tiers ausgelegt:
+/// - Light (≤8 GB RAM): Gemma3-1B oder Llama3.2-1B (jeweils <1 GB).
+/// - Standard (8-16 GB): Qwen2.5-1.5B oder Gemma3-1B mit hoeherer Quant.
+/// - Pro (≥16 GB): Gemma3-4B (Default-Empfehlung gemaess Phase-1-Modus
+///   `korrigierendes_diktat.toml`, dort steht `local_llm_model =
+///   "gemma3:4b"`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LlmModelSlot {
+    /// Gemma 3 4B-IT Q5_K_M — Phase-1-Empfehlung fuer 16+ GB-Geraete.
+    /// 140+ Sprachen, sehr stark auf Deutsch. ~2.8 GB.
+    Gemma3_4bItQ5km,
+    /// Gemma 3 1B-IT Q5_K_M — Light-Tier (<1 GB), passt auf 4-GB-VMs.
+    Gemma3_1bItQ5km,
+    /// Llama 3.2 1B-Instruct Q5_K_M — Alternative im Light-Tier,
+    /// staerker auf Englisch, aber Deutsch sehr ordentlich.
+    Llama32_1bInstructQ5km,
+    /// Qwen 2.5 1.5B-Instruct Q5_K_M — Mittlere Groesse (~1.3 GB),
+    /// stark auf strukturierten Output / Code (Modus
+    /// "claude_code_anweisung" haette davon profitiert wenn er lokal
+    /// liefe).
+    Qwen25_15bInstructQ5km,
+}
+
+impl LlmModelSlot {
+    pub fn filename(self) -> &'static str {
+        match self {
+            Self::Gemma3_4bItQ5km => "gemma-3-4b-it-Q5_K_M.gguf",
+            Self::Gemma3_1bItQ5km => "gemma-3-1b-it-Q5_K_M.gguf",
+            Self::Llama32_1bInstructQ5km => "Llama-3.2-1B-Instruct-Q5_K_M.gguf",
+            Self::Qwen25_15bInstructQ5km => "qwen2.5-1.5b-instruct-q5_k_m.gguf",
+        }
+    }
+
+    pub fn approximate_size_mb(self) -> u32 {
+        match self {
+            Self::Gemma3_4bItQ5km => 2_829,
+            Self::Gemma3_1bItQ5km => 851,
+            Self::Llama32_1bInstructQ5km => 912,
+            Self::Qwen25_15bInstructQ5km => 1_285,
+        }
+    }
+
+    /// SHA-256 aus dem HF-Git-LFS-Pointer
+    /// (`curl https://huggingface.co/<repo>/raw/main/<file> | head -3`).
+    pub fn expected_sha256(self) -> Option<&'static str> {
+        match self {
+            Self::Gemma3_4bItQ5km => {
+                Some("974e5c2f13c321fc3258b6fbf2ce326a09d8ace511aa6846df1db62baf7df7d4")
+            }
+            Self::Gemma3_1bItQ5km => {
+                Some("0da75a587ce0be8ea0281d5c6453822c3c347ce524b6cc14b129fb137caa8a6a")
+            }
+            Self::Llama32_1bInstructQ5km => {
+                Some("69dce91345442121eb3195370337eefa02cf076c7d84bd39adc0ce9552ccdfef")
+            }
+            Self::Qwen25_15bInstructQ5km => {
+                Some("b46661073c18e5b56a41fa320975f866a00def1ff08feef4718e013258896f8c")
+            }
+        }
+    }
+
+    /// Mappt den persistierten Settings-String auf einen Slot. Bei
+    /// unbekannten Werten faellt's auf das kleinste Modell zurueck —
+    /// safer Default fuer Memory-knappe Geraete.
+    pub fn from_setting(s: &str) -> Self {
+        match s {
+            "gemma3-4b-it-q5_k_m" => Self::Gemma3_4bItQ5km,
+            "llama3.2-1b-instruct-q5_k_m" => Self::Llama32_1bInstructQ5km,
+            "qwen2.5-1.5b-instruct-q5_k_m" => Self::Qwen25_15bInstructQ5km,
+            _ => Self::Gemma3_1bItQ5km,
+        }
+    }
+
+    fn url(self) -> String {
+        let base = match self {
+            Self::Gemma3_4bItQ5km => LLM_UNSLOTH_GEMMA3_4B,
+            Self::Gemma3_1bItQ5km => LLM_UNSLOTH_GEMMA3_1B,
+            Self::Llama32_1bInstructQ5km => LLM_UNSLOTH_LLAMA32_1B,
+            Self::Qwen25_15bInstructQ5km => LLM_QWEN25_15B,
+        };
+        format!("{base}/{}", self.filename())
+    }
+}
+
+/// Lade ein GGUF-LLM-Modell herunter. Wiederverwendet den generischen
+/// `download_to_file`-Helper. Idempotent — wenn die Datei schon mit
+/// passendem Hash existiert, kein Re-Download.
+pub async fn download_llm<F>(slot: LlmModelSlot, dest_dir: &Path, on_progress: F) -> Result<PathBuf>
+where
+    F: FnMut(DownloadProgress) + Send + 'static,
+{
+    let dest_path = dest_dir.join(slot.filename());
+    download_to_file(&slot.url(), &dest_path, slot.expected_sha256(), on_progress).await
+}
+
 /// Silero-VAD-Modell, das whisper.cpp's built-in VAD-Pfad braucht.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VadModel {

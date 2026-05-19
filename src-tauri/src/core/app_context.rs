@@ -10,6 +10,7 @@ use crate::core::log_buffer::LogRingBuffer;
 use crate::core::modes::{Mode, ModesRegistry};
 use crate::core::state::StateBus;
 use crate::injection::TextInjector;
+use crate::processing::embedded::LlamaEmbeddedProcessor;
 use crate::transcription::local::LocalTranscriber;
 use crate::transcription::Transcriber;
 use parking_lot::{Mutex, RwLock};
@@ -42,6 +43,12 @@ pub struct AppContext {
     /// Instanz wie `transcriber`, wenn der App-Default lokal ist;
     /// sonst eigene LocalTranscriber-Instanz parallel.
     pub local_transcriber: Arc<LocalTranscriber>,
+    /// **Phase 3b** — Embedded-LLM-Processor. Lazy-Modell-Load beim ersten
+    /// `process()`-Call; danach gehalten fuer die App-Lebenszeit. Wird
+    /// nur dann benutzt, wenn ein Modus `local_engine = "embedded"`
+    /// setzt; sonst bleibt der Modell-Cache leer und das File auf Disk
+    /// muss noch nicht existieren.
+    pub local_llm_processor: Arc<LlamaEmbeddedProcessor>,
     /// Handle des aktuell laufenden Streaming-Decode-Workers (Phase 2,
     /// nur bei `transcription = "local"`). Wird in `start_recording`
     /// gespawnt, in `finish_recording_and_inject` abortet, bevor der
