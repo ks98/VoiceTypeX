@@ -163,7 +163,12 @@ export default function Settings(): JSX.Element {
         </select>
       </Field>
 
-      <HardwareStatusField hardware={hardware} activeBackend={activeBackend} />
+      <HardwareStatusField
+        hardware={hardware}
+        activeBackend={activeBackend}
+        currentLlmSlot={settings.llm_default_slot}
+        onPickLlmSlot={(slot) => void update({ llm_default_slot: slot })}
+      />
 
       <Field
         label="Lokales Whisper-Modell"
@@ -441,12 +446,41 @@ function MenuHotkeyField({
  * Quelle: `get_hardware_report` (Runtime-Detection von libvulkan,
  * libcuda, /proc/meminfo) + `get_whisper_backend` (Compile-Time-Feature).
  */
+/**
+ * Empfehlung welcher GGUF-LLM-Slot zur Hardware passt. Konservativ:
+ * Modell-Footprint + Inferenz-Working-Set sollte unter 50 % des
+ * gesamten RAM bleiben, sonst wird's bei Whisper + Browser eng.
+ */
+function recommendLlmSlot(totalRamGb: number): {
+  slot: string;
+  label: string;
+} {
+  if (totalRamGb <= 0) {
+    // Detection nicht implementiert (Windows) — Default zu Light.
+    return { slot: "gemma3-1b-it-q5_k_m", label: "Gemma 3 1B (Light)" };
+  }
+  if (totalRamGb < 8) {
+    return { slot: "gemma3-1b-it-q5_k_m", label: "Gemma 3 1B (Light)" };
+  }
+  if (totalRamGb < 12) {
+    return {
+      slot: "qwen2.5-1.5b-instruct-q5_k_m",
+      label: "Qwen 2.5 1.5B (Mittel)",
+    };
+  }
+  return { slot: "gemma3-4b-it-q5_k_m", label: "Gemma 3 4B (Pro)" };
+}
+
 function HardwareStatusField({
   hardware,
   activeBackend,
+  currentLlmSlot,
+  onPickLlmSlot,
 }: {
   hardware: HardwareReport | null;
   activeBackend: WhisperBackendInfo | null;
+  currentLlmSlot: string;
+  onPickLlmSlot: (slot: string) => void;
 }): JSX.Element {
   if (!hardware && !activeBackend) {
     return (
@@ -481,6 +515,12 @@ function HardwareStatusField({
     hardware.recommended_variant !== activeBackend.backend &&
     hardware.recommended_speedup > activeBackend.expected_speedup * 1.2;
 
+  const llmRecommendation = hardware
+    ? recommendLlmSlot(hardware.total_ram_gb)
+    : null;
+  const llmMismatch =
+    llmRecommendation !== null && llmRecommendation.slot !== currentLlmSlot;
+
   return (
     <Field
       label="Hardware-Status"
@@ -514,6 +554,27 @@ function HardwareStatusField({
           <span className="text-fg-faint">Compute-Libs:</span>{" "}
           {libsFlags.join(", ")}
         </div>
+        {llmRecommendation ? (
+          <div>
+            <span className="text-fg-faint">LLM-Empfehlung fuer dein RAM:</span>{" "}
+            <span className="font-medium text-fg">
+              {llmRecommendation.label}
+            </span>
+            {llmMismatch ? (
+              <button
+                type="button"
+                onClick={() => onPickLlmSlot(llmRecommendation.slot)}
+                className="ml-2 text-xs underline text-brand hover:text-brand-hover pointer-events-auto"
+              >
+                uebernehmen
+              </button>
+            ) : (
+              <span className="ml-2 text-xs text-status-recording">
+                ✓ aktiv
+              </span>
+            )}
+          </div>
+        ) : null}
         {showVariantHint ? (
           <div className="mt-1 text-xs rounded-md bg-brand/10 border border-brand/40 px-2.5 py-1.5 text-fg">
             Tip: Ein {hardware.recommended_variant}-Build koennte ~
