@@ -114,6 +114,19 @@ und `libggml-base.so` als separate Shared-Libs.
 `src-tauri/resources/lib/` ist gitignored ausser `.gitkeep` — Inhalt
 wird bei jedem Bundle-Build neu erzeugt, gehoert nicht ins Repo.
 
+**Optionaler CUDA-Builder-Pfad (Task #27):**
+Wer auf einer Maschine mit CUDA-Toolkit baut, kann zusaetzlich
+das `embedded-cuda-dynamic`-Feature aktivieren:
+```bash
+sudo apt install -y nvidia-cuda-toolkit  # oder vendor-Download
+cargo build --release --features embedded-cuda-dynamic
+```
+Damit baut llama-cpp-2 die GGML-Backends als separate Shared-Libs
+(`ggml-cpu.so`, `ggml-vulkan.so`, `ggml-cuda.so`); zur Laufzeit waehlt
+llama.cpp das schnellste verfuegbare. Auf User-Maschinen ohne CUDA-
+Treiber faellt die App transparent auf Vulkan zurueck — keine
+Code-Anpassung noetig.
+
 **Verifikation auf erstem Bundle-Build noetig** — Tauri-Bundler-
 Layout-Details koennen je nach Format (.deb/.rpm/AppImage)
 abweichen. Wenn der Test-Install meldet `error while loading shared

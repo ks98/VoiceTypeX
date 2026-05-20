@@ -141,6 +141,20 @@ gpu-vulkan = ["whisper-rs/vulkan"]
 gpu-cuda = ["whisper-rs/cuda"]
 gpu-metal = ["whisper-rs/metal"]
 gpu-coreml = ["whisper-rs/coreml"]
+# Phase 3b — opt-in fuer NVIDIA-Builder. Aktiviert `dynamic-backends`
+# bei llama-cpp-2: GGML-Backends (cpu, vulkan, cuda) werden als
+# separate ggml-*.so/.dll-Files gebaut und zur Laufzeit via dlopen
+# geladen. Damit kann ein Builder mit CUDA-Toolkit + libvulkan-dev
+# ein Bundle erzeugen, das auf User-Maschinen automatisch CUDA nutzt
+# wenn die NVIDIA-Treiber vorhanden sind, und sonst transparent auf
+# Vulkan/CPU fallbackt. Build:
+#   cargo build --release --features embedded-cuda-dynamic
+# Erfordert CUDA-Toolkit auf der Build-Maschine — auf reinen Vulkan-
+# Buildern fehlt das, daher nicht im Default-Feature-Set.
+embedded-cuda-dynamic = [
+    "llama-cpp-2/dynamic-backends",
+    "llama-cpp-2/cuda",
+]
 
 [profile.dev]
 incremental = true

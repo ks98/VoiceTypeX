@@ -159,6 +159,28 @@ debug/`. Wird vom `predev`/`prebuild`-Hook in `package.json`
 (`scripts/clean-dangling-libs.mjs`) automatisch vor jedem Tauri-Build
 geraeumt. Siehe PLATFORMS.md fuer Details.
 
+**NVIDIA-Builder-Pfad (Phase 3b, Task #27 — opt-in):**
+Builder mit CUDA-Toolkit + libvulkan-dev koennen ein Bundle mit
+Runtime-Backend-Dispatch erzeugen:
+```bash
+cargo build --release --features embedded-cuda-dynamic
+```
+Das Feature aktiviert llama-cpp-2's `dynamic-backends`-Feature: GGML
+baut CPU/Vulkan/CUDA als separate `ggml-*.so`-Files. Zur Laufzeit
+laedt llama.cpp ueber `ggml_backend_load_all()` die verfuegbaren
+Backends und nutzt das schnellste (typisch CUDA wenn `libcudart.so.13`
+auf dem User-System ist, sonst Vulkan, sonst CPU).
+
+**Wichtig zur Lizenz-Sauberkeit:** CUDA-Runtime wird **nicht**
+gebundlet (NVIDIA-EULA-Konflikt mit GPL-3 — siehe Phase-3-Architektur-
+Recherche). Der User muss CUDA-Toolkit oder mindestens die
+`cuda-runtime`-Pakete selbst installiert haben. Ohne CUDA-Runtime
+faellt der Pfad transparent auf Vulkan zurueck. Die `dynamic-backends`-
+Build-Variante ist also ein Hybrid: NVIDIA-User mit CUDA-Treiber
+bekommen die volle Speed, alle anderen werden via Vulkan bedient —
+mit einem einzigen Bundle. Standard-Default-Build (ohne das Feature)
+ist Vulkan-only und braucht kein CUDA-Toolkit auf der Build-Maschine.
+
 ### Ollama (lokal, kein BYOK-Key — Legacy-Pfad)
 
 Bleibt als opt-in fuer User, die ihre bestehende Ollama-Installation
