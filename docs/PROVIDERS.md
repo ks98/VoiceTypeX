@@ -153,14 +153,11 @@ Alle mit gepinten SHA-256-Hashes; Download ueber `download_llm()` in
 unsloth-Re-Packs werden bevorzugt, weil bartowski-/google-Original-Repos
 ein Lizenz-Gate haben (Gemma-Akzept beim ersten Download).
 
-**Bekannter Build-Quirk:** llama-cpp-sys-2 0.1.146's build.rs hat einen
-TOC/TOU-Bug mit dangling Symlinks im `target/debug/`-Verzeichnis. Wenn
-der Build mit `Os { code: 17, kind: AlreadyExists }`-Panic abbricht,
-hilft:
-```bash
-find src-tauri/target/debug -maxdepth 2 \
-  \( -name "libggml*.so*" -o -name "libllama.so*" \) -delete
-```
+**Bekannter Build-Quirk (automatisiert):** llama-cpp-sys-2 0.1.146's
+build.rs hat einen TOC/TOU-Bug mit dangling Symlinks im `target/
+debug/`. Wird vom `predev`/`prebuild`-Hook in `package.json`
+(`scripts/clean-dangling-libs.mjs`) automatisch vor jedem Tauri-Build
+geraeumt. Siehe PLATFORMS.md fuer Details.
 
 ### Ollama (lokal, kein BYOK-Key — Legacy-Pfad)
 

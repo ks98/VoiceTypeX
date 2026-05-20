@@ -76,15 +76,21 @@ cargo build --no-default-features --features custom-protocol,fast-cpu
 Das `fast-cpu`-Feature linkt OpenBLAS statt Vulkan. Build-Voraussetzung
 dafuer: `libopenblas-dev` und `BLAS_INCLUDE_DIRS` gesetzt (siehe unten).
 
-**Phase 3b — llama-cpp-sys-2 0.1.146 Build-Quirk:**
-Bei einem Rebuild nach Cargo-Feature-Wechsel kann der Build mit
-`Os { code: 17, kind: AlreadyExists }`-Panic abbrechen — dangling
-Symlinks in `target/debug/` von vorigen Builds. Workaround:
+**Phase 3b — llama-cpp-sys-2 0.1.146 Build-Quirk (automatisiert):**
+llama-cpp-sys-2 0.1.146's build.rs hat einen TOC/TOU-Bug — `Path::
+exists()` folgt Symlinks und liefert false fuer dangling Links,
+`std::fs::hard_link()` schlaegt aber fehl, weil der Symlink-Eintrag
+noch da ist. Resultat ohne Workaround: `Os { code: 17, kind:
+AlreadyExists }`-Panic beim Rebuild.
+
+**Automatisiert via npm-Hook:** `scripts/clean-dangling-libs.mjs`
+laeuft als `predev` und `prebuild` (siehe `package.json`) vor jedem
+`pnpm tauri dev` und `pnpm tauri build`. Pure-Node, cross-platform,
+no-op auf Windows. Falls du Cargo direkt aufrufst (z.B. `cargo build`
+fuer Tests), entweder Tauri-Workflow nutzen oder manuell:
 ```bash
-find src-tauri/target/debug -maxdepth 2 \
-  \( -name "libggml*.so*" -o -name "libllama.so*" \) -delete
+node scripts/clean-dangling-libs.mjs
 ```
-Danach Build erneut starten. Wird upstream-Fix beobachtet.
 
 **Phase 3b — `dynamic-link` Runtime-Erwartungen:**
 llama-cpp-2 wird mit `dynamic-link`-Feature gelinkt; das produziert
