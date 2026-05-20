@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import {
   ipcDownloadDefaultModel,
+  ipcDownloadLlmDefaultModel,
   ipcGetHardwareReport,
   ipcGetWhisperBackend,
   ipcSetProviderKey,
@@ -16,7 +17,29 @@ import { useSettingsStore } from "../store";
 import Button from "./Button";
 import Logo from "./Logo";
 
-type Step = 1 | 2 | 3 | 4;
+type Step = 1 | 2 | 3 | 4 | 5;
+const TOTAL_STEPS = 5;
+
+/**
+ * Welcher GGUF-LLM-Slot passt zur Hardware? Selbe Heuristik wie in
+ * Settings.tsx → `recommendLlmSlot`. Bei null-RAM (Windows-Detection
+ * nicht implementiert) fallback auf Light.
+ */
+function recommendLlmSlot(totalRamGb: number): {
+  slot: string;
+  label: string;
+} {
+  if (totalRamGb <= 0 || totalRamGb < 8) {
+    return { slot: "gemma3-1b-it-q5_k_m", label: "Gemma 3 1B (Light)" };
+  }
+  if (totalRamGb < 12) {
+    return {
+      slot: "qwen2.5-1.5b-instruct-q5_k_m",
+      label: "Qwen 2.5 1.5B (Mittel)",
+    };
+  }
+  return { slot: "gemma3-4b-it-q5_k_m", label: "Gemma 3 4B (Pro)" };
+}
 
 interface OnboardingWizardProps {
   onClose: () => void;
@@ -38,6 +61,11 @@ export default function OnboardingWizard({
     useState<ModelDownloadProgress | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
+  const [llmDownloading, setLlmDownloading] = useState(false);
+  const [llmDownloadProgress, setLlmDownloadProgress] =
+    useState<ModelDownloadProgress | null>(null);
+  const [llmDownloadError, setLlmDownloadError] = useState<string | null>(null);
+
   const [xaiKey, setXaiKey] = useState("");
   const [keyStatus, setKeyStatus] = useState<
     null | { kind: "saving" } | { kind: "ok" } | { kind: "error"; msg: string }
@@ -47,12 +75,13 @@ export default function OnboardingWizard({
   const [hardware, setHardware] = useState<HardwareReport | null>(null);
 
   useEffect(() => {
-    let unlisten: UnlistenFn | null = null;
+    const unlistens: UnlistenFn[] = [];
     void listen<ModelDownloadProgress>("model-download-progress", (event) =>
       setDownloadProgress(event.payload),
-    ).then((fn) => {
-      unlisten = fn;
-    });
+    ).then((fn) => unlistens.push(fn));
+    void listen<ModelDownloadProgress>("llm-model-download-progress", (event) =>
+      setLlmDownloadProgress(event.payload),
+    ).then((fn) => unlistens.push(fn));
     void ipcGetWhisperBackend()
       .then(setBackend)
       .catch(() => null);
@@ -60,7 +89,7 @@ export default function OnboardingWizard({
       .then(setHardware)
       .catch(() => null);
     return () => {
-      if (unlisten) unlisten();
+      unlistens.forEach((u) => u());
     };
   }, []);
 
@@ -76,6 +105,23 @@ export default function OnboardingWizard({
       setDownloadError(String(e));
     } finally {
       setDownloading(false);
+    }
+  };
+
+  const onPickLlmSlot = async (slot: string) => {
+    await update({ llm_default_slot: slot });
+  };
+
+  const onLlmDownload = async () => {
+    setLlmDownloading(true);
+    setLlmDownloadError(null);
+    setLlmDownloadProgress(null);
+    try {
+      await ipcDownloadLlmDefaultModel();
+    } catch (e) {
+      setLlmDownloadError(String(e));
+    } finally {
+      setLlmDownloading(false);
     }
   };
 
@@ -120,7 +166,7 @@ export default function OnboardingWizard({
                 Willkommen bei VoiceTypeX
               </h2>
               <div className="text-xs text-fg-faint mt-0.5">
-                Setup in {4} kurzen Schritten
+                Setup in {TOTAL_STEPS} kurzen Schritten
               </div>
             </div>
             <Button
@@ -131,7 +177,7 @@ export default function OnboardingWizard({
               überspringen
             </Button>
           </div>
-          <StepIndicator current={step} total={4} />
+          <StepIndicator current={step} total={TOTAL_STEPS} />
         </div>
 
         <div className="px-6 py-8 min-h-[360px]">
@@ -154,6 +200,18 @@ export default function OnboardingWizard({
               keyStatus={keyStatus}
               onSaveKey={onSaveKey}
             />
+          ) : step === 4 ? (
+            <StepLlmDownload
+              hardware={hardware}
+              currentSlot={settings?.llm_default_slot ?? ""}
+              onPickSlot={(s) => void onPickLlmSlot(s)}
+              onDownload={onLlmDownload}
+              downloading={llmDownloading}
+              progress={llmDownloadProgress}
+              error={llmDownloadError}
+              modelPath={settings?.llm_model_path ?? null}
+              fmtMb={fmtMb}
+            />
           ) : (
             <StepFinish backend={backend} hardware={hardware} />
           )}
@@ -167,11 +225,13 @@ export default function OnboardingWizard({
           >
             ← Zurück
           </Button>
-          {step < 4 ? (
+          {step < TOTAL_STEPS ? (
             <Button
               variant="secondary"
               onClick={() =>
-                setStep((s) => Math.min(4, (s + 1) as Step) as Step)
+                setStep(
+                  (s) => Math.min(TOTAL_STEPS, (s + 1) as Step) as Step,
+                )
               }
             >
               Weiter →
@@ -323,6 +383,122 @@ export default function OnboardingWizard({
         </div>
         {keyStatus?.kind === "error" ? (
           <div className="text-xs text-status-error">{keyStatus.msg}</div>
+        ) : null}
+      </div>
+    );
+  }
+
+  function StepLlmDownload({
+    hardware,
+    currentSlot,
+    onPickSlot,
+    onDownload,
+    downloading,
+    progress,
+    error,
+    modelPath,
+    fmtMb,
+  }: {
+    hardware: HardwareReport | null;
+    currentSlot: string;
+    onPickSlot: (slot: string) => void;
+    onDownload: () => Promise<void>;
+    downloading: boolean;
+    progress: ModelDownloadProgress | null;
+    error: string | null;
+    modelPath: string | null;
+    fmtMb: (bytes: number) => string;
+  }): JSX.Element {
+    const rec = hardware ? recommendLlmSlot(hardware.total_ram_gb) : null;
+    const mismatch = rec !== null && rec.slot !== currentSlot;
+    const pct =
+      progress && progress.total
+        ? Math.round((progress.downloaded / progress.total) * 100)
+        : null;
+
+    return (
+      <div className="flex flex-col gap-4">
+        <Hero icon={<CloudDownloadIcon />} />
+        <div>
+          <h3 className="text-lg font-semibold text-fg">
+            Lokales LLM-Modell (optional)
+          </h3>
+          <p className="text-sm text-fg-muted mt-1">
+            VoiceTypeX bringt einen eingebetteten LLM-Pfad via{" "}
+            <code className="text-brand font-mono">llama-cpp-2</code> — kein
+            externer Daemon nötig. Wird genutzt von Modi mit{" "}
+            <code className="text-brand font-mono">
+              local_engine = "embedded"
+            </code>{" "}
+            in der Mode-TOML. Wenn du nur Cloud-Modi nutzt, kannst du diesen
+            Schritt überspringen.
+          </p>
+        </div>
+
+        {rec && hardware ? (
+          <div className="rounded-md bg-brand/10 border border-brand/30 px-3 py-2.5 text-sm">
+            <div className="text-fg">
+              <span className="text-fg-faint">Empfehlung für </span>
+              <span className="font-medium">
+                {hardware.total_ram_gb > 0
+                  ? `${hardware.total_ram_gb.toFixed(1)} GB RAM`
+                  : "dein System"}
+              </span>
+              :{" "}
+              <span className="font-medium text-brand">{rec.label}</span>
+            </div>
+            {mismatch ? (
+              <button
+                type="button"
+                onClick={() => onPickSlot(rec.slot)}
+                className="mt-1.5 text-xs underline text-brand hover:text-brand-hover"
+              >
+                Empfehlung übernehmen
+              </button>
+            ) : (
+              <div className="mt-1 text-xs text-status-recording">
+                ✓ aktiv
+              </div>
+            )}
+          </div>
+        ) : null}
+
+        <Button
+          onClick={() => void onDownload()}
+          disabled={downloading}
+          className="self-start"
+        >
+          {downloading
+            ? "Lade LLM-Modell…"
+            : "LLM-Modell jetzt herunterladen"}
+        </Button>
+
+        {progress ? (
+          <div className="flex flex-col gap-1.5 text-xs text-fg-muted">
+            <div>
+              {fmtMb(progress.downloaded)}
+              {progress.total ? ` von ${fmtMb(progress.total)}` : ""}
+              {pct !== null ? ` (${pct} %)` : ""}
+            </div>
+            {pct !== null ? (
+              <div className="h-2 bg-elevated rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-brand transition-all"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {error ? (
+          <div className="text-xs text-status-error">{error}</div>
+        ) : null}
+
+        {modelPath ? (
+          <div className="text-xs text-status-done">
+            ✓ LLM-Modell konfiguriert: {modelPath}
+          </div>
         ) : null}
       </div>
     );
