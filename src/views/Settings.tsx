@@ -22,6 +22,7 @@ import {
   type SessionInfo,
   type WhisperBackendInfo,
 } from "../lib/tauri";
+import { recommendLlmSlot } from "../lib/recommend";
 
 const inputCls =
   "bg-surface border border-outline rounded-md px-3 py-2 text-sm text-fg placeholder:text-fg-faint focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/40";
@@ -446,31 +447,6 @@ function MenuHotkeyField({
  * Quelle: `get_hardware_report` (Runtime-Detection von libvulkan,
  * libcuda, /proc/meminfo) + `get_whisper_backend` (Compile-Time-Feature).
  */
-/**
- * Empfehlung welcher GGUF-LLM-Slot zur Hardware passt. Konservativ:
- * Modell-Footprint + Inferenz-Working-Set sollte unter 50 % des
- * gesamten RAM bleiben, sonst wird's bei Whisper + Browser eng.
- */
-function recommendLlmSlot(totalRamGb: number): {
-  slot: string;
-  label: string;
-} {
-  if (totalRamGb <= 0) {
-    // Detection nicht implementiert (Windows) — Default zu Light.
-    return { slot: "gemma3-1b-it-q5_k_m", label: "Gemma 3 1B (Light)" };
-  }
-  if (totalRamGb < 8) {
-    return { slot: "gemma3-1b-it-q5_k_m", label: "Gemma 3 1B (Light)" };
-  }
-  if (totalRamGb < 12) {
-    return {
-      slot: "qwen2.5-1.5b-instruct-q5_k_m",
-      label: "Qwen 2.5 1.5B (Mittel)",
-    };
-  }
-  return { slot: "gemma3-4b-it-q5_k_m", label: "Gemma 3 4B (Pro)" };
-}
-
 function HardwareStatusField({
   hardware,
   activeBackend,

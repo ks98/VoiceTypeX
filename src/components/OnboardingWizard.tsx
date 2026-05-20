@@ -13,33 +13,13 @@ import {
   type ModelDownloadProgress,
   type WhisperBackendInfo,
 } from "../lib/tauri";
+import { recommendLlmSlot } from "../lib/recommend";
 import { useSettingsStore } from "../store";
 import Button from "./Button";
 import Logo from "./Logo";
 
 type Step = 1 | 2 | 3 | 4 | 5;
 const TOTAL_STEPS = 5;
-
-/**
- * Welcher GGUF-LLM-Slot passt zur Hardware? Selbe Heuristik wie in
- * Settings.tsx → `recommendLlmSlot`. Bei null-RAM (Windows-Detection
- * nicht implementiert) fallback auf Light.
- */
-function recommendLlmSlot(totalRamGb: number): {
-  slot: string;
-  label: string;
-} {
-  if (totalRamGb <= 0 || totalRamGb < 8) {
-    return { slot: "gemma3-1b-it-q5_k_m", label: "Gemma 3 1B (Light)" };
-  }
-  if (totalRamGb < 12) {
-    return {
-      slot: "qwen2.5-1.5b-instruct-q5_k_m",
-      label: "Qwen 2.5 1.5B (Mittel)",
-    };
-  }
-  return { slot: "gemma3-4b-it-q5_k_m", label: "Gemma 3 4B (Pro)" };
-}
 
 interface OnboardingWizardProps {
   onClose: () => void;
