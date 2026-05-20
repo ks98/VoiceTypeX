@@ -76,6 +76,25 @@ cargo build --no-default-features --features custom-protocol,fast-cpu
 Das `fast-cpu`-Feature linkt OpenBLAS statt Vulkan. Build-Voraussetzung
 dafuer: `libopenblas-dev` und `BLAS_INCLUDE_DIRS` gesetzt (siehe unten).
 
+**Phase 3b — llama-cpp-sys-2 0.1.146 Build-Quirk:**
+Bei einem Rebuild nach Cargo-Feature-Wechsel kann der Build mit
+`Os { code: 17, kind: AlreadyExists }`-Panic abbrechen — dangling
+Symlinks in `target/debug/` von vorigen Builds. Workaround:
+```bash
+find src-tauri/target/debug -maxdepth 2 \
+  \( -name "libggml*.so*" -o -name "libllama.so*" \) -delete
+```
+Danach Build erneut starten. Wird upstream-Fix beobachtet.
+
+**Phase 3b — `dynamic-link` Runtime-Erwartungen:**
+llama-cpp-2 wird mit `dynamic-link`-Feature gelinkt; das produziert
+`libllama.so`, `libggml.so`, `libggml-cpu.so`, `libggml-vulkan.so`
+und `libggml-base.so` als separate Shared-Libs. Im Dev-Build liegen
+sie in `target/debug/` und werden ueber Cargo's rpath gefunden.
+Fuer Distribution (Task #26, noch ausstehend) muessen sie mit dem
+Tauri-Bundle ausgeliefert werden (Resource-Verzeichnis +
+LD_LIBRARY_PATH/rpath-Setup).
+
 **BLAS_INCLUDE_DIRS (nur fuer `fast-cpu`-Feature):**
 Wenn `fast-cpu` aktiv ist, braucht `whisper-rs-sys` 0.15+
 `BLAS_INCLUDE_DIRS` explizit. Auf Debian/Ubuntu liegt der Pfad bei

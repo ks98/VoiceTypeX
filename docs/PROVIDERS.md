@@ -109,7 +109,66 @@ Anthropic nutzt die Messages-API, nicht Chat-Completions:
     `messages`-Liste (anders als bei OpenAI-Kompatiblen).
 - **Response-Pfad:** `content[0].text`
 
-### Ollama (lokal, kein BYOK-Key)
+### Embedded LLM via llama-cpp-2 (Phase 3b — Default-Pfad ab Mai 2026)
+
+Der **embedded** LLM-Pfad bettet llama.cpp direkt in den VoiceTypeX-
+Prozess ein — kein externer Daemon noetig. Aktivierung pro Modus via
+`local_engine = "embedded"` in der Mode-TOML.
+
+- **Crate:** `llama-cpp-2 = "0.1.146"`, Features `vulkan + sampler +
+  dynamic-link`. `dynamic-link` ist Pflicht (kollidiert sonst mit
+  whisper-rs-sys bei statischer ggml).
+- **Backend:** GPU via Vulkan (gleich wie Whisper), CPU-Fallback.
+- **Modell-Format:** GGUF, geladen ueber `LlamaModel::load_from_file`.
+  Pfad aus `Settings.llm_model_path` (Override) oder slot-basiert aus
+  `Settings.llm_default_slot`.
+- **Lifecycle:** Modell wird LAZY beim ersten `process()`-Call geladen,
+  cached fuer App-Lebenszeit hinter `Arc<RwLock<Option<LlamaModel>>>`.
+  Wenn der User Embedded nie nutzt, bleibt die GGUF-Datei optional.
+- **Pipeline pro Call:**
+  1. Chat-Template aus dem GGUF: `model.chat_template(None)`.
+  2. `LlamaChatMessage`-Liste (system + user) → `apply_chat_template
+     (template, msgs, add_ass=true)`.
+  3. `model.str_to_token(prompt, AddBos::Always)`.
+  4. Frischer `LlamaContext` + `LlamaBatch`. Prompt-Tokens rein, einmal
+     `decode()`.
+  5. Sampler-Kette: `penalties → top_p → temp → dist` (oder `greedy`
+     bei temperature == 0).
+  6. Token-Loop bis EOG oder `max_tokens` (Default 1024).
+  7. Detokenize via `token_to_str(Special::Plaintext)`.
+- **Sampling-Defaults** (bei `None` in Mode-TOML): temperature 0.2,
+  top_p 0.8, repeat_penalty 1.05, max_tokens 1024.
+
+**GGUF-Slots** (`LlmModelSlot::from_setting`):
+
+| Slot-Slug | Datei | Größe | Quelle |
+|---|---|---|---|
+| `gemma3-1b-it-q5_k_m` *(Default)* | `gemma-3-1b-it-Q5_K_M.gguf` | ~851 MB | unsloth/gemma-3-1b-it-GGUF |
+| `gemma3-4b-it-q5_k_m` | `gemma-3-4b-it-Q5_K_M.gguf` | ~2,8 GB | unsloth/gemma-3-4b-it-GGUF |
+| `llama3.2-1b-instruct-q5_k_m` | `Llama-3.2-1B-Instruct-Q5_K_M.gguf` | ~912 MB | unsloth/Llama-3.2-1B-Instruct-GGUF |
+| `qwen2.5-1.5b-instruct-q5_k_m` | `qwen2.5-1.5b-instruct-q5_k_m.gguf` | ~1,3 GB | Qwen/Qwen2.5-1.5B-Instruct-GGUF |
+
+Alle mit gepinten SHA-256-Hashes; Download ueber `download_llm()` in
+`transcription/model_downloader.rs` mit in-flight Verifikation.
+unsloth-Re-Packs werden bevorzugt, weil bartowski-/google-Original-Repos
+ein Lizenz-Gate haben (Gemma-Akzept beim ersten Download).
+
+**Bekannter Build-Quirk:** llama-cpp-sys-2 0.1.146's build.rs hat einen
+TOC/TOU-Bug mit dangling Symlinks im `target/debug/`-Verzeichnis. Wenn
+der Build mit `Os { code: 17, kind: AlreadyExists }`-Panic abbricht,
+hilft:
+```bash
+find src-tauri/target/debug -maxdepth 2 \
+  \( -name "libggml*.so*" -o -name "libllama.so*" \) -delete
+```
+
+### Ollama (lokal, kein BYOK-Key — Legacy-Pfad)
+
+Bleibt als opt-in fuer User, die ihre bestehende Ollama-Installation
+weiter nutzen wollen oder Modelle laufen, die noch nicht als GGUF im
+Embedded-Pfad slot-basiert ausgewaehlt sind. Aktivierung pro Modus via
+`local_engine = "ollama"` (oder `None`/weglassen — Backward-Compat-
+Default).
 
 - **Endpoint (Default):** `POST http://127.0.0.1:11434/api/chat`
 - **Auth:** keine (lokaler HTTP-Server)

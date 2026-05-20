@@ -18,7 +18,7 @@ Festgelegt — Alternativen werden nicht ohne Rücksprache eingeführt.
 | Async-Runtime | tokio |
 | Audio | cpal + hound (WAV) + rubato (Sinc-Resampling) |
 | Lokales STT | whisper-rs 0.16 + Silero-VAD v6, **Default-Backend `gpu-vulkan`** (Phase 3a, Mai 2026); `gpu-cuda`/`gpu-metal`/`gpu-coreml` opt-in, `fast-cpu` (OpenBLAS) als Headless-Fallback. CPU-Fallback bei fehlendem Vulkan-Device ist whisper.cpp-internal — kein App-Code-Pfad. |
-| Lokales LLM | Phase 1+2: Ollama HTTP, Default `gemma3:4b`. Phase 3b (in Arbeit): embedded llama-cpp-2 mit `dynamic-backends`, Ollama bleibt Legacy-Opt-in. |
+| Lokales LLM | Phase 3b: **embedded llama-cpp-2 0.1.146** mit Vulkan + `dynamic-link` als Default. Per-Mode-Switch via `local_engine = "embedded"` vs `"ollama"`. Ollama bleibt Legacy-Opt-in fuer User mit bestehender Installation. |
 | Cloud-STT | xAI (One-Shot REST), OpenAI Whisper, Groq Whisper, Deepgram |
 | Cloud-LLM | xAI Grok (Default `grok-4-fast-non-reasoning`), OpenAI GPT, Anthropic Claude |
 | HTTP-Client | reqwest (rustls-tls) |
@@ -296,11 +296,35 @@ löscht. Die State-Machine selbst ändert sich gegenüber Phase 1 nicht
 | `STREAMING_INTERVAL_MS` | 800 | Decode-Frequenz |
 | `STREAMING_MIN_AUDIO_SAMPLES` | 8000 | Decodes erst ab 0.5 s Audio (16 kHz) |
 
-## Lokales LLM (Ollama, Phase 1)
+## Lokales LLM — zwei Pfade ab Phase 3b
+
+`Mode.local_engine` waehlt pro Modus zwischen den beiden Pfaden:
+
+### Embedded (`local_engine = "embedded"`) — Phase 3b Default
+
+[`processing/embedded.rs`](../src-tauri/src/processing/embedded.rs):
+
+- llama-cpp-2 0.1.146 mit Features `vulkan + sampler + dynamic-link`.
+  `dynamic-link` Pflicht — sonst kollidieren statisch eingelinkte
+  ggml-Versionen von whisper-rs-sys und llama-cpp-sys-2.
+- `LlamaBackend::init()` einmalig per `OnceLock` Singleton.
+- Modell-Cache hinter `Arc<RwLock<Option<LlamaModel>>>` (analog
+  `LocalTranscriber`).
+- Per `process()`-Call: frischer `LlamaContext` + `LlamaBatch`,
+  Chat-Template aus dem GGUF (`model.chat_template(None)`),
+  Sampling-Chain `penalties → top_p → temp → dist` (oder `greedy`
+  bei temperature == 0).
+- Modell-Pfad-Resolution: `Settings.llm_model_path` (Override) →
+  `LlmModelSlot::from_setting(Settings.llm_default_slot).filename()`
+  unter `app_data_dir/models/`.
+- AppContext: `local_llm_processor: Arc<LlamaEmbeddedProcessor>`,
+  beim Start konstruiert, Modell wird LAZY geladen.
+
+### Ollama (`local_engine = "ollama"` oder None) — Legacy-Pfad
 
 [`processing/local.rs`](../src-tauri/src/processing/local.rs):
 
-- Default-Modell für `processing="local"`: `gemma3:4b` (DeepMind, Mar
+- Default-Modell-Empfehlung fuer Ollama: `gemma3:4b` (DeepMind, Mar
   2025) — 140+ Sprachen, ~3 GB Footprint, Sweet-Spot für 8–16-GB-
   Geräte. Vorher `qwen2.5:7b`.
 - **Sampling pro Modus** über `ProcessOpts.{temperature, top_p,
@@ -312,6 +336,13 @@ löscht. Die State-Machine selbst ändert sich gegenüber Phase 1 nicht
   Profilen, `"-1"` für unbegrenztes Warmhalten).
 - Cloud-Processors (xAI/OpenAI/Anthropic) bekommen dieselben Sampling-
   Felder durchgereicht, soweit der Provider sie respektiert.
+
+### Verzweigung im Pipeline-Code
+
+`pipeline/mod.rs::run_local_processing` schaut auf `mode.local_engine`:
+`"embedded"` → `ctx.local_llm_processor`, `"ollama"`/None →
+`run_local_processing_ollama` (haendelt das Ollama-HTTP-Call-Setup mit
+keep_alive + model-Name). Unbekannter Wert → `Mode`-Fehlermeldung.
 
 ## Wayland Auto-Paste
 
@@ -440,6 +471,7 @@ Settings, auf X11 / Windows bleibt das Feld editierbar.
 | Modi (Hot-Reload) | `~/.config/.../modes/*.toml` | TOML |
 | Whisper-Modelle | `~/.config/.../models/*.bin` | GGML, SHA-256-verifiziert |
 | Silero-VAD | `~/.config/.../models/ggml-silero-v6.2.0.bin` | GGML, SHA-256-verifiziert |
+| GGUF-LLM-Modelle (Phase 3b) | `~/.config/.../models/*.gguf` | GGUF, SHA-256-verifiziert |
 
 Settings + Token werden beim App-Start gelesen, nach jedem
 Mutations-IPC geschrieben (siehe `Settings::load_or_default` /

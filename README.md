@@ -62,7 +62,13 @@ Menü-Hotkey*.
   GPU-Device automatischer CPU-Fallback. `gpu-cuda`/`gpu-metal`/
   `gpu-coreml` als opt-in Features, `fast-cpu` (OpenBLAS) als
   Headless-Fallback.
-- **Lokales LLM:** Ollama via HTTP
+- **Lokales LLM:** Zwei Pfade ab Phase 3b. **Embedded** (Default) via
+  llama-cpp-2 0.1.146 mit Vulkan-Backend — kein externer Daemon
+  nötig, GGUF-Modelle direkt im VoiceTypeX-Prozess. Vier Slots:
+  Gemma 3 1B (Light/~851 MB), Gemma 3 4B (Pro/~2,8 GB), Llama 3.2 1B,
+  Qwen 2.5 1.5B. Settings-UI hat Hardware-basierte Slot-Empfehlung
+  und Ein-Klick-Download. **Ollama** bleibt als Legacy-Opt-in via
+  `local_engine = "ollama"` im Mode-TOML
 - **Cloud-Provider (BYOK):** xAI (STT + Grok, Default `grok-4-fast-non-reasoning`),
   OpenAI Whisper + GPT, Groq Whisper, Deepgram, Anthropic Claude
 - **Wayland Auto-Paste:** ashpd (RemoteDesktop-Portal) + reis (libei)
