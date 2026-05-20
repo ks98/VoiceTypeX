@@ -7,7 +7,8 @@
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
     "beforeDevCommand": "pnpm dev",
-    "beforeBuildCommand": "pnpm build"
+    "beforeBuildCommand": "pnpm build",
+    "beforeBundleCommand": "node ../scripts/bundle-libs.mjs"
   },
   "app": {
     "windows": [
@@ -81,7 +82,11 @@
     "category": "Productivity",
     "shortDescription": "Diktiere — VoiceTypeX schreibt es.",
     "longDescription": "VoiceTypeX ist ein Diktier-Tool, das Audio per Hotkey aufnimmt, lokal oder via Cloud transkribiert und den Text an der aktuellen Cursor-Position einfuegt. Konfigurierbare Modi steuern Transkription, LLM-Nachbearbeitung und Einfuege-Methode. BYOK-Cloud (xAI, OpenAI, Anthropic, Groq, Deepgram); lokal via whisper.cpp und Ollama.",
-    "resources": ["../assets/cue_start.wav", "../assets/cue_stop.wav"],
+    "resources": [
+      "../assets/cue_start.wav",
+      "../assets/cue_stop.wav",
+      "resources/lib/*"
+    ],
     "linux": {
       "deb": {
         "depends": [

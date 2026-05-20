@@ -1,0 +1,2 @@
+# Placeholder — Inhalt wird via scripts/bundle-libs.mjs vor tauri-bundler
+# aus target/{release,debug}/ kopiert. Siehe docs/PLATFORMS.md.

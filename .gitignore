@@ -54,6 +54,11 @@ models/
 *.ggml
 *.gguf
 
+# --- Bundle-Libs (Phase 3b — werden via scripts/bundle-libs.mjs aus target/
+# kopiert, nicht ins Repo)
+src-tauri/resources/lib/*
+!src-tauri/resources/lib/.gitkeep
+
 # --- Build-Bundles (entstehen bei Tag-Releases via CI) ---
 release/
 *.msi

@@ -92,14 +92,35 @@ fuer Tests), entweder Tauri-Workflow nutzen oder manuell:
 node scripts/clean-dangling-libs.mjs
 ```
 
-**Phase 3b — `dynamic-link` Runtime-Erwartungen:**
+**Phase 3b — `dynamic-link` Runtime-Erwartungen + Bundle-Pipeline:**
 llama-cpp-2 wird mit `dynamic-link`-Feature gelinkt; das produziert
 `libllama.so`, `libggml.so`, `libggml-cpu.so`, `libggml-vulkan.so`
-und `libggml-base.so` als separate Shared-Libs. Im Dev-Build liegen
-sie in `target/debug/` und werden ueber Cargo's rpath gefunden.
-Fuer Distribution (Task #26, noch ausstehend) muessen sie mit dem
-Tauri-Bundle ausgeliefert werden (Resource-Verzeichnis +
-LD_LIBRARY_PATH/rpath-Setup).
+und `libggml-base.so` als separate Shared-Libs.
+
+- **Dev-Build (`pnpm tauri dev`):** Cargo legt die Libs in
+  `target/debug/` ab und setzt rpath automatisch dorthin. Binary
+  findet sie zur Laufzeit ohne Zusatzkonfiguration.
+- **Distribution-Build (`pnpm tauri build`):**
+  1. Cargo baut Binary + Libs in `target/release/`.
+  2. `beforeBundleCommand` triggert `scripts/bundle-libs.mjs`, der
+     die Libs nach `src-tauri/resources/lib/` kopiert.
+  3. `tauri.conf.json`-Eintrag `bundle.resources: ["resources/lib/*"]`
+     packt sie ins finale Bundle.
+  4. `src-tauri/build.rs` setzt mehrere rpath-Fallback-Entries
+     (`$ORIGIN`, `$ORIGIN/lib`, `$ORIGIN/../lib/voicetypex`,
+     `$ORIGIN/../lib`) — egal wo der Tauri-Bundler die Libs hinlegt,
+     der Linker findet sie.
+
+`src-tauri/resources/lib/` ist gitignored ausser `.gitkeep` — Inhalt
+wird bei jedem Bundle-Build neu erzeugt, gehoert nicht ins Repo.
+
+**Verifikation auf erstem Bundle-Build noetig** — Tauri-Bundler-
+Layout-Details koennen je nach Format (.deb/.rpm/AppImage)
+abweichen. Wenn der Test-Install meldet `error while loading shared
+libraries: libllama.so: cannot open shared object file`, dann ist
+keiner der rpath-Pfade getroffen worden — Bundle-Inspect mit
+`dpkg-deb -c xyz.deb` zeigt das tatsaechliche Layout, danach
+build.rs-rpath-Entries entsprechend ergaenzen.
 
 **BLAS_INCLUDE_DIRS (nur fuer `fast-cpu`-Feature):**
 Wenn `fast-cpu` aktiv ist, braucht `whisper-rs-sys` 0.15+
