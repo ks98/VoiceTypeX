@@ -18,9 +18,15 @@ export interface Mode {
   cloud_llm_provider: string | null;
   cloud_llm_model: string | null;
   local_llm_model: string | null;
+  /** Phase 3b: "embedded" | "ollama" (Default = ollama bei null). */
+  local_engine: string | null;
   injection_method: InjectionMethod;
   language: string | null;
   system_prompt: string | null;
+  /** Phase 1: Sampling-Params pro Modus. */
+  temperature: number | null;
+  top_p: number | null;
+  repeat_penalty: number | null;
 }
 
 export interface Settings {
@@ -30,6 +36,12 @@ export interface Settings {
   diagnostic_logging: boolean;
   autostart: boolean;
   ollama_url: string;
+  /** Phase 1: Ollama-Duration-String ("5m", "0", "-1"). */
+  ollama_keep_alive: string;
+  /** Phase 3b: Welches GGUF-Modell beim ersten Embedded-LLM-Aufruf geladen wird. */
+  llm_default_slot: string;
+  /** Phase 3b: Optionaler Override-Pfad zu eigenem GGUF-File. */
+  llm_model_path: string | null;
   onboarding_done: boolean;
   whisper_n_threads: number | null;
   menu_hotkey: string;

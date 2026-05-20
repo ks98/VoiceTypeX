@@ -4,7 +4,9 @@
 use crate::audio;
 use crate::core::config::Settings;
 use crate::core::AppContext;
-use crate::transcription::model_downloader::{download_model, download_vad, ModelSlot, VadModel};
+use crate::transcription::model_downloader::{
+    download_llm, download_model, download_vad, LlmModelSlot, ModelSlot, VadModel,
+};
 use serde::Serialize;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
@@ -105,6 +107,41 @@ pub async fn download_default_model(
     let path_str = result.to_string_lossy().into_owned();
     state.settings.write().whisper_model_path = Some(path_str.clone());
     let _ = persist_settings(&state); // Best-effort, Download-Result trotzdem zurueckgeben
+    Ok(path_str)
+}
+
+/// **Phase 3b** — Lade das in `Settings.llm_default_slot` konfigurierte
+/// GGUF-LLM-Modell nach `app_data_dir/models/`. Sendet `llm-model-
+/// download-progress`-Events ans Frontend (separate Channel von Whisper,
+/// damit beide Downloads parallel laufen koennen ohne Progress-Mix).
+#[tauri::command]
+pub async fn download_llm_default_model(
+    app: AppHandle,
+    state: tauri::State<'_, Arc<AppContext>>,
+) -> IpcResult<String> {
+    let (slot_name, dest_dir) = {
+        let s = state.settings.read();
+        (s.llm_default_slot.clone(), state.model_dir.clone())
+    };
+
+    let slot = LlmModelSlot::from_setting(&slot_name);
+
+    let app_for_progress = app.clone();
+    let result = download_llm(slot, &dest_dir, move |progress| {
+        let _ = app_for_progress.emit(
+            "llm-model-download-progress",
+            ModelDownloadProgress {
+                downloaded: progress.bytes_downloaded,
+                total: progress.bytes_total,
+            },
+        );
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+
+    let path_str = result.to_string_lossy().into_owned();
+    state.settings.write().llm_model_path = Some(path_str.clone());
+    let _ = persist_settings(&state);
     Ok(path_str)
 }
 

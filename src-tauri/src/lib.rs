@@ -64,6 +64,7 @@ pub fn run() {
             ipc::settings::get_effective_menu_hotkey,
             ipc::settings::set_whisper_model_path,
             ipc::settings::download_default_model,
+            ipc::settings::download_llm_default_model,
             ipc::modes::get_modes,
             ipc::modes::reload_modes,
             ipc::modes::create_mode,

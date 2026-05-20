@@ -12,6 +12,7 @@ import ThemeToggle from "../components/ThemeToggle";
 import { useSettingsStore } from "../store";
 import {
   ipcDownloadDefaultModel,
+  ipcDownloadLlmDefaultModel,
   ipcGetEffectiveMenuHotkey,
   ipcGetHardwareReport,
   ipcGetSessionInfo,
@@ -43,6 +44,11 @@ export default function Settings(): JSX.Element {
   const [activeBackend, setActiveBackend] = useState<WhisperBackendInfo | null>(
     null,
   );
+  const [llmDownloading, setLlmDownloading] = useState(false);
+  const [llmDownloadError, setLlmDownloadError] = useState<string | null>(null);
+  const [llmProgress, setLlmProgress] = useState<ModelDownloadProgress | null>(
+    null,
+  );
 
   useEffect(() => {
     void load();
@@ -62,14 +68,15 @@ export default function Settings(): JSX.Element {
   }, [load, loadAudioDevices]);
 
   useEffect(() => {
-    let unlisten: UnlistenFn | null = null;
+    const unlistens: UnlistenFn[] = [];
     void listen<ModelDownloadProgress>("model-download-progress", (event) =>
       setProgress(event.payload),
-    ).then((fn) => {
-      unlisten = fn;
-    });
+    ).then((fn) => unlistens.push(fn));
+    void listen<ModelDownloadProgress>("llm-model-download-progress", (event) =>
+      setLlmProgress(event.payload),
+    ).then((fn) => unlistens.push(fn));
     return () => {
-      if (unlisten) unlisten();
+      unlistens.forEach((u) => u());
     };
   }, []);
 
@@ -85,6 +92,20 @@ export default function Settings(): JSX.Element {
     });
     if (typeof picked === "string") {
       void update({ whisper_model_path: picked });
+    }
+  };
+
+  const onDownloadLlmDefault = async () => {
+    setLlmDownloading(true);
+    setLlmDownloadError(null);
+    setLlmProgress(null);
+    try {
+      await ipcDownloadLlmDefaultModel();
+      await load(); // Settings neu ziehen, damit llm_model_path aktualisiert ist
+    } catch (e) {
+      setLlmDownloadError(String(e));
+    } finally {
+      setLlmDownloading(false);
     }
   };
 
@@ -250,7 +271,7 @@ export default function Settings(): JSX.Element {
 
       <Field
         label="Ollama-Endpunkt"
-        hint="Lokales LLM. Standardport von Ollama ist 11434."
+        hint="Lokales LLM via externer Ollama-Daemon. Standardport ist 11434. Wird benutzt, wenn ein Modus local_engine = ollama setzt (Default fuer Backward-Compat)."
       >
         <input
           type="text"
@@ -258,6 +279,76 @@ export default function Settings(): JSX.Element {
           value={settings.ollama_url}
           onChange={(e) => void update({ ollama_url: e.target.value })}
         />
+      </Field>
+
+      <Field
+        label="Embedded LLM-Modell (Phase 3b)"
+        hint="GGUF-Modell fuer den eingebetteten llama-cpp-2-Pfad. Wird ohne externen Daemon im VoiceTypeX-Prozess geladen. Aktiviert pro Modus via local_engine = embedded."
+      >
+        <select
+          className={inputCls}
+          value={settings.llm_default_slot}
+          onChange={(e) =>
+            void update({ llm_default_slot: e.target.value })
+          }
+        >
+          <option value="gemma3-1b-it-q5_k_m">
+            Gemma 3 1B-IT Q5_K_M (~851 MB, Light, 4-GB-RAM-OK)
+          </option>
+          <option value="gemma3-4b-it-q5_k_m">
+            Gemma 3 4B-IT Q5_K_M (~2.8 GB, Pro, 16-GB-empfohlen)
+          </option>
+          <option value="llama3.2-1b-instruct-q5_k_m">
+            Llama 3.2 1B-Instruct Q5_K_M (~912 MB, EN-fokussiert)
+          </option>
+          <option value="qwen2.5-1.5b-instruct-q5_k_m">
+            Qwen 2.5 1.5B-Instruct Q5_K_M (~1.3 GB, Code-affin)
+          </option>
+        </select>
+        <input
+          type="text"
+          className={inputCls}
+          placeholder="(Default-Modell aus Slot)"
+          value={settings.llm_model_path ?? ""}
+          onChange={(e) =>
+            void update({ llm_model_path: e.target.value || null })
+          }
+        />
+        <div className="flex flex-col gap-1.5">
+          <Button
+            onClick={() => void onDownloadLlmDefault()}
+            disabled={llmDownloading}
+            className="self-start"
+          >
+            {llmDownloading
+              ? "Lade LLM-Modell…"
+              : "LLM-Modell jetzt herunterladen"}
+          </Button>
+          {llmProgress ? (
+            <div className="flex flex-col gap-1 text-xs text-fg-muted">
+              <div>
+                {fmtMb(llmProgress.downloaded)}
+                {llmProgress.total ? ` von ${fmtMb(llmProgress.total)}` : ""}
+                {llmProgress.total
+                  ? ` (${Math.round((llmProgress.downloaded / llmProgress.total) * 100)} %)`
+                  : ""}
+              </div>
+              {llmProgress.total ? (
+                <div className="h-1.5 bg-elevated rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-brand transition-all"
+                    style={{
+                      width: `${Math.round((llmProgress.downloaded / llmProgress.total) * 100)}%`,
+                    }}
+                  />
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          {llmDownloadError ? (
+            <div className="text-xs text-status-error">{llmDownloadError}</div>
+          ) : null}
+        </div>
       </Field>
 
       <Field

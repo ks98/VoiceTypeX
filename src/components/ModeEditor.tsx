@@ -27,9 +27,13 @@ function emptyMode(): Mode {
     cloud_llm_provider: null,
     cloud_llm_model: null,
     local_llm_model: null,
+    local_engine: null,
     injection_method: "clipboard",
     language: "de",
     system_prompt: null,
+    temperature: null,
+    top_p: null,
+    repeat_penalty: null,
   };
 }
 

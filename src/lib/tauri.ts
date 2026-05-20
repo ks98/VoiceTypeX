@@ -105,6 +105,17 @@ export async function ipcGetHardwareReport(): Promise<HardwareReport> {
 }
 
 /**
+ * Lädt das in `Settings.llm_default_slot` gewählte GGUF-LLM-Modell nach
+ * `app_data_dir/models/` herunter. Progress kommt als
+ * `llm-model-download-progress`-Event (separat von Whisper-Progress).
+ *
+ * Returns: absoluter Pfad zum heruntergeladenen GGUF-File.
+ */
+export async function ipcDownloadLlmDefaultModel(): Promise<string> {
+  return invoke<string>("download_llm_default_model");
+}
+
+/**
  * Diagnose: testet den Auto-Paste-Pfad direkt, ohne die normale Pipeline
  * (kein Audio, kein STT, kein LLM). Wartet `delaySecs` Sekunden — User
  * fokussiert in der Zwischenzeit das Ziel-Fenster — und sendet dann
