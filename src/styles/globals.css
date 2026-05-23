@@ -24,7 +24,11 @@
     --outline-strong-rgb:  200 204 212;   /* #C8CCD4 */
     --fg-rgb:              21 24 29;      /* #15181D */
     --fg-muted-rgb:        92 100 112;    /* #5C6470 */
-    --fg-faint-rgb:        138 146 160;   /* #8A92A0 */
+    /* fg-faint bewusst etwas dunkler als rein dekorativ: wird als Hint-
+     * Farbe in Field.tsx benutzt, das ist Body-Text und braucht WCAG AA
+     * (>=4.5:1). 0x70788A auf canvas #FBFBFD ergibt ~4.1:1 — knapp AA
+     * fuer Small Text, sicher AA fuer >=14pt. */
+    --fg-faint-rgb:        112 120 138;   /* #70788A */
     --brand-rgb:           61 90 254;     /* #3D5AFE */
     --brand-hover-rgb:     46 72 224;     /* #2E48E0 */
     --brand-contrast-rgb:  255 255 255;
@@ -84,17 +88,53 @@
 }
 
 /*
- * Equalizer-Animation für das Aufnahme-Overlay. Drei Bars mit
- * unterschiedlichem animation-delay erzeugen einen Live-Audio-Eindruck,
- * ohne tatsächlich vom Audio-Pegel abzuhängen — der Renderer hat den
- * Pegel nicht, das wäre eine eigene IPC-Schiene.
+ * Recording-Pulse fuer das Aufnahme-Overlay. Ein einzelner Dot pulsiert
+ * als ehrliche "Recording laeuft"-Status-LED — die frueher hier
+ * verwendete Equalizer-Animation suggerierte Audio-Pegel-Reaktion, die
+ * tatsaechlich nicht existierte (Renderer hat den Pegel nicht). 1.2s-
+ * Cycle: scale + opacity-Atmen, eindeutig als LED erkennbar.
  */
-@keyframes vtx-eq {
+@keyframes vtx-rec-pulse {
   0%,
   100% {
-    transform: scaleY(0.3);
+    transform: scale(0.85);
+    opacity: 0.55;
   }
   50% {
-    transform: scaleY(1);
+    transform: scale(1.1);
+    opacity: 1;
+  }
+}
+
+/*
+ * Sanftes Fade-In fuer key-basierte Re-Mounts (Phase-Cross-Fade im
+ * Overlay, Partial-Word-Refresh nach LA-2-Revision).
+ */
+@keyframes vtx-fadein {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/*
+ * Glass-Backdrop-Utility fuer Floating-Windows (Overlay/Menu). Default
+ * nutzt backdrop-blur; auf Compositors ohne backdrop-filter-Support
+ * (sway, Hyprland ohne Plugin) faellt es auf eine dichtere, solide
+ * Variante zurueck, damit der Hintergrund nicht durchscheint.
+ */
+.vtx-glass {
+  background-color: rgb(var(--canvas-rgb) / 0.8);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgb(var(--fg-rgb) / 0.1);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .vtx-glass {
+    background-color: rgb(var(--canvas-rgb) / 0.95);
+    border-color: rgb(var(--fg-rgb) / 0.15);
   }
 }

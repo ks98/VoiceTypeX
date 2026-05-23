@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
-type Variant = "primary" | "secondary" | "ghost" | "danger";
+type Variant = "primary" | "secondary" | "ghost" | "danger" | "danger-strong" | "tab";
 type Size = "md" | "sm";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -29,8 +29,17 @@ const VARIANTS: Record<Variant, string> = {
     "bg-elevated text-fg hover:bg-outline-strong/40 disabled:opacity-50 disabled:hover:bg-elevated",
   ghost:
     "text-fg-muted hover:bg-elevated hover:text-fg disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-fg-muted",
+  // `danger` — dezent, nur Hover-Tint. Fuer Inline-Aktionen wo der Lösch-
+  // Knopf nicht aufschreien soll (z.B. Edit/Delete-Reihe in Tabellen).
   danger:
     "bg-elevated text-fg-muted hover:bg-status-error/15 hover:text-status-error disabled:opacity-50",
+  // `danger-strong` — permanent-tinted, fuer bewusste Gefahren-Aktionen
+  // (Factory-Reset, "Alle löschen"). Visuell sofort als Risiko erkennbar.
+  "danger-strong":
+    "bg-status-error/15 text-status-error border border-status-error/40 hover:bg-status-error/25 disabled:opacity-50",
+  // `tab` — fuer Sidebar-Navigation. Aktivität wird per `aria-current`
+  // gesetzt; das Hintergrund-State steuert der Konsument ueber className.
+  tab: "text-fg-muted hover:bg-elevated/60 hover:text-fg aria-[current=page]:bg-elevated aria-[current=page]:text-fg aria-[current=page]:font-medium",
 };
 
 const SIZES: Record<Size, string> = {

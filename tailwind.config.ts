@@ -50,6 +50,13 @@ const config: Config = {
           "monospace",
         ],
       },
+      // Zusätzliche kleinere Stufe für Begleittext (Sidebar-Subtitle,
+      // Menu-Hotkey-Hint, Mode-Description im Menu, Initials-Badge).
+      // 11px Lower-Bound nach Lesbarkeits-Empfehlung; alle ehemaligen
+      // text-[10px]/[11px]-Magic-Werte fallen darauf.
+      fontSize: {
+        xxs: ["11px", "14px"],
+      },
     },
   },
   plugins: [],
