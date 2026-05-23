@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useModesStore, useSettingsStore } from "../store";
-import { ipcCancelMenu, ipcStartRecording } from "../lib/tauri";
+import { ipcCancelMenu, ipcReloadModes, ipcStartRecording } from "../lib/tauri";
 import type { Mode } from "../lib/types";
+import Banner from "../components/Banner";
 
 /**
  * Modus-Auswahl-Menü.
@@ -26,6 +27,12 @@ export default function Menu(): JSX.Element {
 
   const [cursor, setCursor] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // C9: Wayland-Compositors fokussieren neu eingeblendete Windows nicht
+  // immer automatisch (z.B. sway ohne `focus_on_window_activation`).
+  // Wenn document.hasFocus() beim Mount false ist, blenden wir einen
+  // dezenten Hinweis ein — User klickt einmal ins Fenster, dann gehen
+  // die Tasten. Erster Keydown blendet den Hinweis wieder aus.
+  const [focusWarning, setFocusWarning] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const itemRefs = useRef<Array<HTMLLIElement | null>>([]);
 
@@ -34,6 +41,19 @@ export default function Menu(): JSX.Element {
     void loadSettings();
     rootRef.current?.focus();
   }, [loadModes, loadSettings]);
+
+  useEffect(() => {
+    // Initial-Check + verzoegerter Re-Check: Compositors brauchen
+    // manchmal einen Tick, bis das Focus-Event durchlaeuft.
+    const check = () => {
+      if (!document.hasFocus()) {
+        setFocusWarning(true);
+      }
+    };
+    check();
+    const t = window.setTimeout(check, 150);
+    return () => window.clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     if (modes.length === 0) return;
@@ -48,6 +68,9 @@ export default function Menu(): JSX.Element {
 
   const onKeyDown = useMemo(
     () => async (event: React.KeyboardEvent<HTMLDivElement>) => {
+      // Jeder Tastendruck beweist Focus — Warnung sofort weg.
+      if (focusWarning) setFocusWarning(false);
+
       if (modes.length === 0) return;
 
       if (event.key === "ArrowDown") {
@@ -80,8 +103,10 @@ export default function Menu(): JSX.Element {
         }
       }
     },
-    [modes, cursor],
+    [modes, cursor, focusWarning],
   );
+
+  const lastSelectedId = settings?.last_selected_mode_id ?? null;
 
   return (
     <div
@@ -90,21 +115,26 @@ export default function Menu(): JSX.Element {
       onKeyDown={(e) => void onKeyDown(e)}
       className="h-screen w-screen overflow-hidden p-2 select-none outline-none"
     >
-      <div className="h-full w-full rounded-lg bg-canvas/85 backdrop-blur-xl border border-fg/10 shadow-2xl flex flex-col overflow-hidden">
+      <div className="h-full w-full rounded-lg vtx-glass shadow-2xl flex flex-col overflow-hidden">
         <div className="px-4 py-2.5 border-b border-fg/10 flex items-center justify-between shrink-0">
           <span className="text-fg text-xs font-semibold tracking-wide uppercase">
             Modus wählen
           </span>
-          <span className="text-fg-faint text-[10px] font-mono">
+          <span className="text-fg-faint text-xxs font-mono">
             ↑ ↓ Enter · Esc
           </span>
         </div>
-        {modes.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center px-4 py-3">
-            <p className="text-fg-muted text-sm italic">
-              Keine Modi geladen — leg eine TOML unter modes/ an.
-            </p>
+        {focusWarning ? (
+          <div className="px-3 py-2 shrink-0">
+            <Banner tone="warning" dense>
+              <span className="text-xxs">
+                Klick ins Fenster, falls Tasten nicht reagieren.
+              </span>
+            </Banner>
           </div>
+        ) : null}
+        {modes.length === 0 ? (
+          <EmptyState />
         ) : (
           <ul className="flex-1 overflow-y-auto py-1">
             {modes.map((m, i) => (
@@ -112,6 +142,7 @@ export default function Menu(): JSX.Element {
                 key={m.id}
                 mode={m}
                 active={i === cursor}
+                lastUsed={m.id === lastSelectedId}
                 refCb={(el) => {
                   itemRefs.current[i] = el;
                 }}
@@ -129,15 +160,64 @@ export default function Menu(): JSX.Element {
   );
 }
 
+function EmptyState(): JSX.Element {
+  const loadModes = useModesStore((s) => s.load);
+  const [busy, setBusy] = useState(false);
+  const [hint, setHint] = useState<string | null>(null);
+
+  // `ipcReloadModes` liest die Modi-TOMLs vom Disk neu — wenn dort keine
+  // liegen, kommt eine leere Liste zurueck. Der Bootstrap-Pfad, der die
+  // 6 Default-Modi schreibt, laeuft nur beim App-Start (verifiziert
+  // gegen das Backend). Darum: Versuch via reload — wenn das nichts
+  // bringt, freundlicher Hinweis auf Neustart.
+  const onReset = async () => {
+    setBusy(true);
+    setHint(null);
+    try {
+      const result = await ipcReloadModes();
+      await loadModes();
+      if (result.length === 0) {
+        setHint(
+          "Keine Modi vorhanden — VoiceTypeX legt beim nächsten Neustart 6 Standard-Modi an.",
+        );
+      }
+    } catch (e) {
+      setHint(`Konnte Modi nicht laden: ${String(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center gap-3 px-6 py-4 text-center">
+      <p className="text-fg-muted text-sm">
+        Keine Modi vorhanden — leg los mit den 6 Standard-Modi.
+      </p>
+      <button
+        type="button"
+        onClick={() => void onReset()}
+        disabled={busy}
+        className="px-3 py-1.5 rounded-md bg-brand text-brand-contrast text-xs font-medium hover:bg-brand-hover disabled:opacity-50 transition-colors"
+      >
+        {busy ? "Lade …" : "Standard-Modi laden"}
+      </button>
+      {hint ? <p className="text-xxs text-fg-faint">{hint}</p> : null}
+    </div>
+  );
+}
+
 function ModeRow({
   mode,
   active,
+  lastUsed,
   refCb,
 }: {
   mode: Mode;
   active: boolean;
+  lastUsed: boolean;
   refCb: (el: HTMLLIElement | null) => void;
 }): JSX.Element {
+  const offline = isOfflineMode(mode);
   return (
     <li
       ref={refCb}
@@ -155,26 +235,39 @@ function ModeRow({
       />
       <span
         className={
-          "shrink-0 inline-flex items-center justify-center h-7 w-7 rounded-md text-[10px] font-mono font-semibold tracking-wide " +
-          (active
-            ? "bg-brand text-brand-contrast"
-            : "bg-elevated text-fg-muted")
+          "shrink-0 inline-flex items-center justify-center h-7 w-7"
         }
-        aria-hidden
+        aria-label={offline ? "vollständig offline" : "Netz nötig"}
+        title={offline ? "Vollständig offline" : "Cloud-Komponente — Netz nötig"}
       >
-        {initialsFor(mode)}
+        <span
+          className={
+            "h-2.5 w-2.5 rounded-full " +
+            (offline ? "bg-status-done" : "bg-brand")
+          }
+          aria-hidden
+        />
       </span>
       <div className="min-w-0 flex-1">
-        <div
-          className={
-            "text-sm truncate " +
-            (active ? "text-fg font-medium" : "text-fg")
-          }
-        >
-          {mode.name}
+        <div className="flex items-center gap-1.5">
+          <span
+            className={
+              "text-sm truncate " +
+              (active ? "text-fg font-medium" : "text-fg")
+            }
+          >
+            {mode.name}
+          </span>
+          {lastUsed ? (
+            <span
+              className="shrink-0 inline-block h-[3px] w-[3px] rounded-full bg-brand"
+              aria-label="zuletzt verwendet"
+              title="zuletzt verwendet"
+            />
+          ) : null}
         </div>
         {mode.description ? (
-          <div className="text-[11px] text-fg-faint truncate">
+          <div className="text-xxs text-fg-faint truncate">
             {mode.description}
           </div>
         ) : null}
@@ -183,13 +276,15 @@ function ModeRow({
   );
 }
 
-function initialsFor(mode: Mode): string {
-  const parts = mode.name
-    .split(/[\s/\-_]+/)
-    .filter((w) => w.length > 0)
-    .slice(0, 2);
-  if (parts.length === 0) {
-    return mode.id.slice(0, 2).toUpperCase();
-  }
-  return parts.map((w) => w[0]?.toUpperCase() ?? "").join("") || "·";
+/**
+ * Ein Modus ist "vollstaendig offline", wenn weder STT noch
+ * Post-Processing eine Cloud-Komponente brauchen. processing="none"
+ * zaehlt als kein Cloud-Bedarf — der Post-Processing-Step entfaellt
+ * dann ganz.
+ */
+function isOfflineMode(mode: Mode): boolean {
+  return (
+    mode.transcription === "local" &&
+    (mode.processing === "none" || mode.processing === "local")
+  );
 }

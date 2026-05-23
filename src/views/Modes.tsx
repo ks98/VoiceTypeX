@@ -10,6 +10,8 @@ import {
 import type { Mode } from "../lib/types";
 import ModeEditor from "../components/ModeEditor";
 import Button from "../components/Button";
+import Banner from "../components/Banner";
+import Loading from "../components/Loading";
 
 export default function Modes(): JSX.Element {
   const modes = useModesStore((s) => s.modes);
@@ -65,14 +67,10 @@ export default function Modes(): JSX.Element {
   };
 
   if (loading) {
-    return <div className="text-fg-faint">Lade Modi…</div>;
+    return <Loading label="Lade Modi…" />;
   }
   if (error) {
-    return (
-      <div className="rounded-md bg-status-error/10 border border-status-error/40 px-3 py-2 text-sm text-status-error">
-        {error}
-      </div>
-    );
+    return <Banner tone="error">{error}</Banner>;
   }
 
   const noHotkeys = session !== null && !session.global_hotkeys_supported;
@@ -80,54 +78,61 @@ export default function Modes(): JSX.Element {
   return (
     <div className="flex flex-col gap-3">
       {noHotkeys ? (
-        <div className="rounded-md bg-status-processing/10 border border-status-processing/40 px-3 py-2 text-xs text-status-processing">
+        <Banner tone="warning">
           <strong>Display-Server: {session?.display_server}.</strong> Globale
-          Hotkeys sind hier nicht verfuegbar (Phase 5 ergaenzt das via
-          xdg-desktop-portal). Nutze die <em>Trigger</em>-Buttons unten — sie
-          starten/stoppen die Aufnahme. Der Text landet im Clipboard;
+          Hotkeys sind hier nicht verfügbar. Nutze die <em>Trigger</em>-Buttons
+          unten — sie starten/stoppen die Aufnahme. Der Text landet im
+          Clipboard
           {session?.auto_paste_supported
-            ? ""
-            : " danach drueck Ctrl+V in der Ziel-App."}
-        </div>
+            ? "."
+            : " — danach drück Ctrl+V in der Ziel-App."}
+        </Banner>
       ) : null}
       <div className="flex justify-between items-start gap-4">
         <p className="text-sm text-fg-muted max-w-3xl">
           Modi werden in{" "}
           <code className="text-brand font-mono">app_config_dir/modes/</code>{" "}
-          als TOML-Dateien gespeichert. UI-Aenderungen schreiben dorthin; der
-          Hot-Reload-Watcher pickt sie auf. Du kannst die Dateien auch direkt im
-          Editor anfassen.
+          als TOML-Dateien gespeichert. UI-Änderungen schreiben dorthin; der
+          Hot-Reload-Watcher pickt sie auf. Du kannst die Dateien auch direkt
+          im Editor anfassen.
         </p>
         <Button onClick={() => setShowNew(true)} className="shrink-0">
           + Neuer Modus
         </Button>
       </div>
 
-      {opError ? (
-        <div className="rounded-md bg-status-error/10 border border-status-error/40 px-3 py-2 text-sm text-status-error">
-          {opError}
-        </div>
-      ) : null}
+      {opError ? <Banner tone="error">{opError}</Banner> : null}
 
       <table className="w-full text-sm">
         <thead className="text-left text-fg-muted border-b border-outline">
           <tr>
-            <th className="py-2 font-medium">Name</th>
-            <th className="py-2 font-medium">STT</th>
-            <th className="py-2 font-medium">Nachbearbeitung</th>
-            <th className="py-2 font-medium">Inject</th>
-            <th className="py-2 w-40"></th>
+            <th scope="col" className="py-2 font-medium">
+              Name
+            </th>
+            <th scope="col" className="py-2 font-medium">
+              STT
+            </th>
+            <th scope="col" className="py-2 font-medium">
+              Nachbearbeitung
+            </th>
+            <th scope="col" className="py-2 font-medium">
+              Inject
+            </th>
+            <th scope="col" className="py-2 w-44">
+              <span className="sr-only">Aktionen</span>
+            </th>
           </tr>
         </thead>
         <tbody>
           {modes.map((m) => (
             <tr
               key={m.id}
-              className="border-b border-outline/60 hover:bg-elevated/60 transition-colors"
+              className="group border-b border-outline/60 hover:bg-elevated/60 transition-colors"
             >
               <td className="py-2">
                 <div className="font-medium text-fg">{m.name}</div>
-                <div className="text-xs text-fg-faint font-mono">
+                {/* ID nur bei Hover sichtbar — der Power-User braucht sie zum Filename-Mapping, der normale User nicht. */}
+                <div className="text-xs text-fg-faint font-mono opacity-0 group-hover:opacity-100 transition-opacity">
                   id: {m.id}
                 </div>
               </td>
@@ -144,7 +149,10 @@ export default function Modes(): JSX.Element {
                 {m.injection_method}
               </td>
               <td className="py-2">
-                <div className="flex justify-end items-center gap-1">
+                {/* Trigger isoliert links, Edit + Delete rechts mit grossem Gap.
+                    Klick-Falle vermieden: Delete sitzt nicht direkt neben dem
+                    häufig-benutzten Trigger. */}
+                <div className="flex justify-end items-center gap-2">
                   <Button
                     size="sm"
                     onClick={() => void onTrigger(m.id)}
@@ -153,6 +161,7 @@ export default function Modes(): JSX.Element {
                   >
                     {triggering === m.id ? "…" : "Trigger"}
                   </Button>
+                  <span className="w-2" aria-hidden />
                   <Button
                     size="sm"
                     variant="secondary"
@@ -164,9 +173,10 @@ export default function Modes(): JSX.Element {
                     size="sm"
                     variant="danger"
                     onClick={() => void onDelete(m.id, m.name)}
-                    title="Modus loeschen"
+                    aria-label={`Modus „${m.name}" löschen`}
+                    title={`Modus „${m.name}" löschen`}
                   >
-                    X
+                    <TrashIcon />
                   </Button>
                 </div>
               </td>
@@ -191,5 +201,22 @@ export default function Modes(): JSX.Element {
         />
       ) : null}
     </div>
+  );
+}
+
+function TrashIcon(): JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14zM10 11v6M14 11v6" />
+    </svg>
   );
 }

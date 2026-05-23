@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { useEffect, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { listen, emit } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 
 type Phase =
   | "idle"
@@ -48,10 +49,6 @@ export default function Overlay(): JSX.Element {
     }).then((u) => unlistens.push(u));
 
     listen<PartialTranscriptPayload>("app://partial-transcript", (event) => {
-      // Hilfreich im DevTools-Konsolen-Log waehrend Phase-2-Diagnose:
-      // bestaetigt, dass das Backend-Event durchkommt.
-      // eslint-disable-next-line no-console
-      console.log("[overlay] partial received:", event.payload.text?.length, "chars");
       setPartial(event.payload.text ?? "");
     }).then((u) => unlistens.push(u));
 
@@ -62,25 +59,48 @@ export default function Overlay(): JSX.Element {
 
   const meta = phaseMeta(phase, errorMsg);
   const visiblePartial = truncateStart(partial, 65);
+  const isError = phase === "error";
 
   return (
     <div className="h-screen w-screen overflow-hidden p-2 select-none pointer-events-none">
-      <div className="h-full w-full rounded-lg bg-canvas/80 backdrop-blur-xl border border-fg/10 shadow-2xl px-4 py-2.5 flex flex-col justify-center gap-1">
-        <div className="flex items-center gap-3">
+      <div
+        className={
+          "h-full w-full rounded-lg vtx-glass shadow-2xl px-4 py-2.5 flex flex-col justify-center gap-1 " +
+          // E1: gleicher Container, key-basierter Inhalt — Cross-Fade.
+          // A4: bei error muessen Klicks ankommen (Detail-Pfad).
+          (isError ? "pointer-events-auto" : "")
+        }
+      >
+        <div
+          key={phase}
+          className="flex items-center gap-3 animate-[vtx-fadein_200ms_ease-out] transition-opacity duration-200"
+        >
           <span
             className={`shrink-0 inline-flex items-center justify-center h-7 w-7 rounded-md ${meta.iconBg} ${meta.iconColor}`}
             aria-hidden
           >
             {meta.icon}
           </span>
-          <p className="flex-1 text-fg text-sm leading-snug font-medium overflow-hidden text-ellipsis whitespace-nowrap">
-            {meta.label}
-          </p>
-          {phase === "recording" ? <Equalizer /> : null}
+          {isError ? (
+            <button
+              type="button"
+              onClick={openLogsInMainWindow}
+              title={errorMsg ?? "Fehler — klicken fuer Details"}
+              className="flex-1 text-left text-fg text-sm leading-snug font-medium whitespace-normal break-words cursor-pointer hover:text-status-error focus:outline-none focus-visible:ring-2 focus-visible:ring-status-error/50 rounded"
+            >
+              {meta.label}
+            </button>
+          ) : (
+            <p className="flex-1 text-fg text-sm leading-snug font-medium overflow-hidden text-ellipsis whitespace-nowrap">
+              {meta.label}
+            </p>
+          )}
+          {phase === "recording" ? <RecordingDot /> : null}
         </div>
         {phase === "recording" && visiblePartial ? (
           <p
-            className="text-fg text-xs italic leading-snug pl-10 pr-1 overflow-hidden text-ellipsis whitespace-nowrap"
+            key={visiblePartial}
+            className="text-fg text-xs italic leading-snug pl-10 pr-1 overflow-hidden text-ellipsis whitespace-nowrap animate-[vtx-fadein_120ms_ease-out]"
             title={partial}
           >
             {visiblePartial}
@@ -89,6 +109,33 @@ export default function Overlay(): JSX.Element {
       </div>
     </div>
   );
+}
+
+/**
+ * Klickt der User auf den Error-Text, holen wir das Main-Window in den
+ * Vordergrund und signalisieren "Logs anzeigen" via Event. Das Event
+ * muss in App.tsx abgehoert werden, um den activeTab auf "logs" zu
+ * setzen — siehe TODO unten.
+ *
+ * TODO(app-logs-wiring): App.tsx hat keinen `app://focus-logs`-Listener.
+ * Bis der nachgezogen ist, oeffnet der Klick nur das Hauptfenster — der
+ * User muss dort manuell auf den Logs-Tab wechseln. Backend-IPC
+ * `show_main_window_with_logs` existiert nicht (verifiziert in
+ * src-tauri/src/lib.rs), darum nutzen wir die Frontend-Window-API.
+ */
+async function openLogsInMainWindow(): Promise<void> {
+  try {
+    const main = await WebviewWindow.getByLabel("main");
+    if (main) {
+      await main.show();
+      await main.setFocus();
+    }
+    await emit("app://focus-logs");
+  } catch {
+    // Window-API kann auf restriktiven Capabilities scheitern — der User
+    // sieht in dem Fall weiter den vollen Fehlertext im Overlay (umbruch
+    // + title-Tooltip), das ist tolerabel.
+  }
 }
 
 /**
@@ -102,15 +149,19 @@ function truncateStart(text: string, max: number): string {
   return `…${text.slice(text.length - max)}`;
 }
 
-function Equalizer(): JSX.Element {
-  const bar =
-    "w-1 h-4 bg-status-recording rounded-sm origin-bottom animate-[vtx-eq_700ms_ease-in-out_infinite]";
+/**
+ * Ehrliche Recording-Status-LED. Pulsiert in 1.2s scale/opacity-Cycle —
+ * eindeutig als LED-Indikator erkennbar, suggeriert (anders als der
+ * frueher hier verwendete 3-Bar-Equalizer) keine Reaktion auf den
+ * Audio-Pegel. Der echte Pegel ist im Renderer nicht verfuegbar; eine
+ * IPC-Schiene dafuer waere ein eigenes Feature.
+ */
+function RecordingDot(): JSX.Element {
   return (
-    <div className="shrink-0 flex items-end gap-0.5 h-5 pr-1" aria-hidden>
-      <span className={bar} />
-      <span className={`${bar} [animation-delay:120ms]`} />
-      <span className={`${bar} [animation-delay:240ms]`} />
-    </div>
+    <span
+      className="shrink-0 inline-block h-3 w-3 rounded-full bg-status-recording animate-[vtx-rec-pulse_1200ms_ease-in-out_infinite] mr-1"
+      aria-hidden
+    />
   );
 }
 

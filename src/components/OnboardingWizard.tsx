@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import {
@@ -15,7 +15,9 @@ import {
 } from "../lib/tauri";
 import { recommendLlmSlot } from "../lib/recommend";
 import { useSettingsStore } from "../store";
+import Banner from "./Banner";
 import Button from "./Button";
+import Input from "./Input";
 import Logo from "./Logo";
 
 type Step = 1 | 2 | 3 | 4 | 5;
@@ -25,8 +27,17 @@ interface OnboardingWizardProps {
   onClose: () => void;
 }
 
-const inputCls =
-  "bg-surface border border-outline rounded-md px-3 py-2 text-sm text-fg placeholder:text-fg-faint focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/40";
+/**
+ * Sichtbarkeit eines abgeschlossenen Download-Häkchens in Millisekunden,
+ * bevor die Mini-Progressbar ganz ausgeblendet wird.
+ */
+const DONE_FLASH_MS = 2000;
+
+type DownloadStatus =
+  | { kind: "idle" }
+  | { kind: "running" }
+  | { kind: "done" }
+  | { kind: "error"; msg: string };
 
 export default function OnboardingWizard({
   onClose,
@@ -36,15 +47,24 @@ export default function OnboardingWizard({
 
   const [step, setStep] = useState<Step>(1);
 
-  const [downloading, setDownloading] = useState(false);
-  const [downloadProgress, setDownloadProgress] =
+  // Whisper-Download — Background, persistent über Step-Wechsel.
+  const [whisperStatus, setWhisperStatus] = useState<DownloadStatus>({
+    kind: "idle",
+  });
+  const [whisperProgress, setWhisperProgress] =
     useState<ModelDownloadProgress | null>(null);
-  const [downloadError, setDownloadError] = useState<string | null>(null);
 
-  const [llmDownloading, setLlmDownloading] = useState(false);
-  const [llmDownloadProgress, setLlmDownloadProgress] =
+  // LLM-Download — analog.
+  const [llmStatus, setLlmStatus] = useState<DownloadStatus>({ kind: "idle" });
+  const [llmProgress, setLlmProgress] =
     useState<ModelDownloadProgress | null>(null);
-  const [llmDownloadError, setLlmDownloadError] = useState<string | null>(null);
+
+  // Done-Flashes nach DONE_FLASH_MS automatisch ausblenden. Mit Refs, damit
+  // ein neuer Download den vorigen Timer canceln kann.
+  const [whisperFlashVisible, setWhisperFlashVisible] = useState(false);
+  const [llmFlashVisible, setLlmFlashVisible] = useState(false);
+  const whisperFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const llmFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [xaiKey, setXaiKey] = useState("");
   const [keyStatus, setKeyStatus] = useState<
@@ -57,10 +77,10 @@ export default function OnboardingWizard({
   useEffect(() => {
     const unlistens: UnlistenFn[] = [];
     void listen<ModelDownloadProgress>("model-download-progress", (event) =>
-      setDownloadProgress(event.payload),
+      setWhisperProgress(event.payload),
     ).then((fn) => unlistens.push(fn));
     void listen<ModelDownloadProgress>("llm-model-download-progress", (event) =>
-      setLlmDownloadProgress(event.payload),
+      setLlmProgress(event.payload),
     ).then((fn) => unlistens.push(fn));
     void ipcGetWhisperBackend()
       .then(setBackend)
@@ -70,39 +90,62 @@ export default function OnboardingWizard({
       .catch(() => null);
     return () => {
       unlistens.forEach((u) => u());
+      if (whisperFlashTimer.current) clearTimeout(whisperFlashTimer.current);
+      if (llmFlashTimer.current) clearTimeout(llmFlashTimer.current);
     };
   }, []);
 
-  const onDownload = async () => {
-    setDownloading(true);
-    setDownloadError(null);
-    setDownloadProgress(null);
-    try {
-      const path = await ipcDownloadDefaultModel();
-      void update({ whisper_model_path: path });
-      setStep(3);
-    } catch (e) {
-      setDownloadError(String(e));
-    } finally {
-      setDownloading(false);
+  // Whisper-Download startet im Hintergrund; Wizard springt sofort zum nächsten
+  // Step weiter. Progress-Events füllen die sticky Mini-Bar im Header.
+  const onDownload = () => {
+    setWhisperStatus({ kind: "running" });
+    setWhisperProgress(null);
+    setWhisperFlashVisible(false);
+    if (whisperFlashTimer.current) {
+      clearTimeout(whisperFlashTimer.current);
+      whisperFlashTimer.current = null;
     }
+    setStep(3);
+    void (async () => {
+      try {
+        const path = await ipcDownloadDefaultModel();
+        await update({ whisper_model_path: path });
+        setWhisperStatus({ kind: "done" });
+        setWhisperFlashVisible(true);
+        whisperFlashTimer.current = setTimeout(() => {
+          setWhisperFlashVisible(false);
+        }, DONE_FLASH_MS);
+      } catch (e) {
+        setWhisperStatus({ kind: "error", msg: String(e) });
+      }
+    })();
   };
 
   const onPickLlmSlot = async (slot: string) => {
     await update({ llm_default_slot: slot });
   };
 
-  const onLlmDownload = async () => {
-    setLlmDownloading(true);
-    setLlmDownloadError(null);
-    setLlmDownloadProgress(null);
-    try {
-      await ipcDownloadLlmDefaultModel();
-    } catch (e) {
-      setLlmDownloadError(String(e));
-    } finally {
-      setLlmDownloading(false);
+  const onLlmDownload = () => {
+    setLlmStatus({ kind: "running" });
+    setLlmProgress(null);
+    setLlmFlashVisible(false);
+    if (llmFlashTimer.current) {
+      clearTimeout(llmFlashTimer.current);
+      llmFlashTimer.current = null;
     }
+    setStep(5);
+    void (async () => {
+      try {
+        await ipcDownloadLlmDefaultModel();
+        setLlmStatus({ kind: "done" });
+        setLlmFlashVisible(true);
+        llmFlashTimer.current = setTimeout(() => {
+          setLlmFlashVisible(false);
+        }, DONE_FLASH_MS);
+      } catch (e) {
+        setLlmStatus({ kind: "error", msg: String(e) });
+      }
+    })();
   };
 
   const onSaveKey = async () => {
@@ -130,11 +173,8 @@ export default function OnboardingWizard({
     onClose();
   };
 
-  const fmtMb = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  const progressPct =
-    downloadProgress && downloadProgress.total
-      ? Math.round((downloadProgress.downloaded / downloadProgress.total) * 100)
-      : null;
+  const anyRunning =
+    whisperStatus.kind === "running" || llmStatus.kind === "running";
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -158,6 +198,14 @@ export default function OnboardingWizard({
             </Button>
           </div>
           <StepIndicator current={step} total={TOTAL_STEPS} />
+          <MiniProgressStack
+            whisperStatus={whisperStatus}
+            whisperProgress={whisperProgress}
+            whisperFlashVisible={whisperFlashVisible}
+            llmStatus={llmStatus}
+            llmProgress={llmProgress}
+            llmFlashVisible={llmFlashVisible}
+          />
         </div>
 
         <div className="px-6 py-8 min-h-[360px]">
@@ -166,11 +214,11 @@ export default function OnboardingWizard({
           ) : step === 2 ? (
             <StepDownload
               onDownload={onDownload}
-              downloading={downloading}
-              progressPct={progressPct}
-              downloadProgress={downloadProgress}
-              downloadError={downloadError}
-              fmtMb={fmtMb}
+              downloadStarted={
+                whisperStatus.kind !== "idle" || settings?.whisper_model_path
+                  ? true
+                  : false
+              }
               modelPath={settings?.whisper_model_path ?? null}
             />
           ) : step === 3 ? (
@@ -186,14 +234,19 @@ export default function OnboardingWizard({
               currentSlot={settings?.llm_default_slot ?? ""}
               onPickSlot={(s) => void onPickLlmSlot(s)}
               onDownload={onLlmDownload}
-              downloading={llmDownloading}
-              progress={llmDownloadProgress}
-              error={llmDownloadError}
+              downloadStarted={
+                llmStatus.kind !== "idle" || settings?.llm_model_path
+                  ? true
+                  : false
+              }
               modelPath={settings?.llm_model_path ?? null}
-              fmtMb={fmtMb}
             />
           ) : (
-            <StepFinish backend={backend} hardware={hardware} />
+            <StepFinish
+              backend={backend}
+              hardware={hardware}
+              anyDownloadRunning={anyRunning}
+            />
           )}
         </div>
 
@@ -228,19 +281,11 @@ export default function OnboardingWizard({
 
   function StepDownload({
     onDownload,
-    downloading,
-    progressPct,
-    downloadProgress,
-    downloadError,
-    fmtMb,
+    downloadStarted,
     modelPath,
   }: {
-    onDownload: () => Promise<void>;
-    downloading: boolean;
-    progressPct: number | null;
-    downloadProgress: ModelDownloadProgress | null;
-    downloadError: string | null;
-    fmtMb: (bytes: number) => string;
+    onDownload: () => void;
+    downloadStarted: boolean;
     modelPath: string | null;
   }): JSX.Element {
     return (
@@ -260,38 +305,22 @@ export default function OnboardingWizard({
             <code className="text-brand font-mono">app_data_dir/models/</code>{" "}
             heruntergeladen.
           </p>
+          <p className="text-xs text-fg-faint mt-2">
+            Du springst nach dem Klick sofort weiter — der Download läuft im
+            Hintergrund (Fortschritt oben im Header).
+          </p>
         </div>
         <Button
-          onClick={() => void onDownload()}
-          disabled={downloading}
+          onClick={() => onDownload()}
+          disabled={downloadStarted}
           className="self-start"
         >
-          {downloading
-            ? "Lade Modell…"
-            : "Default-Modell jetzt herunterladen"}
+          {modelPath
+            ? "Bereits geladen"
+            : downloadStarted
+              ? "Download läuft …"
+              : "Default-Modell jetzt herunterladen"}
         </Button>
-        {downloadProgress ? (
-          <div className="flex flex-col gap-1.5 text-xs text-fg-muted">
-            <div>
-              {fmtMb(downloadProgress.downloaded)}
-              {downloadProgress.total
-                ? ` von ${fmtMb(downloadProgress.total)}`
-                : ""}
-              {progressPct !== null ? ` (${progressPct} %)` : ""}
-            </div>
-            {progressPct !== null ? (
-              <div className="h-2 bg-elevated rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-brand transition-all"
-                  style={{ width: `${progressPct}%` }}
-                />
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-        {downloadError ? (
-          <div className="text-xs text-status-error">{downloadError}</div>
-        ) : null}
         {modelPath ? (
           <div className="text-xs text-status-done">
             ✓ Modell konfiguriert: {modelPath}
@@ -336,12 +365,12 @@ export default function OnboardingWizard({
             lokalen Modi nutzen.
           </p>
         </div>
-        <input
+        <Input
           type="password"
           value={xaiKey}
           onChange={(e) => setXaiKey(e.target.value)}
           placeholder="xai-…"
-          className={`${inputCls} font-mono`}
+          className="font-mono"
         />
         <div className="flex items-center gap-3">
           <Button
@@ -373,28 +402,18 @@ export default function OnboardingWizard({
     currentSlot,
     onPickSlot,
     onDownload,
-    downloading,
-    progress,
-    error,
+    downloadStarted,
     modelPath,
-    fmtMb,
   }: {
     hardware: HardwareReport | null;
     currentSlot: string;
     onPickSlot: (slot: string) => void;
-    onDownload: () => Promise<void>;
-    downloading: boolean;
-    progress: ModelDownloadProgress | null;
-    error: string | null;
+    onDownload: () => void;
+    downloadStarted: boolean;
     modelPath: string | null;
-    fmtMb: (bytes: number) => string;
   }): JSX.Element {
     const rec = hardware ? recommendLlmSlot(hardware.total_ram_gb) : null;
     const mismatch = rec !== null && rec.slot !== currentSlot;
-    const pct =
-      progress && progress.total
-        ? Math.round((progress.downloaded / progress.total) * 100)
-        : null;
 
     return (
       <div className="flex flex-col gap-4">
@@ -412,6 +431,10 @@ export default function OnboardingWizard({
             </code>{" "}
             in der Mode-TOML. Wenn du nur Cloud-Modi nutzt, kannst du diesen
             Schritt überspringen.
+          </p>
+          <p className="text-xs text-fg-faint mt-2">
+            Auch dieser Download läuft im Hintergrund — du landest direkt im
+            Abschluss-Step.
           </p>
         </div>
 
@@ -444,36 +467,16 @@ export default function OnboardingWizard({
         ) : null}
 
         <Button
-          onClick={() => void onDownload()}
-          disabled={downloading}
+          onClick={() => onDownload()}
+          disabled={downloadStarted}
           className="self-start"
         >
-          {downloading
-            ? "Lade LLM-Modell…"
-            : "LLM-Modell jetzt herunterladen"}
+          {modelPath
+            ? "Bereits geladen"
+            : downloadStarted
+              ? "Download läuft …"
+              : "LLM-Modell jetzt herunterladen"}
         </Button>
-
-        {progress ? (
-          <div className="flex flex-col gap-1.5 text-xs text-fg-muted">
-            <div>
-              {fmtMb(progress.downloaded)}
-              {progress.total ? ` von ${fmtMb(progress.total)}` : ""}
-              {pct !== null ? ` (${pct} %)` : ""}
-            </div>
-            {pct !== null ? (
-              <div className="h-2 bg-elevated rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-brand transition-all"
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-
-        {error ? (
-          <div className="text-xs text-status-error">{error}</div>
-        ) : null}
 
         {modelPath ? (
           <div className="text-xs text-status-done">
@@ -487,13 +490,21 @@ export default function OnboardingWizard({
   function StepFinish({
     backend,
     hardware,
+    anyDownloadRunning,
   }: {
     backend: WhisperBackendInfo | null;
     hardware: HardwareReport | null;
+    anyDownloadRunning: boolean;
   }): JSX.Element {
     return (
       <div className="flex flex-col gap-4">
         <Hero icon={<CheckIcon />} accent="done" />
+        {anyDownloadRunning ? (
+          <Banner tone="warning">
+            Ein oder mehrere Modell-Downloads laufen noch. Du kannst das Setup
+            jetzt abschließen — die Downloads laufen im Hintergrund weiter.
+          </Banner>
+        ) : null}
         <div>
           <h3 className="text-lg font-semibold text-fg">
             System-Check &amp; Fertig
@@ -547,6 +558,105 @@ export default function OnboardingWizard({
   }
 }
 
+interface MiniProgressStackProps {
+  whisperStatus: DownloadStatus;
+  whisperProgress: ModelDownloadProgress | null;
+  whisperFlashVisible: boolean;
+  llmStatus: DownloadStatus;
+  llmProgress: ModelDownloadProgress | null;
+  llmFlashVisible: boolean;
+}
+
+/**
+ * Sticky Mini-Progressbar-Stack im Wizard-Header. Zeigt pro laufendem
+ * Download eine dünne Bar mit Provider-Tag + Prozent rechts; nach Abschluss
+ * kurz ein grünes Häkchen, dann ausblenden. Fehler-Zustand ersetzt die Bar
+ * durch ein {@link Banner}.
+ *
+ * TODO: Download-Cancellation ist Backend-seitig nicht verfügbar — sobald
+ * `ipcCancelModelDownload` existiert, hier einen ×-Button pro Zeile ergänzen.
+ */
+function MiniProgressStack({
+  whisperStatus,
+  whisperProgress,
+  whisperFlashVisible,
+  llmStatus,
+  llmProgress,
+  llmFlashVisible,
+}: MiniProgressStackProps): JSX.Element | null {
+  const whisperRow = renderRow(
+    "Whisper",
+    whisperStatus,
+    whisperProgress,
+    whisperFlashVisible,
+  );
+  const llmRow = renderRow("LLM", llmStatus, llmProgress, llmFlashVisible);
+  if (whisperRow === null && llmRow === null) return null;
+  return (
+    <div className="mt-3 flex flex-col gap-1.5">
+      {whisperRow}
+      {llmRow}
+    </div>
+  );
+}
+
+function renderRow(
+  tag: string,
+  status: DownloadStatus,
+  progress: ModelDownloadProgress | null,
+  flashVisible: boolean,
+): JSX.Element | null {
+  if (status.kind === "idle") return null;
+  if (status.kind === "done") {
+    if (!flashVisible) return null;
+    return (
+      <div
+        key={tag}
+        className="flex items-center gap-2 text-xs text-status-done"
+        role="status"
+      >
+        <div className="h-1 flex-1 rounded-full bg-status-done/40 overflow-hidden">
+          <div className="h-full w-full bg-status-done" />
+        </div>
+        <span className="font-mono">✓ {tag} fertig</span>
+      </div>
+    );
+  }
+  if (status.kind === "error") {
+    return (
+      <Banner key={tag} tone="error" dense>
+        {tag}-Download fehlgeschlagen: {status.msg}
+      </Banner>
+    );
+  }
+  const pct =
+    progress && progress.total
+      ? Math.round((progress.downloaded / progress.total) * 100)
+      : null;
+  return (
+    <div
+      key={tag}
+      className="flex items-center gap-2 text-xs text-fg-muted"
+      role="status"
+      aria-label={`${tag}-Download${pct !== null ? `: ${pct} Prozent` : ""}`}
+    >
+      <div className="h-1 flex-1 rounded-full bg-elevated overflow-hidden">
+        {pct !== null ? (
+          <div
+            className="h-full bg-brand transition-all"
+            style={{ width: `${pct}%` }}
+          />
+        ) : (
+          <div className="h-full w-1/4 bg-brand/40 animate-pulse" />
+        )}
+      </div>
+      <span className="font-mono whitespace-nowrap">
+        {tag}: {pct !== null ? `${pct} %` : "läuft …"}
+      </span>
+    </div>
+  );
+}
+
 function StepWelcome(): JSX.Element {
   return (
     <div className="flex flex-col gap-4">
@@ -578,6 +688,13 @@ function StepWelcome(): JSX.Element {
       <p className="text-xs text-fg-faint">
         Das Setup dauert &lt; 5 Minuten. Du kannst Schritte überspringen
         und später aus den Einstellungen nachholen.
+      </p>
+      <p className="text-xs text-fg-faint">
+        Diesen Assistenten kannst du jederzeit erneut starten —{" "}
+        <em className="not-italic text-fg-muted">
+          Einstellungen → Diagnose &amp; Tests → Setup-Assistent öffnen
+        </em>
+        .
       </p>
     </div>
   );

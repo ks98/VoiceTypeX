@@ -1,8 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Mode } from "../lib/types";
 import { ipcCreateMode, ipcUpdateMode } from "../lib/tauri";
 import Button from "./Button";
+import Banner from "./Banner";
+
+// Lokale Input-Klassen — der ModeEditor hat ~17 Sites mit unterschiedlichen
+// Zusatz-Klassen (font-mono, min-h-[120px], ...), die mit der generischen
+// <Input />-Komponente nur via repetitivem Markup ersetzbar waeren. Hier
+// bewusst inline gelassen, mit Focus-Visible-Ring fuer A11y-Paritaet zur
+// Input-Komponente. Konsolidierung der Sites ist eigenes Refactoring.
+const inputCls =
+  "bg-surface border border-outline rounded-md px-2 py-1.5 text-sm w-full text-fg placeholder:text-fg-faint focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-1 focus-visible:ring-offset-canvas focus:border-brand transition-colors";
 
 interface ModeEditorProps {
   initial: Mode | null;
@@ -60,9 +69,6 @@ const LLM_SLOTS: Array<{ value: string; label: string }> = [
   },
 ];
 
-const inputCls =
-  "bg-surface border border-outline rounded-md px-2 py-1.5 text-sm w-full text-fg placeholder:text-fg-faint focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/40";
-
 function emptyMode(): Mode {
   return {
     id: "",
@@ -111,7 +117,16 @@ export default function ModeEditor({
   const [draft, setDraft] = useState<Mode>(initial ?? emptyMode());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [samplingOpen, setSamplingOpen] = useState(false);
+  // Sampling-Section ist default-collapsed — **außer** der initiale Modus
+  // hat schon Werte gesetzt. Sonst sieht der User beim Edit nicht, dass
+  // sein temperature=0.3 noch da ist, und denkt, er müsse es neu setzen.
+  const [samplingOpen, setSamplingOpen] = useState<boolean>(
+    initial !== null &&
+      (initial.temperature !== null ||
+        initial.top_p !== null ||
+        initial.repeat_penalty !== null ||
+        initial.max_tokens !== null),
+  );
 
   const update = <K extends keyof Mode>(key: K, value: Mode[K]) =>
     setDraft((d) => ({ ...d, [key]: value }));
@@ -133,16 +148,57 @@ export default function ModeEditor({
     inRange(draft.repeat_penalty, 0.5, 2) &&
     inRange(draft.max_tokens, 1, 8192);
 
-  const canSave =
-    draft.id.length > 0 &&
-    idValid &&
-    draft.name.length > 0 &&
-    (!isCloudSTT || !!draft.cloud_stt_provider) &&
-    (!isCloudLLM || !!draft.cloud_llm_provider) &&
-    (!needsOllamaTag || !!draft.ollama_model_tag) &&
-    (!needsSystemPrompt ||
-      (draft.system_prompt !== null && draft.system_prompt.length > 0)) &&
-    samplingValid;
+  // Statt black-box-Button: explizit benennen, was noch fehlt. Der erste
+  // Eintrag wird im Footer angezeigt.
+  const blockingReasons: string[] = [];
+  if (draft.id.length === 0) blockingReasons.push("ID");
+  else if (!idValid) blockingReasons.push("ID (nur a-z, 0-9, _, -)");
+  if (draft.name.length === 0) blockingReasons.push("Anzeigename");
+  if (isCloudSTT && !draft.cloud_stt_provider)
+    blockingReasons.push("Cloud-STT-Provider");
+  if (isCloudLLM && !draft.cloud_llm_provider)
+    blockingReasons.push("Cloud-LLM-Provider");
+  if (needsOllamaTag && !draft.ollama_model_tag)
+    blockingReasons.push("Ollama-Modell-Tag");
+  if (
+    needsSystemPrompt &&
+    (draft.system_prompt === null || draft.system_prompt.length === 0)
+  )
+    blockingReasons.push("System-Prompt");
+  if (!samplingValid)
+    blockingReasons.push("Sampling-Wert(e) außerhalb erlaubter Bereiche");
+  const canSave = blockingReasons.length === 0;
+
+  // Dirty-Check fuer Escape/Backdrop — Vergleich gegen Initial (oder leere
+  // Vorlage). JSON-stringify ist genug fuer eine flache Struktur und
+  // billiger als Per-Feld-Vergleiche.
+  const baseline = JSON.stringify(initial ?? emptyMode());
+  const isDirty = JSON.stringify(draft) !== baseline;
+
+  const requestClose = () => {
+    if (
+      isDirty &&
+      !window.confirm("Ungespeicherte Änderungen verwerfen?")
+    ) {
+      return;
+    }
+    onClose();
+  };
+
+  // Escape-Handler — Browser-Default fuer Modals fehlt, ohne explizite
+  // Bindung schliesst nur der Backdrop-Klick (den wir bewusst nicht
+  // handhaben). Mit Dirty-Check.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        requestClose();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDirty]);
 
   const onSave = async () => {
     setSaving(true);
@@ -186,20 +242,22 @@ export default function ModeEditor({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-surface border border-outline rounded-lg max-w-3xl w-full max-h-[90vh] overflow-auto shadow-2xl">
-        <div className="p-5 border-b border-outline">
-          <h2 className="text-lg font-semibold text-fg">
+    <div
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="mode-editor-title"
+    >
+      <div className="bg-surface border border-outline rounded-lg max-w-3xl w-full max-h-[90vh] shadow-2xl flex flex-col overflow-hidden">
+        <div className="p-5 border-b border-outline shrink-0">
+          <h2 id="mode-editor-title" className="text-lg font-semibold text-fg">
             {isEdit ? `Modus bearbeiten: ${draft.name}` : "Neuer Modus"}
           </h2>
         </div>
 
-        <div className="p-5 flex flex-col gap-6">
-          {error ? (
-            <div className="rounded-md bg-status-error/10 border border-status-error/40 px-3 py-2 text-sm text-status-error">
-              {error}
-            </div>
-          ) : null}
+        {/* Body: scrollt unabhaengig vom Sticky-Footer. */}
+        <div className="p-5 flex flex-col gap-6 overflow-y-auto flex-1 min-h-0">
+          {error ? <Banner tone="error">{error}</Banner> : null}
 
           {/* ──────────────────────── Section 1 — Basis ────────────────────── */}
           <Section title="Basis">
@@ -540,8 +598,22 @@ export default function ModeEditor({
           </Section>
         </div>
 
-        <div className="p-5 border-t border-outline flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose}>
+        {/* Sticky-Footer: bleibt sichtbar, auch wenn der Body scrollt. */}
+        <div className="p-5 border-t border-outline flex justify-between items-center gap-3 shrink-0 bg-surface">
+          <div className="text-xs text-fg-faint min-w-0 flex-1">
+            {blockingReasons.length > 0 ? (
+              <span>
+                Noch nötig:{" "}
+                <span className="text-fg-muted">
+                  {blockingReasons.slice(0, 3).join(", ")}
+                  {blockingReasons.length > 3
+                    ? ` (+${blockingReasons.length - 3})`
+                    : ""}
+                </span>
+              </span>
+            ) : null}
+          </div>
+          <Button variant="secondary" onClick={requestClose}>
             Abbrechen
           </Button>
           <Button onClick={() => void onSave()} disabled={!canSave || saving}>
@@ -574,10 +646,11 @@ function Section({
         <button
           type="button"
           onClick={onToggle}
-          className="flex items-center justify-between text-left text-sm font-semibold text-fg-muted hover:text-fg transition-colors"
+          aria-expanded={open}
+          className="flex items-center justify-between text-left text-sm font-semibold text-fg hover:text-brand transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 rounded"
         >
           <span>{title}</span>
-          <span className="text-xs text-fg-faint">{open ? "▾" : "▸"}</span>
+          <span className="text-xs text-fg-muted">{open ? "▾" : "▸"}</span>
         </button>
         {open ? <div className="flex flex-col gap-3">{children}</div> : null}
       </section>
@@ -585,7 +658,9 @@ function Section({
   }
   return (
     <section className="flex flex-col gap-3 rounded-md border border-outline/60 bg-surface/40 p-3">
-      <h3 className="text-sm font-semibold text-fg-muted">{title}</h3>
+      <h3 className="text-sm font-semibold text-fg border-b border-outline/40 pb-2">
+        {title}
+      </h3>
       <div className="flex flex-col gap-3">{children}</div>
     </section>
   );
