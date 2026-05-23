@@ -298,17 +298,23 @@ export default function Settings(): JSX.Element {
             void update({ llm_default_slot: e.target.value })
           }
         >
+          <option value="gemma4-e4b-it-q5_k_m">
+            Gemma 4 E4B-IT Q5_K_M (~5,1 GB, Pro · 12+ GB RAM · April 2026)
+          </option>
+          <option value="gemma4-e2b-it-q5_k_m">
+            Gemma 4 E2B-IT Q5_K_M (~3,1 GB, Mittel · 8-12 GB RAM)
+          </option>
           <option value="gemma3-1b-it-q5_k_m">
-            Gemma 3 1B-IT Q5_K_M (~851 MB, Light, 4-GB-RAM-OK)
+            Gemma 3 1B-IT Q5_K_M (~851 MB, Light · 4-GB-RAM-OK)
           </option>
           <option value="gemma3-4b-it-q5_k_m">
-            Gemma 3 4B-IT Q5_K_M (~2.8 GB, Pro, 16-GB-empfohlen)
+            Gemma 3 4B-IT Q5_K_M (~2,8 GB, Legacy-Pro · Maerz 2025)
           </option>
           <option value="llama3.2-1b-instruct-q5_k_m">
             Llama 3.2 1B-Instruct Q5_K_M (~912 MB, EN-fokussiert)
           </option>
           <option value="qwen2.5-1.5b-instruct-q5_k_m">
-            Qwen 2.5 1.5B-Instruct Q5_K_M (~1.3 GB, Code-affin)
+            Qwen 2.5 1.5B-Instruct Q5_K_M (~1,3 GB, Code-affin)
           </option>
         </select>
         <input

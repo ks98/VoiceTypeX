@@ -3,10 +3,18 @@ name = "Korrigierendes Diktat"
 description = "Lokales LLM glaettet Grammatik und Versprecher, behaelt Inhalt strikt."
 transcription = "local"
 processing = "local"
-# Gemma 3 4B-IT (DeepMind, Maerz 2025) — 140+ Sprachen, sehr stark auf
-# Deutsch bei ~3 GB Footprint. Sweet-Spot fuer 8-16-GB-Geraete mit iGPU
-# oder kleiner dGPU. User mit reichlich VRAM koennen auf `llama3.3:8b`
-# oder `gemma3:12b-it` umstellen.
+# Ollama-Modell-Tag fuer den Legacy-Pfad (`local_engine = "ollama"`).
+# Bleibt auf `gemma3:4b` fuer Backward-Compat — wer Ollama benutzt, hat
+# das wahrscheinlich schon gepullt. Wenn du Ollama frisch installierst,
+# `ollama pull gemma3:4b` (oder neuer: `ollama pull gemma4:4b` sobald
+# bei Ollama verfuegbar).
+#
+# Fuer den **Embedded-Pfad** (`local_engine = "embedded"`) wird statt
+# dessen `Settings.llm_default_slot` benutzt — Default-Empfehlung
+# basiert auf Hardware-Probe:
+#   12+ GB RAM → Gemma 4 E4B-IT Q5_K_M (April 2026, neuer Pro-Default)
+#   8-12 GB   → Gemma 4 E2B-IT Q5_K_M
+#   <8 GB     → Gemma 3 1B-IT Q5_K_M (Gemma 4 zu gross fuer Light)
 local_llm_model = "gemma3:4b"
 injection_method = "clipboard"
 language = "de"

@@ -139,14 +139,28 @@ Prozess ein — kein externer Daemon noetig. Aktivierung pro Modus via
 - **Sampling-Defaults** (bei `None` in Mode-TOML): temperature 0.2,
   top_p 0.8, repeat_penalty 1.05, max_tokens 1024.
 
-**GGUF-Slots** (`LlmModelSlot::from_setting`):
+**GGUF-Slots** (`LlmModelSlot::from_setting`, Refresh Mai 2026 mit
+Gemma 4 als neue Pro/Mittel-Defaults):
 
-| Slot-Slug | Datei | Größe | Quelle |
-|---|---|---|---|
-| `gemma3-1b-it-q5_k_m` *(Default)* | `gemma-3-1b-it-Q5_K_M.gguf` | ~851 MB | unsloth/gemma-3-1b-it-GGUF |
-| `gemma3-4b-it-q5_k_m` | `gemma-3-4b-it-Q5_K_M.gguf` | ~2,8 GB | unsloth/gemma-3-4b-it-GGUF |
-| `llama3.2-1b-instruct-q5_k_m` | `Llama-3.2-1B-Instruct-Q5_K_M.gguf` | ~912 MB | unsloth/Llama-3.2-1B-Instruct-GGUF |
-| `qwen2.5-1.5b-instruct-q5_k_m` | `qwen2.5-1.5b-instruct-q5_k_m.gguf` | ~1,3 GB | Qwen/Qwen2.5-1.5B-Instruct-GGUF |
+| Slot-Slug | Datei | Größe | Empfehlung | Quelle |
+|---|---|---|---|---|
+| `gemma4-e4b-it-q5_k_m` | `gemma-4-E4B-it-Q5_K_M.gguf` | ~5,1 GB | **Pro · 12+ GB RAM** | unsloth/gemma-4-E4B-it-GGUF |
+| `gemma4-e2b-it-q5_k_m` | `gemma-4-E2B-it-Q5_K_M.gguf` | ~3,1 GB | **Mittel · 8-12 GB RAM** | unsloth/gemma-4-E2B-it-GGUF |
+| `gemma3-1b-it-q5_k_m` *(Light-Default)* | `gemma-3-1b-it-Q5_K_M.gguf` | ~851 MB | **Light · <8 GB RAM** | unsloth/gemma-3-1b-it-GGUF |
+| `gemma3-4b-it-q5_k_m` | `gemma-3-4b-it-Q5_K_M.gguf` | ~2,8 GB | Legacy-Pro (Phase 1) | unsloth/gemma-3-4b-it-GGUF |
+| `llama3.2-1b-instruct-q5_k_m` | `Llama-3.2-1B-Instruct-Q5_K_M.gguf` | ~912 MB | Light, EN-fokussiert | unsloth/Llama-3.2-1B-Instruct-GGUF |
+| `qwen2.5-1.5b-instruct-q5_k_m` | `qwen2.5-1.5b-instruct-q5_k_m.gguf` | ~1,3 GB | Code-affin | Qwen/Qwen2.5-1.5B-Instruct-GGUF |
+
+**Gemma 4 (April 2026, Apache 2.0)** ist der bevorzugte Modell-Stand
+fuer Embedded-LLM. Matformer-Architektur ("effective" vs "total"
+params: E4B hat 4,5 B effective bei 7B+ raw → groessere Disk-Files als
+naive Param-Zahl vermuten laesst). 256k Context-Window, 140+
+Sprachen, multimodal-faehig (Text/Image/Audio — wir nutzen nur Text).
+llama.cpp-Support inkl. Chat-Template-Updates seit April 2026.
+
+**Gemma 3 bleibt** fuer Light-Tier (4-GB-Setups) und als Backward-
+Compat-Pfad fuer User, die bei der kleineren Disk-Groesse bleiben
+wollen.
 
 Alle mit gepinten SHA-256-Hashes; Download ueber `download_llm()` in
 `transcription/model_downloader.rs` mit in-flight Verifikation.

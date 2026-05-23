@@ -18,11 +18,15 @@ export interface LlmSlotRecommendation {
 /**
  * Empfehlung welcher GGUF-LLM-Slot zur Hardware passt.
  *
- * Schwellen:
+ * Schwellen (Refresh Mai 2026 mit Gemma 4 als Default fuer 8+ GB):
  * - 0 GB (Detection nicht implementiert auf Windows) → Light-Default.
- * - < 8 GB RAM → Gemma 3 1B (Light, ~851 MB).
- * - 8–12 GB → Qwen 2.5 1.5B (Mittel, ~1.3 GB, gut auf Code).
- * - 12+ GB → Gemma 3 4B (Pro, ~2.8 GB, beste DE-Qualitaet).
+ * - < 8 GB RAM → Gemma 3 1B (Light, ~851 MB Disk, einzige Option fuer
+ *   knappe Hardware — Gemma 4 ist im kleinsten E2B-Format ~3 GB Disk).
+ * - 8–12 GB → **Gemma 4 E2B** (Mittel, ~3,1 GB Disk, ~5 GB RAM 4-bit).
+ *   Loest Qwen 2.5 1.5B ab — bessere DE-Qualitaet bei aehnlicher Latenz.
+ * - 12+ GB → **Gemma 4 E4B** (Pro, ~5,1 GB Disk, ~6 GB RAM 4-bit).
+ *   Loest Gemma 3 4B als Pro-Default ab — Apache 2.0, 256k Context,
+ *   140+ Sprachen, multimodal-faehig (wir nutzen nur Text).
  */
 export function recommendLlmSlot(totalRamGb: number): LlmSlotRecommendation {
   if (totalRamGb <= 0 || totalRamGb < 8) {
@@ -30,9 +34,9 @@ export function recommendLlmSlot(totalRamGb: number): LlmSlotRecommendation {
   }
   if (totalRamGb < 12) {
     return {
-      slot: "qwen2.5-1.5b-instruct-q5_k_m",
-      label: "Qwen 2.5 1.5B (Mittel)",
+      slot: "gemma4-e2b-it-q5_k_m",
+      label: "Gemma 4 E2B (Mittel)",
     };
   }
-  return { slot: "gemma3-4b-it-q5_k_m", label: "Gemma 3 4B (Pro)" };
+  return { slot: "gemma4-e4b-it-q5_k_m", label: "Gemma 4 E4B (Pro)" };
 }

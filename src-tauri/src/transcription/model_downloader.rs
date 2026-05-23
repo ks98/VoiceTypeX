@@ -119,10 +119,14 @@ impl ModelSlot {
     }
 }
 
-// GGUF-Quellen fuer Embedded-LLM-Pfad (Phase 3b). Bevorzugt
-// `unsloth/*` weil deren GGUF-Re-Packs oeffentlich zugaenglich sind
-// (im Gegensatz zu `bartowski/gemma-3-*` und originalen `google/*`,
+// GGUF-Quellen fuer Embedded-LLM-Pfad (Phase 3b + Refresh Mai 2026).
+// Bevorzugt `unsloth/*` weil deren GGUF-Re-Packs oeffentlich zugaenglich
+// sind (im Gegensatz zu `bartowski/gemma-*` und originalen `google/*`,
 // die ein Lizenz-Gate haben).
+const LLM_UNSLOTH_GEMMA4_E4B: &str =
+    "https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main";
+const LLM_UNSLOTH_GEMMA4_E2B: &str =
+    "https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main";
 const LLM_UNSLOTH_GEMMA3_4B: &str =
     "https://huggingface.co/unsloth/gemma-3-4b-it-GGUF/resolve/main";
 const LLM_UNSLOTH_GEMMA3_1B: &str =
@@ -132,18 +136,34 @@ const LLM_UNSLOTH_LLAMA32_1B: &str =
 const LLM_QWEN25_15B: &str = "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main";
 
 /// GGUF-LLM-Modelle, die der `LlamaEmbeddedProcessor` laden kann.
-/// Auswahl ist auf Consumer-Hardware-Tiers ausgelegt:
-/// - Light (≤8 GB RAM): Gemma3-1B oder Llama3.2-1B (jeweils <1 GB).
-/// - Standard (8-16 GB): Qwen2.5-1.5B oder Gemma3-1B mit hoeherer Quant.
-/// - Pro (≥16 GB): Gemma3-4B (Default-Empfehlung gemaess Phase-1-Modus
-///   `korrigierendes_diktat.toml`, dort steht `local_llm_model =
-///   "gemma3:4b"`).
+/// Auswahl-Tiers (Mai 2026):
+/// - **Light** (4-8 GB RAM): Gemma3-1B oder Llama3.2-1B (<1 GB Disk,
+///   ~1,5 GB RAM bei 4-bit). Gemma 4 passt hier nicht — die Matformer-
+///   Architektur hat mehr Raw-Params und braucht selbst im kleinsten
+///   E2B-Format ~3 GB Disk.
+/// - **Mittel** (8-12 GB): Qwen2.5-1.5B oder **Gemma 4 E2B** (neu, ~3 GB
+///   Disk, ~5 GB RAM 4-bit) — Sweet-Spot fuer 8-GB-Notebooks.
+/// - **Pro** (12+ GB): **Gemma 4 E4B** (neu, ~5 GB Disk, ~5-7 GB RAM
+///   4-bit) — beste DE-Qualitaet, multimodal-faehig (wir nutzen nur
+///   Text). Loest Gemma 3 4B als Pro-Default ab.
+/// - Gemma 3 4B bleibt als Backward-Compat-Option fuer User, die auf
+///   die kleinere Disk-Groesse nicht verzichten wollen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LlmModelSlot {
-    /// Gemma 3 4B-IT Q5_K_M — Phase-1-Empfehlung fuer 16+ GB-Geraete.
-    /// 140+ Sprachen, sehr stark auf Deutsch. ~2.8 GB.
+    /// **Pro-Tier-Default ab Mai 2026** — Gemma 4 E4B-IT Q5_K_M.
+    /// Apache 2.0, 4,5 B effective params, 140+ Sprachen, 256k Context,
+    /// llama.cpp-Support seit April 2026. ~5,1 GB Disk, ~6 GB RAM bei
+    /// 4-bit Inference.
+    Gemma4_E4bItQ5km,
+    /// **Mittel-Tier-Default ab Mai 2026** — Gemma 4 E2B-IT Q5_K_M.
+    /// Apache 2.0, 2,3 B effective params. ~3,1 GB Disk, ~5 GB RAM
+    /// 4-bit. Sweet-Spot fuer 8-12-GB-Setups.
+    Gemma4_E2bItQ5km,
+    /// Gemma 3 4B-IT Q5_K_M — Phase-1-Empfehlung, jetzt Backward-
+    /// Compat-Variante. 140+ Sprachen, sehr stark auf Deutsch. ~2,8 GB.
     Gemma3_4bItQ5km,
-    /// Gemma 3 1B-IT Q5_K_M — Light-Tier (<1 GB), passt auf 4-GB-VMs.
+    /// Gemma 3 1B-IT Q5_K_M — **Light-Tier-Default** (851 MB), passt
+    /// auf 4-GB-VMs. Gemma 4 ist hier zu gross.
     Gemma3_1bItQ5km,
     /// Llama 3.2 1B-Instruct Q5_K_M — Alternative im Light-Tier,
     /// staerker auf Englisch, aber Deutsch sehr ordentlich.
@@ -158,6 +178,8 @@ pub enum LlmModelSlot {
 impl LlmModelSlot {
     pub fn filename(self) -> &'static str {
         match self {
+            Self::Gemma4_E4bItQ5km => "gemma-4-E4B-it-Q5_K_M.gguf",
+            Self::Gemma4_E2bItQ5km => "gemma-4-E2B-it-Q5_K_M.gguf",
             Self::Gemma3_4bItQ5km => "gemma-3-4b-it-Q5_K_M.gguf",
             Self::Gemma3_1bItQ5km => "gemma-3-1b-it-Q5_K_M.gguf",
             Self::Llama32_1bInstructQ5km => "Llama-3.2-1B-Instruct-Q5_K_M.gguf",
@@ -167,6 +189,8 @@ impl LlmModelSlot {
 
     pub fn approximate_size_mb(self) -> u32 {
         match self {
+            Self::Gemma4_E4bItQ5km => 5_482,
+            Self::Gemma4_E2bItQ5km => 3_356,
             Self::Gemma3_4bItQ5km => 2_829,
             Self::Gemma3_1bItQ5km => 851,
             Self::Llama32_1bInstructQ5km => 912,
@@ -178,6 +202,12 @@ impl LlmModelSlot {
     /// (`curl https://huggingface.co/<repo>/raw/main/<file> | head -3`).
     pub fn expected_sha256(self) -> Option<&'static str> {
         match self {
+            Self::Gemma4_E4bItQ5km => {
+                Some("49bfb8a0cf4a35b74acd30bd1c9867061ccd4bd25336834e46bc608641ec8111")
+            }
+            Self::Gemma4_E2bItQ5km => {
+                Some("d8fc2ac6fd597481dfd9c5ef9543ea1f0bda8088086da3853ce5e5564ab43bf8")
+            }
             Self::Gemma3_4bItQ5km => {
                 Some("974e5c2f13c321fc3258b6fbf2ce326a09d8ace511aa6846df1db62baf7df7d4")
             }
@@ -198,6 +228,8 @@ impl LlmModelSlot {
     /// safer Default fuer Memory-knappe Geraete.
     pub fn from_setting(s: &str) -> Self {
         match s {
+            "gemma4-e4b-it-q5_k_m" => Self::Gemma4_E4bItQ5km,
+            "gemma4-e2b-it-q5_k_m" => Self::Gemma4_E2bItQ5km,
             "gemma3-4b-it-q5_k_m" => Self::Gemma3_4bItQ5km,
             "llama3.2-1b-instruct-q5_k_m" => Self::Llama32_1bInstructQ5km,
             "qwen2.5-1.5b-instruct-q5_k_m" => Self::Qwen25_15bInstructQ5km,
@@ -207,6 +239,8 @@ impl LlmModelSlot {
 
     fn url(self) -> String {
         let base = match self {
+            Self::Gemma4_E4bItQ5km => LLM_UNSLOTH_GEMMA4_E4B,
+            Self::Gemma4_E2bItQ5km => LLM_UNSLOTH_GEMMA4_E2B,
             Self::Gemma3_4bItQ5km => LLM_UNSLOTH_GEMMA3_4B,
             Self::Gemma3_1bItQ5km => LLM_UNSLOTH_GEMMA3_1B,
             Self::Llama32_1bInstructQ5km => LLM_UNSLOTH_LLAMA32_1B,
@@ -450,6 +484,45 @@ mod tests {
             ModelSlot::LargeV3TurboQ8
         );
         assert_eq!(ModelSlot::from_setting(""), ModelSlot::LargeV3TurboQ8);
+    }
+
+    #[test]
+    fn all_llm_slots_have_pinned_hashes() {
+        for slot in [
+            LlmModelSlot::Gemma4_E4bItQ5km,
+            LlmModelSlot::Gemma4_E2bItQ5km,
+            LlmModelSlot::Gemma3_4bItQ5km,
+            LlmModelSlot::Gemma3_1bItQ5km,
+            LlmModelSlot::Llama32_1bInstructQ5km,
+            LlmModelSlot::Qwen25_15bInstructQ5km,
+        ] {
+            assert!(
+                slot.expected_sha256().is_some(),
+                "{slot:?} hat keinen gepinten SHA-256"
+            );
+        }
+    }
+
+    #[test]
+    fn llm_from_setting_recognizes_new_gemma4_slugs() {
+        assert_eq!(
+            LlmModelSlot::from_setting("gemma4-e4b-it-q5_k_m"),
+            LlmModelSlot::Gemma4_E4bItQ5km
+        );
+        assert_eq!(
+            LlmModelSlot::from_setting("gemma4-e2b-it-q5_k_m"),
+            LlmModelSlot::Gemma4_E2bItQ5km
+        );
+        // Backward-Compat: Gemma 3 Slugs bleiben erkennbar
+        assert_eq!(
+            LlmModelSlot::from_setting("gemma3-4b-it-q5_k_m"),
+            LlmModelSlot::Gemma3_4bItQ5km
+        );
+        // Default-Fallback bei unbekannten Werten
+        assert_eq!(
+            LlmModelSlot::from_setting("nonexistent"),
+            LlmModelSlot::Gemma3_1bItQ5km
+        );
     }
 
     #[test]
