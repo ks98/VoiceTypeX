@@ -5,10 +5,11 @@ import { listen } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import Field from "../components/Field";
 import Button from "../components/Button";
+import Banner from "../components/Banner";
+import Loading from "../components/Loading";
 import ApiKeysSection from "../components/ApiKeysSection";
 import TestTranscriptionSection from "../components/TestTranscriptionSection";
 import AutoPasteTestSection from "../components/AutoPasteTestSection";
-import ThemeToggle from "../components/ThemeToggle";
 import { useSettingsStore } from "../store";
 import {
   ipcCleanPartialDownloads,
@@ -90,7 +91,7 @@ export default function Settings(): JSX.Element {
   }, []);
 
   if (loading || !settings) {
-    return <div className="text-fg-faint">Lade Einstellungen…</div>;
+    return <Loading label="Lade Einstellungen…" />;
   }
 
   const onPickModel = async () => {
@@ -139,20 +140,34 @@ export default function Settings(): JSX.Element {
       : null;
 
   return (
-    <div className="flex flex-col gap-6 max-w-2xl">
-      {error ? (
-        <div className="rounded-md bg-status-error/10 border border-status-error/40 px-3 py-2 text-sm text-status-error">
-          {error}
-        </div>
-      ) : null}
+    <div className="flex gap-6 items-start">
+      <SettingsSubNav />
+      <div className="flex-1 flex flex-col gap-8 max-w-2xl min-w-0">
+        {error ? <Banner tone="error">{error}</Banner> : null}
 
-      <Field label="Erscheinungsbild" hint="System folgt der OS-Einstellung.">
-        <ThemeToggle />
-      </Field>
+      <section
+        id="hardware"
+        className="scroll-mt-6 flex flex-col gap-4"
+        aria-labelledby="hardware-heading"
+      >
+        <SectionHeader id="hardware-heading" title="Hardware" />
+        <HardwareStatusField
+          hardware={hardware}
+          activeBackend={activeBackend}
+          currentLlmSlot={settings.llm_default_slot}
+          onPickLlmSlot={(slot) => void update({ llm_default_slot: slot })}
+        />
+      </section>
 
+      <section
+        id="audio-hotkey"
+        className="scroll-mt-6 flex flex-col gap-4"
+        aria-labelledby="audio-hotkey-heading"
+      >
+        <SectionHeader id="audio-hotkey-heading" title="Audio & Hotkey" />
       <Field
-        label="Audio-Eingabegeraet"
-        hint="Leer = OS-Standard. Aenderungen wirken beim naechsten Recording."
+        label="Audio-Eingabegerät"
+        hint="Leer = OS-Standard. Änderungen wirken beim nächsten Recording."
       >
         <select
           className={inputCls}
@@ -172,13 +187,23 @@ export default function Settings(): JSX.Element {
         </select>
       </Field>
 
-      <HardwareStatusField
-        hardware={hardware}
-        activeBackend={activeBackend}
-        currentLlmSlot={settings.llm_default_slot}
-        onPickLlmSlot={(slot) => void update({ llm_default_slot: slot })}
+      <MenuHotkeyField
+        session={session}
+        settingsValue={settings.menu_hotkey}
+        effective={effectiveHotkey}
+        onChange={(v) => void update({ menu_hotkey: v })}
       />
+      </section>
 
+      <section
+        id="local-models"
+        className="scroll-mt-6 flex flex-col gap-4"
+        aria-labelledby="local-models-heading"
+      >
+        <SectionHeader
+          id="local-models-heading"
+          title="Lokale Modelle (STT + LLM)"
+        />
       <Field
         label="Lokales Whisper-Modell"
         hint="Default-Slot wird beim ersten Start nach app_data_dir/models/ heruntergeladen. Eigener Pfad ueberschreibt das."
@@ -250,13 +275,6 @@ export default function Settings(): JSX.Element {
           ) : null}
         </div>
       </Field>
-
-      <MenuHotkeyField
-        session={session}
-        settingsValue={settings.menu_hotkey}
-        effective={effectiveHotkey}
-        onChange={(v) => void update({ menu_hotkey: v })}
-      />
 
       <Field
         label="Whisper-Threads (lokales STT)"
@@ -371,6 +389,17 @@ export default function Settings(): JSX.Element {
         </div>
       </Field>
 
+      </section>
+
+      <section
+        id="privacy-startup"
+        className="scroll-mt-6 flex flex-col gap-4"
+        aria-labelledby="privacy-startup-heading"
+      >
+        <SectionHeader
+          id="privacy-startup-heading"
+          title="Datenschutz & Start"
+        />
       <Field
         label="Diagnose-Logging"
         hint="Erlaubt Audio-Metadata, Transkripte und LLM-Antworten in den Logs. Default OFF (Datenschutz)."
@@ -401,16 +430,135 @@ export default function Settings(): JSX.Element {
         </label>
       </Field>
 
-      <CacheManagementField />
+      </section>
 
-      <TestTranscriptionSection />
+      <section
+        id="cache"
+        className="scroll-mt-6 flex flex-col gap-4"
+        aria-labelledby="cache-heading"
+      >
+        <SectionHeader id="cache-heading" title="Cache & Modelle" />
+        <CacheManagementField />
+      </section>
 
-      <AutoPasteTestSection />
+      <section
+        id="diagnostics"
+        className="scroll-mt-6 flex flex-col gap-4"
+        aria-labelledby="diagnostics-heading"
+      >
+        <SectionHeader
+          id="diagnostics-heading"
+          title="Diagnose & Tests"
+        />
+        <SetupAssistantRetriggerField
+          onTrigger={() => void update({ onboarding_done: false })}
+        />
+        <TestTranscriptionSection />
+        <AutoPasteTestSection />
+      </section>
 
-      <ApiKeysSection />
+      <section
+        id="api-keys"
+        className="scroll-mt-6"
+        aria-labelledby="api-keys-heading"
+      >
+        <ApiKeysSection />
+      </section>
 
-      <DangerZoneSection />
+      <section
+        id="danger-zone"
+        className="scroll-mt-6"
+        aria-labelledby="danger-zone-heading"
+      >
+        <DangerZoneSection />
+      </section>
+      </div>
     </div>
+  );
+}
+
+/**
+ * Sticky-Sub-Nav fuer die Settings-Page. Auf kleinen Fenstern (<1024 px)
+ * ausgeblendet — der User scrollt dann linear durch. Auf groesseren
+ * Fenstern bleibt sie wie ein Outline-Index sichtbar.
+ *
+ * Kein Scroll-Spy: das waere ein zusaetzlicher IntersectionObserver,
+ * lohnt sich nicht fuer 8 Sektionen. Anchor-Links reichen.
+ */
+function SettingsSubNav(): JSX.Element {
+  const items: Array<{ id: string; label: string }> = [
+    { id: "hardware", label: "Hardware" },
+    { id: "audio-hotkey", label: "Audio & Hotkey" },
+    { id: "local-models", label: "Lokale Modelle" },
+    { id: "privacy-startup", label: "Datenschutz & Start" },
+    { id: "cache", label: "Cache" },
+    { id: "diagnostics", label: "Diagnose & Tests" },
+    { id: "api-keys", label: "Cloud-API-Keys" },
+    { id: "danger-zone", label: "Gefahrenzone" },
+  ];
+  return (
+    <nav
+      aria-label="Settings-Bereiche"
+      className="hidden lg:flex flex-col gap-0.5 w-44 shrink-0 sticky top-0 self-start"
+    >
+      {items.map((it) => (
+        <a
+          key={it.id}
+          href={`#${it.id}`}
+          className="px-3 py-1.5 rounded-md text-sm text-fg-muted hover:text-fg hover:bg-elevated transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+        >
+          {it.label}
+        </a>
+      ))}
+    </nav>
+  );
+}
+
+interface SectionHeaderProps {
+  id: string;
+  title: string;
+}
+
+function SectionHeader({ id, title }: SectionHeaderProps): JSX.Element {
+  return (
+    <h2
+      id={id}
+      className="text-lg font-semibold text-fg border-b border-outline pb-2"
+    >
+      {title}
+    </h2>
+  );
+}
+
+/**
+ * Re-Trigger fuer den Onboarding-Wizard. Setzt `onboarding_done: false` —
+ * App.tsx rendert den Wizard, sobald das Settings-Update durchgelaufen ist.
+ * Mit Confirm-Dialog, weil der Wizard das Hauptfenster temporaer komplett
+ * uebernimmt.
+ */
+function SetupAssistantRetriggerField({
+  onTrigger,
+}: {
+  onTrigger: () => void;
+}): JSX.Element {
+  const handler = () => {
+    if (
+      window.confirm(
+        "Setup-Assistent erneut starten?\n\nDer Assistent oeffnet sich anstelle dieses Fensters und fragt erneut nach Whisper-Modell, API-Key und LLM-Modell. Bestehende Einstellungen bleiben unveraendert.",
+      )
+    ) {
+      onTrigger();
+    }
+  };
+  return (
+    <Field
+      label="Setup-Assistent"
+      hint="Wenn sich deine Hardware geändert hat oder du den Assistenten erneut durchlaufen möchtest."
+    >
+      <Button variant="secondary" onClick={handler} className="self-start">
+        Setup-Assistent erneut starten
+      </Button>
+    </Field>
   );
 }
 
@@ -482,7 +630,7 @@ function HardwareStatusField({
         label="Hardware-Status"
         hint="Wird beim App-Start ermittelt."
       >
-        <div className="text-sm text-fg-faint">Lade Hardware-Info…</div>
+        <Loading label="Lade Hardware-Info…" inline />
       </Field>
     );
   }
@@ -704,7 +852,7 @@ function CacheManagementField(): JSX.Element {
     >
       <div className="flex flex-col gap-3">
         {files === null ? (
-          <div className="text-sm text-fg-faint">Lade Datei-Liste…</div>
+          <Loading label="Lade Datei-Liste…" inline />
         ) : files.length === 0 ? (
           <div className="text-sm text-fg-faint">
             Keine Files im Modell-Cache (yet — werden beim ersten Download
@@ -898,18 +1046,14 @@ function DangerRow({
         <div className="text-sm font-medium text-fg">{title}</div>
         <div className="text-xs text-fg-muted">{description}</div>
       </div>
-      <button
-        type="button"
+      <Button
+        size="sm"
+        variant={severe ? "danger-strong" : "secondary"}
         onClick={onClick}
         disabled={disabled}
-        className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-          severe
-            ? "bg-status-error/15 text-status-error hover:bg-status-error/25 border border-status-error/40"
-            : "bg-elevated text-fg hover:bg-surface border border-outline"
-        }`}
       >
         {buttonLabel}
-      </button>
+      </Button>
     </div>
   );
 }

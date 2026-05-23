@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { useUIStore } from "../store";
 import Logo from "./Logo";
+import ThemeToggle from "./ThemeToggle";
 
+// Reihenfolge nach Nutzungs-Frequenz: Power-User oeffnet das Hauptfenster
+// meistens um Modi zu triggern oder zu editieren, nicht zum Konfigurieren.
 const TABS = [
-  { id: "settings", label: "Einstellungen" },
   { id: "modes", label: "Modi" },
+  { id: "settings", label: "Einstellungen" },
   { id: "logs", label: "Logs" },
 ] as const;
 
@@ -20,7 +23,7 @@ export default function Sidebar(): JSX.Element {
           <div className="text-sm font-semibold tracking-tight text-fg leading-tight">
             VoiceTypeX
           </div>
-          <div className="text-[11px] text-fg-faint leading-tight">
+          <div className="text-xxs text-fg-faint leading-tight">
             Diktat in jede App
           </div>
         </div>
@@ -30,8 +33,9 @@ export default function Sidebar(): JSX.Element {
           key={tab.id}
           type="button"
           onClick={() => setActiveTab(tab.id)}
+          aria-current={activeTab === tab.id ? "page" : undefined}
           className={
-            "px-3 py-2 rounded-md text-sm text-left whitespace-nowrap transition-colors " +
+            "px-3 py-2 rounded-md text-sm text-left whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 " +
             (activeTab === tab.id
               ? "bg-elevated text-fg font-medium"
               : "text-fg-muted hover:text-fg hover:bg-elevated/60")
@@ -40,6 +44,11 @@ export default function Sidebar(): JSX.Element {
           {tab.label}
         </button>
       ))}
+      {/* Theme-Toggle in den Sidebar-Footer — gehoert nicht zur App-
+          Konfiguration, sondern ist persoenliche Praeferenz. */}
+      <div className="mt-auto pt-3 border-t border-outline">
+        <ThemeToggle />
+      </div>
     </nav>
   );
 }
