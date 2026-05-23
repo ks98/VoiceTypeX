@@ -1,6 +1,6 @@
 id = "chat"
 name = "Slack/Teams Nachricht"
-description = "Diktat -> kurze, lockere Chat-Nachricht ohne Anrede oder Grussformel."
+description = "Kurz, locker, ohne Anrede oder Gruß."
 transcription = "cloud"
 processing = "cloud"
 cloud_stt_provider = "xai"
@@ -8,10 +8,25 @@ cloud_llm_provider = "xai"
 cloud_llm_model = "grok-4-fast-non-reasoning"
 injection_method = "clipboard"
 language = "de"
+
+# Locker, aber nicht völlig frei: temperature 0.5 lässt die
+# informelle Tonalität zu, bleibt aber konsistent. max_tokens 300
+# verhindert dass aus einer Chat-Antwort ein Aufsatz wird.
+temperature = 0.5
+top_p = 0.9
+max_tokens = 300
+
 system_prompt = """
-Du bekommst ein gesprochenes Diktat fuer eine Chat-Nachricht (Slack/Teams).
-- Halte die Nachricht kurz, locker und direkt.
-- Keine Anrede, keine Grussformel.
-- Korrigiere Grammatik. Behalte den informellen Ton bei.
-- Gib NUR den Nachrichtentext aus, ohne Kommentare.
+Du bekommst ein gesprochenes Diktat für eine Chat-Nachricht
+(Slack/Teams).
+
+- Maximal 2-3 Sätze. Informeller Ton (du-Form), keine Floskeln,
+  kein Smalltalk.
+- Keine Anrede, keine Grußformel.
+- Korrigiere Grammatik, ohne den Ton zu glätten.
+- Plain Text. Keine Markdown-Formatierung, keine Listen, keine
+  Backticks (wenn Code-Identifier wichtig sind, diktiere
+  "in Backticks" und übernimm das wörtlich).
+
+Gib NUR den Nachrichtentext aus, ohne Kommentare.
 """

@@ -1,6 +1,6 @@
 id = "email"
-name = "Foermliche E-Mail"
-description = "Diktat -> formell ausformulierte E-Mail, ohne Floskeln zu erfinden."
+name = "Förmliche E-Mail"
+description = "Ausformulierte E-Mail; Anrede/Gruß nur wenn diktiert."
 transcription = "cloud"
 processing = "cloud"
 cloud_stt_provider = "xai"
@@ -8,11 +8,30 @@ cloud_llm_provider = "xai"
 cloud_llm_model = "grok-4-fast-non-reasoning"
 injection_method = "clipboard"
 language = "de"
+
+# Anti-Halluzinations-Profil: niedrige temperature dämpft die
+# Tendenz von Grok-4-Fast, "Sehr geehrte Damen und Herren" oder
+# "Anbei…"-Floskeln zu erfinden. top_p 0.9 lässt genug Spielraum
+# für natürliche Formulierung.
+temperature = 0.3
+top_p = 0.9
+max_tokens = 1024
+
 system_prompt = """
-Du bekommst ein gesprochenes Diktat. Forme daraus eine foermliche E-Mail auf Deutsch.
-- Verwende eine angemessene Anrede nur, wenn der Sprecher eine Empfaengerperson erwaehnt.
-- Behalte alle inhaltlichen Aussagen vollstaendig bei.
-- Korrigiere Grammatik, Stil und Struktur.
-- Wenn der Sprecher eine Grussformel diktiert, uebernimm sie. Sonst keine eigene hinzufuegen.
-- Gib AUSSCHLIESSLICH den E-Mail-Text aus, ohne erklaerende Kommentare und ohne Markdown.
+Du bekommst ein gesprochenes Diktat. Forme daraus eine förmliche
+E-Mail auf Deutsch.
+
+- Verwende eine Anrede nur, wenn der Sprecher den Empfänger nennt.
+  Wenn keine Empfängerperson genannt ist, beginne die E-Mail direkt
+  mit dem ersten Inhaltssatz — niemals "Sehr geehrte Damen und
+  Herren" oder "Hallo zusammen" erfinden.
+- Wenn der Sprecher eine Grußformel diktiert, übernimm sie. Sonst
+  keine eigene hinzufügen.
+- Behalte alle inhaltlichen Aussagen vollständig bei.
+- Korrigiere Grammatik und Zeichensetzung; formuliere in geschlossene
+  Sätze und Absätze.
+- Keine Floskeln erfinden ("Ich hoffe…", "Anbei…", "Mit der Bitte
+  um…") — nur übernehmen, was diktiert wurde.
+
+Gib NUR den E-Mail-Text aus, ohne Markdown und ohne Kommentare.
 """

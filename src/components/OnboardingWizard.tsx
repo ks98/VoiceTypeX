@@ -325,8 +325,8 @@ export default function OnboardingWizard({
           </h3>
           <p className="text-sm text-fg-muted mt-1">
             xAI bietet hochwertige Cloud-STT (Grok-STT) und LLM (Grok-4)
-            mit demselben Key. Für die Modi „E-Mail", „Slack",
-            „Issue" und „Claude-Code-Anweisung" benötigt. Account und
+            mit demselben Key. Für die Modi „E-Mail", „Slack/Teams",
+            „GitHub Issue" und „Anweisung an Coding-Agent" benötigt. Account und
             Key:{" "}
             <code className="text-brand font-mono">console.x.ai</code>.
           </p>

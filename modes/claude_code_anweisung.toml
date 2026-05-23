@@ -1,20 +1,49 @@
 id = "agent"
-name = "Claude Code / Codex Anweisung"
-description = "Diktat -> praezise Coding-Agent-Anweisung mit Schritten und Akzeptanzkriterien."
+name = "Anweisung an Coding-Agent"
+description = "Imperativ formuliert, mit Schritten und Akzeptanzkriterien."
 transcription = "cloud"
 processing = "cloud"
 cloud_stt_provider = "xai"
 cloud_llm_provider = "xai"
 cloud_llm_model = "grok-4-fast-non-reasoning"
 injection_method = "clipboard"
-language = "de"
+# Bewusst kein `language`-Feld: Coding-Diktate sind oft sprach-gemischt
+# ("die Funktion `parseConfig` returnt..."). Whisper macht dann
+# Auto-Detect, statt deutsche Phonetik auf englische Identifier zu
+# stülpen. Der System-Prompt unten erlaubt explizit beide Sprachen.
+
+# Whisper-Glossar für Coding-Diktate. Wer eigene Stack-Begriffe
+# benutzt, kann die Liste pro Modus erweitern.
+initial_prompt = "Coding-Anweisung. Begriffe: refactor, async, await, Tauri, Rust, TypeScript, ESLint, Clippy, fmt, test, CI, Diff, Repo, Branch, Commit, PR, Pull-Request."
+
+# Präzision > Variation — die Anweisung soll deterministisch
+# strukturiert sein, nicht kreativ formuliert.
+temperature = 0.2
+top_p = 0.9
+max_tokens = 2000
+
 system_prompt = """
-Du bekommst ein gesprochenes Diktat, das eine Anweisung an einen Coding-Agenten
-(Claude Code, Codex, etc.) werden soll.
-- Forme die Anweisung in klare, praezise, imperativ formulierte Anforderungen um.
+Du bekommst ein gesprochenes Diktat, das eine Anweisung an einen
+Coding-Agenten (Claude Code, Codex, Cursor, etc.) werden soll.
+
+- Formuliere im Imperativ ("Implementiere X", nicht "X soll
+  implementiert werden").
 - Wenn der Sprecher mehrere Schritte nennt, nummeriere sie.
-- Keine Hoeflichkeitsfloskeln, kein "bitte".
-- Klar definierte Akzeptanzkriterien am Ende, falls aus dem Diktat ableitbar.
-- Sprache: Deutsch oder Englisch — verwende die Sprache, in der diktiert wurde.
-- Gib NUR die Anweisung aus.
+- Keine Höflichkeitsfloskeln, kein "bitte".
+- Akzeptanzkriterien am Ende als Checkliste (- [ ] ...), nur wenn aus
+  dem Diktat ableitbar — erfinde keine.
+- Setze Code-Identifier, Dateipfade und Kommandos in Backticks.
+- Sprache: Deutsch oder Englisch — verwende die Sprache, in der
+  diktiert wurde. Bei sprach-gemischten Diktaten dominiert die
+  Sprache des Hauptsatzes.
+
+Beispiel-Format für Akzeptanzkriterien:
+```
+**Akzeptanzkriterien:**
+- [ ] `cargo test` läuft grün
+- [ ] Neuer Endpunkt antwortet mit 200 bei valider Eingabe
+```
+
+Gib NUR die Anweisung aus, ohne umschließende Code-Fences und ohne
+Vorwort.
 """

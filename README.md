@@ -30,8 +30,8 @@ nicht im Scope.
    **oder** Cloud-LLM), und an der Cursor-Position eingefügt.
 
 Sechs Modi sind vorinstalliert: *Exaktes Diktat*, *Korrigierendes
-Diktat*, *Förmliche E-Mail*, *Slack/Teams*, *GitHub-Issue*,
-*Claude-Code-Anweisung*. Eigene Modi via TOML — siehe
+Diktat*, *Förmliche E-Mail*, *Slack/Teams Nachricht*, *GitHub Issue*,
+*Anweisung an Coding-Agent*. Eigene Modi via TOML — siehe
 [`docs/MODES.md`](docs/MODES.md).
 
 **Migration aus älteren Versionen:** Modi hatten bisher je einen eigenen

@@ -1,6 +1,6 @@
 id = "issue"
 name = "GitHub Issue"
-description = "Diktat -> klar strukturiertes GitHub-Issue in Markdown."
+description = "Strukturiertes Issue in Markdown: Titel, Problem, Repro."
 transcription = "cloud"
 processing = "cloud"
 cloud_stt_provider = "xai"
@@ -8,14 +8,38 @@ cloud_llm_provider = "xai"
 cloud_llm_model = "grok-4-fast-non-reasoning"
 injection_method = "clipboard"
 language = "de"
+
+# Whisper-Glossar: technische Identifier werden ohne Glossar
+# zerschossen ("Tauri" → "Taurin", "pnpm" → "P & P", "tsc" → "Tsek").
+# Liste deckt das VoiceTypeX-Tech-Spektrum ab — User können sie pro
+# Modus oder via Settings global ergänzen.
+initial_prompt = "GitHub Issue. Begriffe: Tauri, pnpm, tsc, Cargo, Clippy, Rust, TypeScript, ESLint, CI, PR, Repo, Stack-Trace, Whisper, llama.cpp, Wayland, libei."
+
+# Strukturierte Aufgabe — temperature niedrig, damit Format stabil ist.
+temperature = 0.2
+top_p = 0.9
+max_tokens = 1500
+
 system_prompt = """
-Du bekommst ein gesprochenes Diktat. Forme daraus ein klares GitHub Issue in Markdown.
+Du bekommst ein gesprochenes Diktat. Forme daraus ein GitHub Issue
+in Markdown.
+
 Struktur:
-1. Knapper Titel als erste Zeile (ohne `#`-Markdown).
+1. Titel als erste Zeile (max. 80 Zeichen, ohne `#`-Markdown, kein
+   Punkt am Ende).
 2. Leerzeile.
-3. Abschnitt `## Problem` – was passiert, was wurde erwartet.
-4. Abschnitt `## Reproduktion` – nur wenn der Sprecher Schritte nennt.
-5. Abschnitt `## Zusatzinfos` – nur wenn relevant.
-Keine Section weglassen, wenn der Sprecher Inhalt dafuer liefert; keine erfinden.
-Sprache: Deutsch, technisch sachlich. Gib NUR das Markdown aus.
+3. Abschnitt `## Problem` — was passiert, was wurde erwartet.
+4. Abschnitt `## Reproduktion` — nur wenn der Sprecher Schritte nennt.
+   Übernimm nur Schritte, die explizit diktiert wurden; erfinde keine
+   plausiblen Schritte aus der Problembeschreibung.
+5. Abschnitt `## Zusatzinfos` — nur wenn relevant.
+
+Jede Section nur, wenn der Sprecher Inhalt dafür liefert — nichts
+erfinden, nichts weglassen wenn vorhanden.
+
+Setze Code-Identifier, Dateipfade, Kommandos und Funktionsnamen in
+Backticks.
+
+Sprache: Deutsch, technisch sachlich. Gib NUR das Markdown aus, ohne
+umschließende Code-Fences und ohne Kommentare.
 """

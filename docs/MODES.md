@@ -10,24 +10,29 @@ es ohne App-Neustart auf.
 | Modus | STT | LLM-Postprocessing | Datei |
 |---|---|---|---|
 | Exaktes Diktat | Lokal (whisper-rs) | — | `exaktes_diktat.toml` |
-| Korrigierendes Diktat | Lokal (whisper-rs) | Lokal (Ollama) | `korrigierendes_diktat.toml` |
+| Korrigierendes Diktat | Lokal (whisper-rs) | Lokal (Embedded oder Ollama) | `korrigierendes_diktat.toml` |
 | Förmliche E-Mail | xAI | xAI Grok-fast | `foermliche_email.toml` |
-| Slack/Teams | xAI | xAI Grok-fast | `slack_teams.toml` |
-| GitHub-Issue | xAI | xAI Grok-fast | `github_issue.toml` |
-| Claude-Code-Anweisung | xAI | xAI Grok-fast | `claude_code_anweisung.toml` |
+| Slack/Teams Nachricht | xAI | xAI Grok-fast | `slack_teams.toml` |
+| GitHub Issue | xAI | xAI Grok-fast | `github_issue.toml` |
+| Anweisung an Coding-Agent | xAI (Auto-Sprache) | xAI Grok-fast | `claude_code_anweisung.toml` |
 
 Modi haben keinen eigenen Hotkey — siehe Abschnitt *Hotkey-Modell*
 weiter unten.
 
 **Welcher Modus wann?**
 - *Exaktes Diktat* — wenn die Worte 1:1 so wie gesprochen ankommen sollen
-  (z.B. Zitate, technische Begriffe, eigene Code-Identifier).
-- *Korrigierendes Diktat* — vollständig offline, mit lokalem LLM zur
-  Glättung von Verhasplern und Füllwörtern.
-- *Förmliche E-Mail* / *Slack* / *GitHub-Issue* / *Claude-Code* —
-  Cloud-Pipeline mit Zielton pro Kontext. Diese vier teilen die
-  STT-Stage (xAI), unterscheiden sich nur im `system_prompt` des
-  Postprocessings.
+  (z.B. Zitate, technische Begriffe, eigene Code-Identifier). Reiner
+  Lokal-Pfad, kein Netz.
+- *Korrigierendes Diktat* — vollständig offline, lokales LLM entfernt
+  Versprecher und Selbstkorrekturen, behält Inhalt 1:1 bei.
+- *Förmliche E-Mail* / *Slack/Teams Nachricht* / *GitHub Issue* /
+  *Anweisung an Coding-Agent* — Cloud-Pipeline mit Zielton pro Kontext.
+  Diese vier teilen die STT-Stage (xAI), unterscheiden sich in
+  `system_prompt`, Sampling-Profil und (bei den beiden technischen
+  Modi) im Whisper-Glossar via `initial_prompt`. Der Coding-Agent-
+  Modus verzichtet bewusst auf `language`, damit Whisper bei sprach-
+  gemischten Diktaten („die Funktion `parseConfig` returnt…")
+  auto-detect macht.
 
 ## Speicherort
 

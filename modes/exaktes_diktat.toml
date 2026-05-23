@@ -1,7 +1,12 @@
 id = "exakt"
 name = "Exaktes Diktat"
-description = "Woertliche Transkription, nur offensichtliche Erkennungsfehler korrigieren."
+description = "Wort für Wort, ohne Umformulierung. Lokal, kein Netz."
 transcription = "local"
 processing = "none"
 injection_method = "clipboard"
 language = "de"
+
+# Hinweis: dieser Modus reicht den Whisper-Output 1:1 durch.
+# Worterkennungs-Fehler (z.B. "Punkt"/"Komma" diktiert) landen
+# wörtlich im Output — wenn du Versprecher / Füllwörter raus willst,
+# nutze stattdessen "Korrigierendes Diktat".
