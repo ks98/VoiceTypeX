@@ -1,18 +1,25 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Clipboard-Fallback mit Session-Awareness.
+//! Clipboard-Fallback mit Session-Awareness und Keystrokes-Direct-Modus.
 //!
-//! Auf Plattformen, wo Auto-Paste funktioniert (X11, Windows):
+//! Default-Pfad — `InjectionStrategy::Clipboard`, auf X11/Windows:
 //!   1. Aktuellen Clipboard-Inhalt sichern
 //!   2. Neuen Text setzen
 //!   3. Paste-Shortcut senden (Ctrl+V / Cmd+V via enigo)
 //!   4. Nach 200 ms vorherigen Inhalt wiederherstellen
 //!
-//! Auf Wayland (oder anderen "auto_paste_supported = false"):
+//! Direct-Pfad — `InjectionStrategy::Keystrokes`, X11/Windows:
+//!   - Text wird Zeichen fuer Zeichen via enigo getippt (kein Clipboard).
+//!   - Sinnvoll fuer Terminals (`Ctrl+V` ist dort oft `Ctrl+Shift+V`),
+//!     IME-empfindliche Apps und Eingabefelder mit Clipboard-Blockern.
+//!   - Trade-off: Layout-abhaengig, langsamer als Paste, Unicode-Chars
+//!     ausserhalb des Layouts koennen scheitern.
+//!
+//! Wayland oder andere "auto_paste_supported = false" + Clipboard-Strategy:
 //!   - Setze nur den neuen Text
 //!   - **Kein** Paste-Shortcut (enigo's XTest-Pfad scheitert silent)
-//!   - **Kein** Restore (würde den Text nach 200 ms überschreiben, bevor
+//!   - **Kein** Restore (wuerde den Text nach 200 ms ueberschreiben, bevor
 //!     der User ihn manuell pasten kann)
-//!   - Stattdessen Notification "Drücke Ctrl+V in der Ziel-App"
+//!   - Stattdessen Notification "Druecke Ctrl+V in der Ziel-App"
 
 use crate::core::error::{Result, VoiceTypeError};
 use crate::core::session::detect_session;
@@ -43,20 +50,20 @@ impl TextInjector for ClipboardFallbackInjector {
     fn capabilities(&self) -> InjectorCapabilities {
         InjectorCapabilities {
             supports_clipboard: true,
-            // Phase 1 setzt strikt auf Clipboard; "Keystrokes"-Wunsch wird
-            // toleriert, aber der gleiche Pfad genutzt.
-            supports_keystrokes: false,
+            supports_keystrokes: true,
         }
     }
 
     async fn inject(&self, text: &str, opts: InjectOptions) -> Result<()> {
+        let session = detect_session();
+
         if opts.strategy == InjectionStrategy::Keystrokes {
-            tracing::info!(
-                "injection_method=keystrokes angefragt, aber Phase 1 nutzt Clipboard-Fallback"
-            );
+            // Auf macOS / unbekannten Sessions hat enigo keinen verlaesslichen
+            // Pfad fuer direkten Text-Inject. Wir versuchen es trotzdem —
+            // bei Fehler bleibt nichts uebrig als der harte Error nach oben.
+            return inject_keystrokes(text).await;
         }
 
-        let session = detect_session();
         let clipboard = self.app_handle.clipboard();
 
         // Reihenfolge wichtig: erst original-Inhalt sichern, dann neuen setzen.
@@ -101,6 +108,28 @@ impl TextInjector for ClipboardFallbackInjector {
 
         Ok(())
     }
+}
+
+/// Tippt den Text direkt via enigo's `Keyboard::text` — kein Clipboard-Umweg,
+/// kein Paste-Shortcut. enigo waehlt selbst den Plattform-Pfad (Windows
+/// SendInput, X11 XTest, macOS CGEvent). Auf Wayland wuerde der XTest-Pfad
+/// silent scheitern; dieser Code-Pfad wird dort aber nicht erreicht, weil
+/// `make_default_injector` Wayland-Sessions auf `WaylandLibeiInjector`
+/// routet (siehe injection/mod.rs).
+async fn inject_keystrokes(text: &str) -> Result<()> {
+    let owned = text.to_string();
+    tokio::task::spawn_blocking(move || -> Result<()> {
+        use enigo::{Enigo, Keyboard, Settings};
+
+        let mut enigo = Enigo::new(&Settings::default())
+            .map_err(|e| VoiceTypeError::Injection(format!("enigo::new: {e}")))?;
+        enigo
+            .text(&owned)
+            .map_err(|e| VoiceTypeError::Injection(format!("enigo.text: {e}")))?;
+        Ok(())
+    })
+    .await
+    .map_err(|e| VoiceTypeError::Injection(format!("spawn_blocking: {e}")))?
 }
 
 /// Sende Cmd+V (macOS) oder Ctrl+V (sonst) via enigo. enigo's Initialisierung

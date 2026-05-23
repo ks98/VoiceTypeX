@@ -21,7 +21,7 @@
 
 use crate::core::error::{Result, VoiceTypeError};
 use crate::injection::libei_worker::{run_libei_worker, KeyCommand};
-use crate::injection::{InjectOptions, InjectorCapabilities, TextInjector};
+use crate::injection::{InjectOptions, InjectionStrategy, InjectorCapabilities, TextInjector};
 use async_trait::async_trait;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -173,7 +173,20 @@ impl TextInjector for WaylandLibeiInjector {
         }
     }
 
-    async fn inject(&self, text: &str, _opts: InjectOptions) -> Result<()> {
+    async fn inject(&self, text: &str, opts: InjectOptions) -> Result<()> {
+        // `Keystrokes`-Strategy ist auf Wayland nicht implementiert. libei
+        // koennte das prinzipiell (KeyCommand::Type{keysyms} im Worker),
+        // braucht aber Char-zu-Keysym-Mapping via xkbcommon. Solange das
+        // nicht da ist, fallen wir auf den Clipboard+Auto-Paste-Pfad zurueck
+        // und loggen den Mismatch — sonst bleibt es fuer den User schwer
+        // nachvollziehbar, warum sein `injection_method = "keystrokes"`
+        // wie Clipboard aussieht.
+        if opts.strategy == InjectionStrategy::Keystrokes {
+            tracing::info!(
+                "Wayland: injection_method=keystrokes nicht unterstuetzt, nutze libei+Clipboard"
+            );
+        }
+
         // Schritt 1: Clipboard setzen — passiert immer, unabhaengig vom
         // Session-Status.
         self.app_handle

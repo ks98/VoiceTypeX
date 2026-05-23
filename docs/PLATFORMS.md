@@ -161,14 +161,28 @@ cmake) bleibt gleich.
 
 ### Bekannte X11-Limits
 
-- Paste-Shortcut ist auf `Ctrl+V` festgelegt. Terminals erwarten
-  oft `Ctrl+Shift+V` — Diktat in Terminal-Apps fügt nichts ein.
-  Workaround: `injection_method = "keystrokes"` pro Modus (für direktes
-  Tippen statt Paste — auf X11/Windows verfügbar).
+- Paste-Shortcut ist im Clipboard-Pfad auf `Ctrl+V` festgelegt. Terminals
+  erwarten oft `Ctrl+Shift+V` — dort fügt der Clipboard-Pfad nichts ein.
+  Workaround: im Modus `injection_method = "keystrokes"` setzen (siehe
+  unten — funktioniert auf X11 und Windows; auf Wayland ignoriert).
 - Manche WMs blockieren `XGrabKey` für bestimmte Modifier-Kombinationen
   (z.B. wenn ein WM-Shortcut die gleiche Combi schon hat). In dem Fall
   meldet `tauri-plugin-global-shortcut` einen Fehler und VoiceTypeX
   zeigt eine Notification.
+
+### Keystrokes-Modus (X11 + Windows)
+
+Modi mit `injection_method = "keystrokes"` umgehen das Clipboard
+komplett. Der Text wird Zeichen für Zeichen via `enigo.text(...)` getippt
+(Windows: `SendInput`, X11: `XTest`). Vorteile: funktioniert in Terminals
+mit `Ctrl+Shift+V`-Paste, in IME-empfindlichen Apps und in Eingaben mit
+Clipboard-Blockern. Nachteile: langsamer als Paste, Layout-abhängig —
+Unicode-Zeichen außerhalb des aktiven Tastatur-Layouts können scheitern.
+
+**Auf Wayland** wird `keystrokes` aktuell auf den libei-Clipboard-Pfad
+zurückgeführt (mit Hinweis-Log). Echte Keystroke-Injection via libei
+würde Char→Keysym-Mapping per `xkbcommon` brauchen — bisher nicht
+implementiert.
 
 ## Windows
 
