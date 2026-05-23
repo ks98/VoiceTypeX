@@ -24,6 +24,13 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
+/// Service-Identifier fuer Keyring-Entries. Plattform-Mapping:
+/// - Linux (Secret Service): collection-Attribut `service=voicetypex`.
+/// - Windows (Credential Manager): target_name = `<provider>.voicetypex`
+///   (Format `<user>.<service>` mit Default-Delimiter ".", siehe
+///   windows-native-keyring-store). Relevant fuer
+///   `scripts/uninstall-cleanup.ps1`.
+/// - macOS (Keychain): out-of-scope.
 const SERVICE: &str = "voicetypex";
 
 static FILE_STATE: OnceLock<RwLock<FileSecrets>> = OnceLock::new();

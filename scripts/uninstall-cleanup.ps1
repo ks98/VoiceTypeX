@@ -109,10 +109,18 @@ Write-Host ""
 
 if (Confirm-Action "Mit cmdkey alle $($Providers.Count) Provider-Eintraege loeschen?") {
     foreach ($p in $Providers) {
-        # rust-keyring legt unter Windows als target="$SERVICE.$provider"
-        # ab (Generic Credential). Doku ist nicht 100% deterministisch,
-        # deshalb versuchen wir beide gaengigen Schreibweisen.
-        $candidates = @("$Service.$p", "$Service`:$p", "$p")
+        # windows-native-keyring-store (Backend von keyring-3 auf Windows)
+        # bildet target_name als "<user>.<service>" mit Default-Delimiter
+        # ".", siehe docs.rs/windows-native-keyring-store. Unsere Calls
+        # `keyring::Entry::new("voicetypex", "xai")` landen damit unter
+        # target="xai.voicetypex".
+        #
+        # Aus Robustheit gegen Backend-Wechsel oder Custom-target-Modifier
+        # probieren wir nach dem kanonischen Format noch die historischen
+        # Schreibweisen — wenn nichts greift, ist der Eintrag schlicht
+        # nicht da.
+        $canonical = "${p}.${Service}"
+        $candidates = @($canonical, "${Service}.${p}", "${Service}:${p}", $p)
         $deleted = $false
         foreach ($target in $candidates) {
             $output = cmdkey /delete:$target 2>&1

@@ -135,6 +135,11 @@ build:windows:
     - pnpm install --frozen-lockfile
     - pnpm build
     - cargo check --manifest-path src-tauri/Cargo.toml
+    # Plattform-spezifische Bugs in Pfad-Handling, Newline-Konversion und
+    # keyring-Windows-Backend fallen sonst erst beim User auf. `--lib`
+    # weil die Integrationstests (sofern vorhanden) eine Tauri-Webview-
+    # Umgebung verlangen, die auf dem CI-Runner nicht da ist.
+    - cargo test --manifest-path src-tauri/Cargo.toml --lib
   rules:
     - if: '$CI_COMMIT_TAG'
       when: never

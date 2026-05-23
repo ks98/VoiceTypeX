@@ -364,7 +364,7 @@ Re-Install den User-Zustand wiederfindet.
 | Windows | `%APPDATA%\de.kevin-stenzel.voicetypex\data\` | Modelle |
 | Windows | `%LocalAppData%\de.kevin-stenzel.voicetypex\EBWebView\` | WebView2-Profil-Cache |
 | Windows | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\VoiceTypeX` | Autostart-Registry (falls aktiviert) |
-| Windows | Credential Manager, target enthält `voicetypex` | API-Key-Mirror |
+| Windows | Credential Manager, target `<provider>.voicetypex` (z.B. `xai.voicetypex`) | API-Key-Mirror |
 
 ### Drei Wege, das aufzuräumen
 
