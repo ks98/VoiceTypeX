@@ -207,7 +207,8 @@ Default).
 - **Auth:** keine (lokaler HTTP-Server)
 - **Default-Modell (ab Mai 2026):** `gemma3:4b` (vorher `qwen2.5:7b`)
   — Gemma 3 4B-IT von DeepMind, ~3 GB Footprint, 140+ Sprachen, sehr
-  stark auf Deutsch. Wechsel über `Mode.local_llm_model` pro Modus.
+  stark auf Deutsch. Wechsel über `Mode.ollama_model_tag` pro Modus
+  (Deprecated-Alias `local_llm_model` wird beim Load auto-migriert).
 - **Body:** Chat-Format analog zu OpenAI, plus Ollama-spezifische
   Felder:
   ```json

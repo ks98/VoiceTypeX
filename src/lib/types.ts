@@ -17,9 +17,22 @@ export interface Mode {
   cloud_stt_provider: string | null;
   cloud_llm_provider: string | null;
   cloud_llm_model: string | null;
+  /**
+   * @deprecated seit Phase-3b-Refactor — durch `ollama_model_tag` ersetzt.
+   * Bleibt im Type-Mirror nur fuer Migration aus alten TOMLs; das Backend
+   * spiegelt das Feld bei Save zurueck `ollama_model_tag` ein.
+   */
   local_llm_model: string | null;
   /** Phase 3b: "embedded" | "ollama" (Default = ollama bei null). */
   local_engine: string | null;
+  /** Phase 3b: Ollama-Modell-Tag (z.B. "llama3.2:3b") bei engine=ollama. */
+  ollama_model_tag: string | null;
+  /** Phase 3b: GGUF-Slot-Slug (z.B. "gemma4-e4b-it-q5_k_m") bei engine=embedded. null = globaler Default. */
+  embedded_llm_slot: string | null;
+  /** Phase 3b: Whisper-Slot-Slug pro Modus. null = globaler Default. */
+  whisper_model_slot: string | null;
+  /** Phase 3b: Whisper-Initial-Prompt (Glossar / Eigenname-Hinweise). */
+  initial_prompt: string | null;
   injection_method: InjectionMethod;
   language: string | null;
   system_prompt: string | null;
@@ -27,6 +40,8 @@ export interface Mode {
   temperature: number | null;
   top_p: number | null;
   repeat_penalty: number | null;
+  /** Phase 3b: LLM-Output-Token-Limit. */
+  max_tokens: number | null;
 }
 
 export interface Settings {

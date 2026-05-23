@@ -319,6 +319,13 @@ löscht. Die State-Machine selbst ändert sich gegenüber Phase 1 nicht
   unter `app_data_dir/models/`.
 - AppContext: `local_llm_processor: Arc<LlamaEmbeddedProcessor>`,
   beim Start konstruiert, Modell wird LAZY geladen.
+- **Per-Mode-Slot-Override** via `Mode.embedded_llm_slot`: zeigt auf
+  einen alternativen GGUF-Slot. Der Resolver in `pipeline/mod.rs`
+  vergleicht gegen `Settings.llm_default_slot` — bei Gleichheit (oder
+  `null`) wird der globale Processor wiederverwendet, sonst eine neue
+  Instanz lazy in `AppContext.extra_llm_processors` (HashMap, Slot-
+  Slug → Arc) gecached. Analog gibt es `Mode.whisper_model_slot` +
+  `AppContext.extra_transcribers` für Whisper-Overrides.
 
 ### Ollama (`local_engine = "ollama"` oder None) — Legacy-Pfad
 
@@ -340,9 +347,13 @@ löscht. Die State-Machine selbst ändert sich gegenüber Phase 1 nicht
 ### Verzweigung im Pipeline-Code
 
 `pipeline/mod.rs::run_local_processing` schaut auf `mode.local_engine`:
-`"embedded"` → `ctx.local_llm_processor`, `"ollama"`/None →
-`run_local_processing_ollama` (haendelt das Ollama-HTTP-Call-Setup mit
-keep_alive + model-Name). Unbekannter Wert → `Mode`-Fehlermeldung.
+`"embedded"` → `resolve_embedded_llm(ctx, mode)` (globaler Processor
+oder Cache-Lookup über `mode.embedded_llm_slot`), `"ollama"`/None →
+`run_local_processing_ollama` (Ollama-HTTP-Call-Setup mit keep_alive +
+`mode.ollama_model_tag`, Fallback auf deprecated `local_llm_model`).
+Unbekannter Engine-Wert → `Mode`-Fehlermeldung. Sampling-Felder werden
+in beide Pfade über `ProcessOpts.{temperature, top_p, repeat_penalty,
+max_tokens}` durchgereicht.
 
 ## Wayland Auto-Paste
 

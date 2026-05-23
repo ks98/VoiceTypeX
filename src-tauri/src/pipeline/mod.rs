@@ -13,8 +13,11 @@ use crate::core::modes::{Mode, ProcessingTarget, TranscriptionTarget};
 use crate::core::state::AppState;
 use crate::core::AppContext;
 use crate::injection::{InjectOptions, InjectionStrategy};
+use crate::processing::embedded::LlamaEmbeddedProcessor;
 use crate::processing::{make_cloud_processor, make_local_processor, ProcessOpts, Processor};
+use crate::transcription::local::LocalTranscriber;
 use crate::transcription::local_agreement::stable_prefix;
+use crate::transcription::model_downloader::{LlmModelSlot, ModelSlot};
 use crate::transcription::{make_cloud_transcriber, TranscribeOpts, Transcriber};
 use serde::Serialize;
 use std::sync::Arc;
@@ -157,12 +160,27 @@ async fn start_recording(app: &AppHandle, ctx: &Arc<AppContext>, mode: &Mode) ->
         match recorder.await_meta().await {
             Ok(meta) => {
                 let app_clone = app.clone();
-                let ctx_clone = Arc::clone(ctx);
                 let language = mode.language.clone();
+                let initial_prompt = mode.initial_prompt.clone();
                 let n_threads = ctx.settings.read().whisper_n_threads;
+                // Mode-Override fuer Whisper-Slot bereits hier aufloesen,
+                // damit der Streaming-Worker die gleiche Transcriber-
+                // Instanz nutzt wie der Final-Pass nach Stop. Sonst
+                // wuerde der User waehrend der Aufnahme die Default-
+                // Modell-Partials sehen und nach Stop einen abweichenden
+                // Final-Decode bekommen.
+                let transcriber_for_stream = resolve_local_transcriber(ctx, mode);
                 let handle = tauri::async_runtime::spawn(async move {
-                    streaming_worker(app_clone, ctx_clone, samples_arc, meta, language, n_threads)
-                        .await;
+                    streaming_worker(
+                        app_clone,
+                        transcriber_for_stream,
+                        samples_arc,
+                        meta,
+                        language,
+                        initial_prompt,
+                        n_threads,
+                    )
+                    .await;
                 });
                 *ctx.active_streaming_handle.lock() = Some(handle);
                 tracing::info!("Streaming-Worker gespawnt");
@@ -187,12 +205,14 @@ async fn start_recording(app: &AppHandle, ctx: &Arc<AppContext>, mode: &Mode) ->
 /// der Final-Pass startet.
 async fn streaming_worker(
     app: AppHandle,
-    ctx: Arc<AppContext>,
+    transcriber: Arc<LocalTranscriber>,
     samples_arc: Arc<parking_lot::Mutex<Vec<f32>>>,
     meta: crate::audio::recorder::StreamMeta,
     language: Option<String>,
+    initial_prompt: Option<String>,
     n_threads: Option<u32>,
 ) {
+    let ctx: Arc<AppContext> = app.state::<Arc<AppContext>>().inner().clone();
     use tokio::time::{sleep, Duration};
 
     // Erste Wartezeit, damit das Mikrofon ueberhaupt etwas Substanzielles
@@ -237,16 +257,12 @@ async fn streaming_worker(
 
         let opts = TranscribeOpts {
             language: language.clone(),
-            initial_prompt: None,
+            initial_prompt: initial_prompt.clone(),
             n_threads,
         };
 
         let started = std::time::Instant::now();
-        match ctx
-            .local_transcriber
-            .transcribe_streaming_pass(f16k, opts)
-            .await
-        {
+        match transcriber.transcribe_streaming_pass(f16k, opts).await {
             Ok(curr_text) => {
                 let elapsed_ms = started.elapsed().as_millis() as u64;
                 tracing::info!(
@@ -400,9 +416,12 @@ async fn finish_recording_and_inject(
         let _ = ctx.state_bus.transition(AppState::Idle);
     })?;
 
-    // STT — lokal oder Cloud, je nach Modus.
+    // STT — lokal (ggf. Mode-Override-Slot) oder Cloud, je nach Modus.
     let transcriber: Arc<dyn Transcriber> = match mode.transcription {
-        TranscriptionTarget::Local => Arc::clone(&ctx.transcriber),
+        TranscriptionTarget::Local => {
+            let local = resolve_local_transcriber(ctx, mode);
+            local as Arc<dyn Transcriber>
+        }
         TranscriptionTarget::Cloud => {
             let provider = mode.cloud_stt_provider.as_deref().unwrap_or("xai");
             make_cloud_transcriber(provider).inspect_err(|e| {
@@ -420,7 +439,7 @@ async fn finish_recording_and_inject(
             &wav,
             TranscribeOpts {
                 language: mode.language.clone(),
-                initial_prompt: None,
+                initial_prompt: mode.initial_prompt.clone(),
                 n_threads,
             },
         )
@@ -512,17 +531,19 @@ async fn run_local_processing(
         temperature: mode.temperature,
         top_p: mode.top_p,
         repeat_penalty: mode.repeat_penalty,
+        max_tokens: mode.max_tokens,
         ..Default::default()
     };
 
     // Phase 3b: Engine-Wahl pro Modus. `None` faellt auf Ollama zurueck
     // (Backward-Compat fuer Modi aus Phase 1/2). `"embedded"` aktiviert
-    // den `LlamaEmbeddedProcessor` aus dem AppContext — kein externer
-    // Daemon noetig.
+    // den `LlamaEmbeddedProcessor` — wenn der Modus einen anderen Slot
+    // verlangt als der globale Default, gibt der Resolver einen lazy
+    // geladenen Override-Processor zurueck.
     let engine = mode.local_engine.as_deref().unwrap_or("ollama");
     match engine {
         "embedded" => {
-            let processor: Arc<dyn Processor> = ctx.local_llm_processor.clone();
+            let processor: Arc<dyn Processor> = resolve_embedded_llm(ctx, mode);
             processor.process(transcript, system_prompt, opts).await
         }
         "ollama" => run_local_processing_ollama(ctx, mode, transcript, system_prompt, opts).await,
@@ -540,18 +561,100 @@ async fn run_local_processing_ollama(
     system_prompt: &str,
     opts: ProcessOpts,
 ) -> Result<String> {
-    let model = mode.local_llm_model.clone().ok_or_else(|| {
-        VoiceTypeError::Mode(format!(
-            "Modus '{}': processing=local engine=ollama, aber kein local_llm_model gesetzt",
-            mode.id
-        ))
-    })?;
+    // `ollama_model_tag` ist der neue Pflicht-Schluessel. `local_llm_model`
+    // bleibt als deprecated Fallback fuer noch nicht migrierte TOMLs (die
+    // Migration in `load_mode_from_path` kopiert das Feld bereits, aber wir
+    // sind defensiv).
+    let model = mode
+        .ollama_model_tag
+        .clone()
+        .or_else(|| mode.local_llm_model.clone())
+        .ok_or_else(|| {
+            VoiceTypeError::Mode(format!(
+                "Modus '{}': processing=local engine=ollama, aber kein ollama_model_tag gesetzt",
+                mode.id
+            ))
+        })?;
     let (ollama_url, keep_alive) = {
         let s = ctx.settings.read();
         (s.ollama_url.clone(), s.ollama_keep_alive.clone())
     };
     let processor = make_local_processor(ollama_url, model, keep_alive);
     processor.process(transcript, system_prompt, opts).await
+}
+
+/// Resolver fuer den `LocalTranscriber`, den ein Modus benutzen soll.
+///
+/// - Kein `mode.whisper_model_slot` gesetzt → globaler
+///   `ctx.local_transcriber` (Whisper-Modell aus den Settings).
+/// - Slot identisch mit dem globalen Default-Slot → ebenfalls globaler
+///   Transcriber, damit wir kein zweites Modell parallel im RAM halten.
+/// - Sonst: Cache-Lookup in `ctx.extra_transcribers`; bei Cache-Miss
+///   wird ein neuer `LocalTranscriber` fuer den Slot konstruiert
+///   (Modell-Datei wird erst beim ersten `transcribe`-Aufruf in den
+///   Whisper-Context geladen — der Resolver allokiert nur Metadaten).
+fn resolve_local_transcriber(ctx: &Arc<AppContext>, mode: &Mode) -> Arc<LocalTranscriber> {
+    let Some(slot_slug) = mode.whisper_model_slot.as_ref() else {
+        return ctx.local_transcriber.clone();
+    };
+    let default_slot = ctx.settings.read().whisper_default_slot.clone();
+    if slot_slug == &default_slot {
+        return ctx.local_transcriber.clone();
+    }
+
+    {
+        let cache = ctx.extra_transcribers.lock();
+        if let Some(found) = cache.get(slot_slug) {
+            return found.clone();
+        }
+    }
+
+    let slot = ModelSlot::from_setting(slot_slug);
+    let model_path = ctx.model_dir.join(slot.filename());
+    let vad_model_path = Some(ctx.model_dir.join("ggml-silero-v6.2.0.bin"));
+    let new_transcriber = Arc::new(LocalTranscriber::new(model_path, vad_model_path));
+    tracing::info!(
+        slot = %slot_slug,
+        mode_id = %mode.id,
+        "LocalTranscriber-Override fuer Modus erstellt"
+    );
+    let mut cache = ctx.extra_transcribers.lock();
+    cache
+        .entry(slot_slug.clone())
+        .or_insert(new_transcriber)
+        .clone()
+}
+
+/// Analog fuer den Embedded-LLM-Processor (`mode.embedded_llm_slot`).
+fn resolve_embedded_llm(ctx: &Arc<AppContext>, mode: &Mode) -> Arc<LlamaEmbeddedProcessor> {
+    let Some(slot_slug) = mode.embedded_llm_slot.as_ref() else {
+        return ctx.local_llm_processor.clone();
+    };
+    let default_slot = ctx.settings.read().llm_default_slot.clone();
+    if slot_slug == &default_slot {
+        return ctx.local_llm_processor.clone();
+    }
+
+    {
+        let cache = ctx.extra_llm_processors.lock();
+        if let Some(found) = cache.get(slot_slug) {
+            return found.clone();
+        }
+    }
+
+    let slot = LlmModelSlot::from_setting(slot_slug);
+    let model_path = ctx.model_dir.join(slot.filename());
+    let new_processor = Arc::new(LlamaEmbeddedProcessor::new(model_path));
+    tracing::info!(
+        slot = %slot_slug,
+        mode_id = %mode.id,
+        "LlamaEmbeddedProcessor-Override fuer Modus erstellt"
+    );
+    let mut cache = ctx.extra_llm_processors.lock();
+    cache
+        .entry(slot_slug.clone())
+        .or_insert(new_processor)
+        .clone()
 }
 
 async fn run_cloud_processing(mode: &Mode, transcript: &str) -> Result<String> {
@@ -568,6 +671,7 @@ async fn run_cloud_processing(mode: &Mode, transcript: &str) -> Result<String> {
         temperature: mode.temperature,
         top_p: mode.top_p,
         repeat_penalty: mode.repeat_penalty,
+        max_tokens: mode.max_tokens,
         ..Default::default()
     };
     processor.process(transcript, system_prompt, opts).await

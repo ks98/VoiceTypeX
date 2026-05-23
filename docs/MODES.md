@@ -70,13 +70,35 @@ cloud_llm_model = "grok-4-fast-non-reasoning"
                                # als grok-4 bei Postprocessing-Aufgaben)
 
 # Nur wenn processing = "local":
-local_llm_model = "qwen2.5:7b" # Ollama-Model-Tag
+local_engine = "embedded"       # "embedded" (llama-cpp-2) | "ollama" (extern)
+                                # Default bei null/weglassen: "ollama" (Backward-Compat)
+
+# Nur wenn local_engine = "ollama":
+ollama_model_tag = "qwen2.5:7b" # Ollama-Model-Tag
+# (Deprecated-Alias `local_llm_model` wird beim Load automatisch
+#  nach `ollama_model_tag` migriert.)
+
+# Nur wenn local_engine = "embedded" — Override des globalen GGUF-Slots:
+embedded_llm_slot = "gemma4-e4b-it-q5_k_m"  # null = globaler Default
+
+# Nur wenn transcription = "local" — Override des globalen Whisper-Slots:
+whisper_model_slot = "large-v3-turbo-q8_0"  # null = globaler Default
+initial_prompt = """
+Optionaler Whisper-Glossar — Eigennamen, Fachbegriffe oder Schreibweisen,
+die der Decoder als Kontext bekommen soll.
+"""
 
 # Wenn processing != "none" — System-Prompt für die LLM-Nachbearbeitung:
 system_prompt = """
 Mehrzeiliger Prompt-Text. Wird an das LLM als System-Message geschickt,
 das gesprochene Diktat als User-Message.
 """
+
+# Optional — Sampling-Parameter (sonst engine-/provider-spezifischer Default):
+temperature = 0.3       # 0.0 – 2.0
+top_p = 0.8             # 0.0 – 1.0
+repeat_penalty = 1.05   # 0.5 – 2.0
+max_tokens = 1024       # 1 – 8192
 ```
 
 ## Validierung
@@ -87,6 +109,11 @@ VoiceTypeX prüft beim Laden:
 - **`transcription = "cloud"`**: erfordert `cloud_stt_provider`.
 - **`processing = "cloud"`**: erfordert `cloud_llm_provider`.
 - **`processing != "none"`**: erfordert `system_prompt`.
+- **`local_engine`**: nur `"embedded"` oder `"ollama"`.
+- **`processing = "local"` + `local_engine = "ollama"`**: erfordert
+  `ollama_model_tag` (oder Deprecated-`local_llm_model`).
+- **Sampling-Ranges**: `temperature ∈ [0.0, 2.0]`, `top_p ∈ [0.0, 1.0]`,
+  `repeat_penalty ∈ [0.5, 2.0]`, `max_tokens ∈ [1, 8192]`.
 
 Fehlerhafte Modi werden komplett verworfen (das ganze Verzeichnis-Reload
 schlägt fehl) — die zuvor geladenen Modi bleiben aktiv. Der Fehler

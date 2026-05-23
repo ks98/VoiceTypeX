@@ -183,6 +183,8 @@ pub fn run() {
                 transcriber,
                 local_transcriber,
                 local_llm_processor,
+                extra_transcribers: Arc::new(Mutex::new(std::collections::HashMap::new())),
+                extra_llm_processors: Arc::new(Mutex::new(std::collections::HashMap::new())),
                 active_streaming_handle: Arc::new(Mutex::new(None)),
                 injector,
                 settings: Arc::new(RwLock::new(initial_settings)),

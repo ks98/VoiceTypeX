@@ -54,27 +54,66 @@ pub struct Mode {
     pub transcription: TranscriptionTarget,
     pub processing: ProcessingTarget,
 
+    // --- STT-Konfiguration ---
     #[serde(default)]
     pub cloud_stt_provider: Option<String>,
+
+    /// Optionaler Whisper-Modell-Slot-Override fuer diesen Modus.
+    /// `None` (Default) = nutze `Settings.whisper_default_slot`.
+    /// Werte: dieselben Slugs wie in Settings (`large-v3-turbo-q8_0`,
+    /// `large-v3-turbo-german-q5_0`, `small-q5_1`, …).
+    ///
+    /// Pro-Modus-Override braucht eine zweite `LocalTranscriber`-
+    /// Instanz; die Pipeline cached diese in `AppContext.
+    /// extra_transcribers` per Slot-Slug.
+    #[serde(default)]
+    pub whisper_model_slot: Option<String>,
+
+    /// Whisper-Glossary: Worte/Phrasen die Whisper als Hinweis
+    /// bekommt (z.B. Eigennamen, Fachbegriffe). Wird als
+    /// `initial_prompt` an die Decode-Stufe gereicht und beeinflusst
+    /// die Token-Wahrscheinlichkeiten. Empfehlung: kurze Liste mit
+    /// Kommas oder Leerzeichen getrennt.
+    #[serde(default)]
+    pub initial_prompt: Option<String>,
+
+    // --- LLM-Konfiguration ---
     #[serde(default)]
     pub cloud_llm_provider: Option<String>,
     #[serde(default)]
     pub cloud_llm_model: Option<String>,
+
+    /// **Deprecated** seit Phase-3b-Refactor: verwende stattdessen
+    /// `ollama_model_tag` oder `embedded_llm_slot` (je nach Engine).
+    /// Wird beim Laden noch geparst und in `ollama_model_tag`
+    /// migriert, wenn dieses None ist — Backward-Compat fuer
+    /// existierende User-TOMLs.
     #[serde(default)]
     pub local_llm_model: Option<String>,
 
     /// Welche lokale LLM-Engine soll diesen Modus bedienen, wenn
     /// `processing == "local"`?
     /// - `"ollama"` (Default-Fallback) — bestehender Pfad ueber den
-    ///   externen Ollama-Daemon. `local_llm_model` ist dann ein
-    ///   Ollama-Tag (`gemma3:4b`, `qwen2.5:7b`).
+    ///   externen Ollama-Daemon.
     /// - `"embedded"` (Phase 3b) — interner llama-cpp-2-Pfad ohne
-    ///   externen Daemon. `local_llm_model` ist dann ein Slot-Slug
-    ///   (`gemma3-4b-it-q5_k_m`) oder leer fuer `settings.llm_default_slot`.
+    ///   externen Daemon.
     ///
     /// `None` = Ollama (Backward-Compat fuer existierende Modi).
     #[serde(default)]
     pub local_engine: Option<String>,
+
+    /// Ollama-Modell-Tag fuer den Legacy-Pfad (`local_engine =
+    /// "ollama"`). Beispiel: `"gemma3:4b"`, `"qwen2.5:7b"`. Bei
+    /// `engine == "ollama"` Pflicht.
+    #[serde(default)]
+    pub ollama_model_tag: Option<String>,
+
+    /// GGUF-Slot fuer den Embedded-Pfad (`local_engine = "embedded"`).
+    /// `None` = nutze `Settings.llm_default_slot` (Global-Default).
+    /// Werte: `"gemma4-e4b-it-q5_k_m"`, `"gemma4-e2b-it-q5_k_m"`,
+    /// `"gemma3-1b-it-q5_k_m"`, … (siehe `LlmModelSlot::from_setting`).
+    #[serde(default)]
+    pub embedded_llm_slot: Option<String>,
 
     #[serde(default)]
     pub injection_method: InjectionMethod,
@@ -84,21 +123,26 @@ pub struct Mode {
     #[serde(default)]
     pub system_prompt: Option<String>,
 
-    // Sampling-Parameter pro Modus. Greift fuer lokales (Ollama) UND
-    // Cloud-LLM (OpenAI-Chat-Completions / Anthropic Messages, soweit der
-    // jeweilige Provider die Parameter respektiert). Bei `None` benutzt der
-    // Provider seinen Server-Default.
+    // --- Sampling-Parameter pro Modus ---
+    // Greifen fuer lokales (Ollama/Embedded) UND Cloud-LLM (OpenAI-
+    // Chat-Completions / Anthropic Messages, soweit der Provider die
+    // Parameter respektiert). Bei `None` benutzt der Provider/die
+    // Engine den Server-Default.
     //
     // Empfohlene Defaults fuer "faithful rewrite, do not extend":
     //   temperature = 0.2, top_p = 0.8, repeat_penalty = 1.05
-    // Diese Werte stehen in den default_modes-TOMLs der Modi, die lokales
-    // LLM benutzen (siehe Task #8).
     #[serde(default)]
     pub temperature: Option<f32>,
     #[serde(default)]
     pub top_p: Option<f32>,
     #[serde(default)]
     pub repeat_penalty: Option<f32>,
+
+    /// Maximale Output-Token-Zahl fuer LLM-Cleanup. `None` =
+    /// 1024 (Default in `LlamaEmbeddedProcessor`). Slack-Modi
+    /// kommen mit 256 aus, lange E-Mails brauchen 2048+.
+    #[serde(default)]
+    pub max_tokens: Option<u32>,
 }
 
 impl Mode {
@@ -134,7 +178,81 @@ impl Mode {
                 self.id
             )));
         }
+        // Phase 3b: Engine-Type-Check + Ollama-Tag-Pflicht.
+        if let Some(engine) = self.local_engine.as_deref() {
+            match engine {
+                "embedded" | "ollama" => {}
+                other => {
+                    return Err(VoiceTypeError::Mode(format!(
+                        "Modus '{}': local_engine '{other}' unbekannt (erlaubt: \"embedded\", \"ollama\")",
+                        self.id
+                    )));
+                }
+            }
+        }
+        if self.processing == ProcessingTarget::Local {
+            let engine = self.local_engine.as_deref().unwrap_or("ollama");
+            if engine == "ollama"
+                && self.ollama_model_tag.is_none()
+                && self.local_llm_model.is_none()
+            {
+                return Err(VoiceTypeError::Mode(format!(
+                    "Modus '{}': local_engine=ollama, aber weder ollama_model_tag noch local_llm_model gesetzt",
+                    self.id
+                )));
+            }
+        }
+        // Sampling-Parameter-Ranges (Best-effort-Check, kein Hard-Fail
+        // bei minimalen Ueberschreitungen — User-Frust vs.
+        // Hilfsbereitschaft).
+        if let Some(t) = self.temperature {
+            if !(0.0..=2.0).contains(&t) {
+                return Err(VoiceTypeError::Mode(format!(
+                    "Modus '{}': temperature {t} ausserhalb [0.0, 2.0]",
+                    self.id
+                )));
+            }
+        }
+        if let Some(p) = self.top_p {
+            if !(0.0..=1.0).contains(&p) {
+                return Err(VoiceTypeError::Mode(format!(
+                    "Modus '{}': top_p {p} ausserhalb [0.0, 1.0]",
+                    self.id
+                )));
+            }
+        }
+        if let Some(r) = self.repeat_penalty {
+            if !(0.5..=2.0).contains(&r) {
+                return Err(VoiceTypeError::Mode(format!(
+                    "Modus '{}': repeat_penalty {r} ausserhalb [0.5, 2.0]",
+                    self.id
+                )));
+            }
+        }
+        if let Some(m) = self.max_tokens {
+            if !(1..=8192).contains(&m) {
+                return Err(VoiceTypeError::Mode(format!(
+                    "Modus '{}': max_tokens {m} ausserhalb [1, 8192]",
+                    self.id
+                )));
+            }
+        }
         Ok(())
+    }
+
+    /// Migration: alte TOMLs haben `local_llm_model` ohne `ollama_model_tag`.
+    /// Beim Load mappen wir das automatisch (mit WARN-Log), damit
+    /// existierende User-Customizations nicht brechen.
+    fn migrate_deprecated_fields(&mut self) {
+        if self.ollama_model_tag.is_none() && self.local_llm_model.is_some() {
+            let val = self.local_llm_model.clone();
+            tracing::warn!(
+                mode_id = %self.id,
+                value = ?val,
+                "TOML-Feld `local_llm_model` ist deprecated — automatisch nach `ollama_model_tag` migriert"
+            );
+            self.ollama_model_tag = val;
+        }
     }
 }
 
@@ -142,8 +260,9 @@ impl Mode {
 pub fn load_mode_from_path(path: &Path) -> Result<Mode> {
     let content = std::fs::read_to_string(path)
         .map_err(|e| VoiceTypeError::Mode(format!("{}: {e}", path.display())))?;
-    let mode: Mode = toml::from_str(&content)
+    let mut mode: Mode = toml::from_str(&content)
         .map_err(|e| VoiceTypeError::Mode(format!("{}: TOML-Parse: {e}", path.display())))?;
+    mode.migrate_deprecated_fields();
     mode.validate()?;
     Ok(mode)
 }

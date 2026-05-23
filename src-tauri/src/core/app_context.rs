@@ -14,6 +14,7 @@ use crate::processing::embedded::LlamaEmbeddedProcessor;
 use crate::transcription::local::LocalTranscriber;
 use crate::transcription::Transcriber;
 use parking_lot::{Mutex, RwLock};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -49,6 +50,15 @@ pub struct AppContext {
     /// setzt; sonst bleibt der Modell-Cache leer und das File auf Disk
     /// muss noch nicht existieren.
     pub local_llm_processor: Arc<LlamaEmbeddedProcessor>,
+    /// Phase-3b-Refactor: Cache von Override-LocalTranscribers pro
+    /// Whisper-Modell-Slot. Pro-Modus `mode.whisper_model_slot`
+    /// triggert lazy-Load eines neuen LocalTranscribers fuer diesen
+    /// Slot; alle weiteren Aufrufe nutzen den gecachten. Key ist der
+    /// Slot-Slug, Value der Transcriber.
+    pub extra_transcribers: Arc<Mutex<HashMap<String, Arc<LocalTranscriber>>>>,
+    /// Analog fuer `mode.embedded_llm_slot` — Cache von Override-
+    /// LlamaEmbeddedProcessors pro GGUF-Slot.
+    pub extra_llm_processors: Arc<Mutex<HashMap<String, Arc<LlamaEmbeddedProcessor>>>>,
     /// Handle des aktuell laufenden Streaming-Decode-Workers (Phase 2,
     /// nur bei `transcription = "local"`). Wird in `start_recording`
     /// gespawnt, in `finish_recording_and_inject` abortet, bevor der
