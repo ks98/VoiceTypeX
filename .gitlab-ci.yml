@@ -46,6 +46,9 @@ variables:
         libssl-dev libasound2-dev libxdo-dev
         libxcb1-dev libxcb-xtest0-dev libxcb-xfixes0-dev
         libdbus-1-dev libudev-dev
+        libclang-dev cmake
+        libvulkan-dev glslc mesa-vulkan-drivers
+        libopenblas-dev
     - curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
     - apt-get install -y -qq nodejs
     - npm config set prefix "$HOME/.local"
@@ -92,7 +95,10 @@ test:linux:
   stage: test
   needs: [lint:linux]
   script:
-    - cargo test --manifest-path src-tauri/Cargo.toml --all-features
+    # Default-Features (gpu-vulkan); `embedded-cuda-dynamic` ist
+    # opt-in und braucht CUDA-Toolkit auf dem Runner — separater
+    # Job bei Bedarf.
+    - cargo test --manifest-path src-tauri/Cargo.toml --lib
   rules:
     - if: '$CI_COMMIT_TAG'
       when: never
@@ -108,7 +114,10 @@ build:linux:
   script:
     - pnpm install --frozen-lockfile
     - pnpm build
-    - cargo check --manifest-path src-tauri/Cargo.toml --all-features
+    # Default-Features (gpu-vulkan + custom-protocol). `--all-features`
+    # waere falsch: zieht `embedded-cuda-dynamic` rein, das wuerde auf
+    # einem Runner ohne CUDA-Toolkit scheitern.
+    - cargo check --manifest-path src-tauri/Cargo.toml
   rules:
     - if: '$CI_COMMIT_TAG'
       when: never
@@ -119,9 +128,13 @@ build:windows:
   stage: build
   needs: [lint:linux]
   script:
+    # Vulkan-SDK (Lunarg) liefert die Headers + `glslc` fuer
+    # whisper-rs/vulkan + llama-cpp-2/vulkan-Builds.
+    - choco install -y vulkan-sdk --no-progress
+    - refreshenv
     - pnpm install --frozen-lockfile
     - pnpm build
-    - cargo check --manifest-path src-tauri/Cargo.toml --all-features
+    - cargo check --manifest-path src-tauri/Cargo.toml
   rules:
     - if: '$CI_COMMIT_TAG'
       when: never
@@ -148,6 +161,8 @@ bundle:windows:
   <<: *windows-base
   stage: bundle
   script:
+    - choco install -y vulkan-sdk --no-progress
+    - refreshenv
     - pnpm install --frozen-lockfile
     - pnpm tauri build
   artifacts:
