@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Kopiert die zur Laufzeit benoetigten Shared-Libs (`libllama.so*`,
-// `libggml*.so*`) von Cargo's target/{debug,release}/-Verzeichnis nach
-// `src-tauri/resources/lib/`. Wird ueber `beforeBundleCommand` in
-// `tauri.conf.json` getriggered, laeuft also NACH `cargo build` und VOR
-// `tauri-bundler`.
+// Kopiert die zur Laufzeit benoetigten Shared-Libs (Linux: `libllama.so*`,
+// `libggml*.so*`; Windows: `llama.dll`, `ggml*.dll`) von Cargo's
+// target/{debug,release}/-Verzeichnis nach `src-tauri/resources/lib/`.
+// Wird ueber `beforeBundleCommand` in `tauri.conf.json` getriggert, laeuft
+// also NACH `cargo build` und VOR `tauri-bundler`.
 //
-// Tauri-bundler picked die Files via `bundle.resources`-Glob auf und
-// legt sie ins finale Bundle. Zur Laufzeit findet sie der Linker via
-// rpath (siehe `src-tauri/build.rs`).
+// Tauri-bundler picked die Files via `bundle.resources`-Glob auf und legt
+// sie ins finale Bundle.
 //
-// Cross-platform: Linux/macOS aus target/{debug,release}/ → resources/lib/.
-// Windows: .dll-Files heissen anders, aber Bundle-Layout ist auch
-// anders (Tauri legt sie automatisch neben die .exe). Wir lassen den
-// Windows-Pfad als TODO — aktuell ohne dynamic-link-Win32-Build untestbar.
+// - **Linux**: Files landen in `$ORIGIN/resources/lib/`. Der Binary findet
+//   sie zur Laufzeit via rpath-Kaskade (`src-tauri/build.rs`).
+// - **Windows**: Files landen in `$INSTDIR\resources\lib\`. Der Windows-
+//   DLL-Loader sucht dort **nicht** automatisch — siehe NSIS-Hook in
+//   `docs/PLATFORMS.md` (Erster Windows-Bundle-Build verifiziert das).
 
 import { existsSync, mkdirSync, readdirSync, copyFileSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -23,10 +23,17 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "..");
 const RESOURCES_LIB = join(REPO_ROOT, "src-tauri", "resources", "lib");
 
-const PATTERNS = [
-  /^libggml(-[a-z0-9_]+)?\.so(\.[\d.]+)?$/,
-  /^libllama\.so(\.[\d.]+)?$/,
-];
+const IS_WINDOWS = process.platform === "win32";
+
+// Linux: `libllama.so`, `libllama.so.0`, `libllama.so.0.0.0`,
+//        `libggml.so`, `libggml-cpu.so`, `libggml-vulkan.so`, `libggml-base.so`.
+// Windows: `llama.dll`, `ggml.dll`, `ggml-cpu.dll`, `ggml-vulkan.dll`,
+//          `ggml-base.dll`. Keine Versions-Suffixe auf Win.
+const PATTERNS = IS_WINDOWS
+  ? [/^ggml(-[a-z0-9_]+)?\.dll$/, /^llama\.dll$/]
+  : [/^libggml(-[a-z0-9_]+)?\.so(\.[\d.]+)?$/, /^libllama\.so(\.[\d.]+)?$/];
+
+const PROFILE_MARKER = IS_WINDOWS ? /^llama\.dll$/ : /^libllama\.so/;
 
 // Reihenfolge: zuerst release, dann debug. Release hat Vorrang, wenn
 // beides existiert (Bundle-Builds laufen typisch im release-Profil).
@@ -38,10 +45,10 @@ const SOURCE_DIRS = [
 function findFirstSource() {
   for (const dir of SOURCE_DIRS) {
     if (!existsSync(dir)) continue;
-    // Brauchen mindestens libllama.so* damit wir das richtige Profil
+    // Brauchen das llama-Marker-File damit wir das richtige Profil
     // wissen — kein Profil ohne llama.cpp gebaut.
     const entries = readdirSync(dir);
-    if (entries.some((n) => /^libllama\.so/.test(n))) {
+    if (entries.some((n) => PROFILE_MARKER.test(n))) {
       return dir;
     }
   }
@@ -50,8 +57,9 @@ function findFirstSource() {
 
 const source = findFirstSource();
 if (!source) {
+  const marker = IS_WINDOWS ? "llama.dll" : "libllama.so*";
   console.warn(
-    "[bundle-libs] Keine target/{release,debug}/libllama.so* gefunden — " +
+    `[bundle-libs] Keine target/{release,debug}/${marker} gefunden — ` +
       "Cargo-Build muss vorher laufen. Skript ist No-Op.",
   );
   process.exit(0);

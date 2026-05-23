@@ -213,6 +213,38 @@ dem Tauri-Installer).
   aber einige UWP-/WinUI-Apps haben restriktive Input-Pfade. Workaround
   mit Clipboard-Fallback (Standard).
 
+### Windows — Embedded-LLM DLL-Bundle (offener Verifikations-Punkt)
+
+`llama-cpp-2` wird mit `dynamic-link` gelinkt; auf Windows entstehen
+dadurch `llama.dll`, `ggml.dll`, `ggml-cpu.dll`, `ggml-vulkan.dll` und
+`ggml-base.dll` neben dem Binary in `target/release/`.
+`scripts/bundle-libs.mjs` kopiert sie cross-platform nach
+`src-tauri/resources/lib/`, der Tauri-NSIS-Bundler legt sie damit auf der
+Ziel-Maschine unter `$INSTDIR\resources\lib\` ab.
+
+**Problem:** Der Windows-DLL-Loader sucht zur Laufzeit in
+`$INSTDIR\` (App-Dir), nicht in `$INSTDIR\resources\lib\`. Beim ersten
+LLM-Aufruf droht *„llama.dll not found"*.
+
+**Verifikation auf erstem Windows-Bundle-Build:**
+
+1. NSIS-Installer ausführen, App starten.
+2. Im Modes-Settings einen Embedded-LLM-Modus auswählen, einmal diktieren.
+3. Wenn die App weiterläuft → DLLs werden gefunden, alles okay.
+4. Wenn *„The code execution cannot proceed because llama.dll was not
+   found"* erscheint:
+   - **Workaround per Hand:** DLLs aus `$INSTDIR\resources\lib\*.dll`
+     neben die `voicetypex.exe` (`$INSTDIR\`) kopieren.
+   - **Permanente Lösung:** NSIS-Hook in `tauri.conf.json` ergänzen, der
+     die DLLs beim Install kopiert. Skizze:
+     ```nsis
+     ; In bundle.windows.nsis.installerHooks → NSIS_HOOK_POSTINSTALL
+     CopyFiles "$INSTDIR\resources\lib\*.dll" "$INSTDIR"
+     ```
+     Tauri 2's NSIS-Template-Override-Feature dokumentieren wir hier
+     nach erstem realen Test (Doku-Stand zum Zeitpunkt der Notiz: Hook-
+     API in Tauri 2.x in Bewegung).
+
 ## macOS — nicht im Scope
 
 Alle macOS-Implementierungen sind Stubs hinter
