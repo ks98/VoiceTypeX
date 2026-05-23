@@ -127,6 +127,35 @@ Details, Output-Pfade und Installations-Anleitung in
    Erlauben — danach läuft Auto-Paste ohne weitere Dialoge, auch nach
    App-Restart (`restore_token` wird persistiert).
 
+## Deinstallation
+
+Der OS-Paket-Manager (apt/dnf/NSIS) entfernt nur das, was er installiert
+hat — User-Daten unter `~/.config/de.kevin-stenzel.voicetypex/`
+(Settings, Modi, API-Keys, Wayland-Token), Modelle unter `models/`
+(bis zu 10 GB GGUF + Whisper-Files), OS-Keychain-Einträge und ein
+eventueller Autostart-Eintrag bleiben **bewusst** liegen, damit ein
+Re-Install den User-Zustand wiederfindet.
+
+**Vor dem Uninstall:** In *Einstellungen → Gefahrenzone* kannst du
+API-Keys, Wayland-Token und die App-Konfiguration einzeln oder
+gemeinsam zurücksetzen.
+
+**Vollständige Spurenbeseitigung nach dem Uninstall:**
+
+- Linux/macOS:
+  ```bash
+  bash scripts/uninstall-cleanup.sh
+  ```
+- Windows (PowerShell, *nicht* als Admin):
+  ```powershell
+  powershell -ExecutionPolicy Bypass -File scripts\uninstall-cleanup.ps1
+  ```
+
+Beide Skripte sind interaktiv — jeder Schritt fragt einzeln nach.
+Details und welche Spuren manuell entfernt werden müssen (KDE-Wayland-
+Portal-Permission, WebView2-Cache, …) stehen in
+[`docs/PLATFORMS.md`](docs/PLATFORMS.md) → *„Deinstallation"*.
+
 ## Datenschutz & Sicherheit
 
 - Audio, Transkripte und LLM-Antworten werden standardmäßig **nicht**

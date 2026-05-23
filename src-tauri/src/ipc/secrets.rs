@@ -14,7 +14,7 @@ type IpcResult<T> = std::result::Result<T, String>;
 
 /// Provider, fuer die VoiceTypeX einen Keychain-Eintrag verwaltet.
 /// xAI nutzt denselben Eintrag fuer STT und LLM (CLAUDE.md §4.4).
-const PROVIDERS: &[&str] = &["xai", "openai", "anthropic", "groq", "deepgram"];
+pub(crate) const PROVIDERS: &[&str] = &["xai", "openai", "anthropic", "groq", "deepgram"];
 
 #[derive(Serialize)]
 pub struct ProviderStatus {

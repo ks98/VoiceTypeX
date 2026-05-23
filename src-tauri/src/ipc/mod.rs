@@ -5,5 +5,6 @@ pub mod cache;
 pub mod diagnostics;
 pub mod modes;
 pub mod recording;
+pub mod reset;
 pub mod secrets;
 pub mod settings;

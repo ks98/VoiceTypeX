@@ -21,6 +21,9 @@ import {
   ipcGetSessionInfo,
   ipcGetWhisperBackend,
   ipcListCachedFiles,
+  ipcResetApiKeys,
+  ipcResetAppFactory,
+  ipcResetWaylandToken,
   type CachedFile,
   type HardwareReport,
   type ModelDownloadProgress,
@@ -405,6 +408,8 @@ export default function Settings(): JSX.Element {
       <AutoPasteTestSection />
 
       <ApiKeysSection />
+
+      <DangerZoneSection />
     </div>
   );
 }
@@ -765,5 +770,146 @@ function CacheManagementField(): JSX.Element {
         ) : null}
       </div>
     </Field>
+  );
+}
+
+/**
+ * Gefahrenzone — Reset- und Uninstall-Vorbereitungs-Aktionen. Bewusst
+ * am Ende der Seite und visuell abgesetzt (rote Outline), damit sie
+ * nicht versehentlich angeklickt werden. Jeder Button hat einen
+ * Bestaetigungs-Dialog.
+ */
+function DangerZoneSection(): JSX.Element {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [status, setStatus] = useState<{
+    kind: "ok" | "err";
+    text: string;
+  } | null>(null);
+
+  const run = async (
+    label: string,
+    confirmMsg: string,
+    action: () => Promise<void>,
+    successMsg: string,
+  ) => {
+    if (!confirm(confirmMsg)) return;
+    setBusy(label);
+    setStatus(null);
+    try {
+      await action();
+      setStatus({ kind: "ok", text: successMsg });
+    } catch (e) {
+      setStatus({ kind: "err", text: String(e) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const onResetApiKeys = () =>
+    run(
+      "keys",
+      "Alle Cloud-API-Keys (xAI, OpenAI, Anthropic, Groq, Deepgram) aus File-Storage UND OS-Keychain löschen?\n\nDanach musst du die Keys neu eingeben, um Cloud-Provider zu nutzen.",
+      ipcResetApiKeys,
+      "Alle API-Keys geloescht.",
+    );
+
+  const onResetWayland = () =>
+    run(
+      "wayland",
+      "Wayland-Permission-Token löschen?\n\nBeim nächsten Auto-Paste-Inject zeigt der Compositor wieder den Berechtigungs-Dialog. Auf X11/Windows hat das keinen Effekt.",
+      ipcResetWaylandToken,
+      "Wayland-Token geloescht.",
+    );
+
+  const onFactoryReset = () =>
+    run(
+      "factory",
+      "App vollständig zurücksetzen?\n\n• Settings → Defaults\n• Modi → 6 mitgelieferte Defaults (eigene gehen verloren)\n• API-Keys → gelöscht\n• Wayland-Token → gelöscht\n\nHeruntergeladene Modelle bleiben erhalten — die musst du separat über das Cache-Management löschen.\n\nDieser Schritt ist NICHT rückgängig zu machen.",
+      ipcResetAppFactory,
+      "App auf Werkseinstellungen zurückgesetzt. Empfehlung: App neu starten, damit alle In-Memory-States frisch geladen sind.",
+    );
+
+  return (
+    <Field label="Gefahrenzone" hint="Aktionen, die User-Daten dauerhaft entfernen. Jede Aktion fragt vor Ausführung nach.">
+      <div className="rounded-md border border-status-error/40 bg-status-error/5 p-3 flex flex-col gap-3">
+        <DangerRow
+          title="Cloud-API-Keys löschen"
+          description="Entfernt alle Provider-Keys aus secrets.json und OS-Keychain."
+          buttonLabel={busy === "keys" ? "Lösche…" : "API-Keys löschen"}
+          onClick={() => void onResetApiKeys()}
+          disabled={busy !== null}
+        />
+        <DangerRow
+          title="Wayland-Permission-Token löschen"
+          description="Forciert beim nächsten Auto-Paste wieder den xdg-portal-Dialog. Auf X11/Windows No-Op."
+          buttonLabel={busy === "wayland" ? "Lösche…" : "Token löschen"}
+          onClick={() => void onResetWayland()}
+          disabled={busy !== null}
+        />
+        <DangerRow
+          title="App vollständig zurücksetzen"
+          description="Settings, Modi, API-Keys und Wayland-Token raus. Modelle bleiben erhalten."
+          buttonLabel={busy === "factory" ? "Setze zurück…" : "Werkseinstellungen"}
+          onClick={() => void onFactoryReset()}
+          disabled={busy !== null}
+          severe
+        />
+        {status ? (
+          <div
+            className={`text-xs ${
+              status.kind === "ok"
+                ? "text-status-done"
+                : "text-status-error"
+            }`}
+          >
+            {status.text}
+          </div>
+        ) : null}
+        <div className="text-xs text-fg-faint">
+          Für eine vollständige Deinstallation siehe{" "}
+          <code className="text-fg-muted">scripts/uninstall-cleanup.sh</code>
+          {" "}im Repo oder den Abschnitt „Deinstallation" in der README.
+        </div>
+      </div>
+    </Field>
+  );
+}
+
+interface DangerRowProps {
+  title: string;
+  description: string;
+  buttonLabel: string;
+  onClick: () => void;
+  disabled?: boolean;
+  severe?: boolean;
+}
+
+function DangerRow({
+  title,
+  description,
+  buttonLabel,
+  onClick,
+  disabled,
+  severe,
+}: DangerRowProps): JSX.Element {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-medium text-fg">{title}</div>
+        <div className="text-xs text-fg-muted">{description}</div>
+      </div>
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+          severe
+            ? "bg-status-error/15 text-status-error hover:bg-status-error/25 border border-status-error/40"
+            : "bg-elevated text-fg hover:bg-surface border border-outline"
+        }`}
+      >
+        {buttonLabel}
+      </button>
+    </div>
   );
 }

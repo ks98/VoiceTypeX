@@ -144,6 +144,33 @@ export async function ipcCleanPartialDownloads(): Promise<number> {
 }
 
 /**
+ * Loescht alle Provider-API-Keys aus File-Storage **und** OS-Keychain.
+ * Fehler einzelner Provider werden gesammelt — die Funktion rejected nur,
+ * wenn mindestens einer fehlschlug, raeumt aber so viel wie moeglich.
+ */
+export async function ipcResetApiKeys(): Promise<void> {
+  return invoke("reset_api_keys");
+}
+
+/**
+ * Loescht die Wayland-Permission-Token-Datei. Naechster Auto-Paste-Inject
+ * triggert wieder den xdg-desktop-portal-Dialog. Auf X11/Windows No-Op.
+ */
+export async function ipcResetWaylandToken(): Promise<void> {
+  return invoke("reset_wayland_token");
+}
+
+/**
+ * Vollständiger Werksreset: Provider-Keys, Wayland-Token, Modi (zurueck
+ * auf die 6 Defaults) und Settings (JSON geloescht, In-Memory auf
+ * Default). Heruntergeladene Modelle bleiben bewusst erhalten — siehe
+ * `ipcDeleteAllModels` fuer den separaten Modell-Wipe.
+ */
+export async function ipcResetAppFactory(): Promise<void> {
+  return invoke("reset_app_factory");
+}
+
+/**
  * Diagnose: testet den Auto-Paste-Pfad direkt, ohne die normale Pipeline
  * (kein Audio, kein STT, kein LLM). Wartet `delaySecs` Sekunden — User
  * fokussiert in der Zwischenzeit das Ziel-Fenster — und sendet dann

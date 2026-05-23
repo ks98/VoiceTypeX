@@ -247,7 +247,9 @@ Nach der Installation erscheint *VoiceTypeX* im App-Menü. Start
 über Menü oder `voicetypex` im Terminal.
 
 Uninstall: `sudo apt remove voice-type-x` (Tauri normalisiert
-`identifier` auf einen kebab-case-Paketnamen).
+`identifier` auf einen kebab-case-Paketnamen). User-Daten und
+Keychain-Einträge bleiben dabei liegen — Cleanup siehe Abschnitt
+*„Deinstallation — vollständige Spurenbeseitigung"* weiter unten.
 
 ### `.rpm` installieren (Fedora / RHEL / openSUSE)
 
@@ -259,7 +261,8 @@ sudo dnf install ./VoiceTypeX-0.1.0-1.x86_64.rpm
 sudo rpm -i VoiceTypeX-0.1.0-1.x86_64.rpm
 ```
 
-Uninstall: `sudo dnf remove voice-type-x`.
+Uninstall: `sudo dnf remove voice-type-x`. User-Daten bleiben liegen
+— siehe *„Deinstallation"*.
 
 ### AppImage starten (universell Linux)
 
@@ -292,6 +295,68 @@ App-Menü. Für dauerhafte Nutzung empfiehlt sich DEB oder RPM.
   `libwebkit2gtk-4.1.so.0`, `libgtk-3.so.0` — alle aus dem
   Fedora-Standard-Repo.
 - **AppImage**: nichts — alles eingebacken, ~110 MB.
+
+## Deinstallation — vollständige Spurenbeseitigung
+
+Der OS-Paket-Manager (apt/dnf/NSIS) entfernt nur das, was er installiert
+hat. **Bewusst liegen** bleiben User-Daten, OS-Keychain-Einträge,
+Autostart-Konfiguration und Wayland-Portal-Permissions — damit ein
+Re-Install den User-Zustand wiederfindet.
+
+### Was wo liegt
+
+| Plattform | Pfad | Inhalt |
+|---|---|---|
+| Linux | `~/.config/de.kevin-stenzel.voicetypex/settings.json` | App-Einstellungen |
+| Linux | `~/.config/de.kevin-stenzel.voicetypex/secrets.json` (chmod 0600) | Cloud-API-Keys (Source of Truth) |
+| Linux | `~/.config/de.kevin-stenzel.voicetypex/wayland_session.json` (chmod 0600) | Wayland-Permission-Restore-Token |
+| Linux | `~/.config/de.kevin-stenzel.voicetypex/modes/*.toml` | Eigene + Default-Modi |
+| Linux | `~/.config/de.kevin-stenzel.voicetypex/models/` | Whisper-/VAD-/GGUF-Modelle (bis zu ~10 GB) |
+| Linux | `~/.config/autostart/*VoiceType*.desktop` | Autostart-Eintrag (falls aktiviert) |
+| Linux | gnome-keyring / kwallet, `service="voicetypex"` | API-Key-Mirror |
+| Windows | `%APPDATA%\de.kevin-stenzel.voicetypex\config\` | Settings, Modi, Secrets, Token |
+| Windows | `%APPDATA%\de.kevin-stenzel.voicetypex\data\` | Modelle |
+| Windows | `%LocalAppData%\de.kevin-stenzel.voicetypex\EBWebView\` | WebView2-Profil-Cache |
+| Windows | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\VoiceTypeX` | Autostart-Registry (falls aktiviert) |
+| Windows | Credential Manager, target enthält `voicetypex` | API-Key-Mirror |
+
+### Drei Wege, das aufzuräumen
+
+**1. In der App — vor dem Uninstall:**
+*Einstellungen → Gefahrenzone* bietet drei Reset-Stufen
+(API-Keys, Wayland-Token, Werksreset). Modelle bleiben dabei
+unangetastet — separates Cache-Management in derselben Settings-Seite.
+
+**2. Cleanup-Skript — nach dem Uninstall:**
+
+Linux/macOS:
+```bash
+bash scripts/uninstall-cleanup.sh
+```
+
+Windows (PowerShell, *nicht* als Admin):
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\uninstall-cleanup.ps1
+```
+
+Beide Skripte sind interaktiv. Sie räumen User-Daten, OS-Keychain-
+Einträge und Autostart-Eintrag weg, jeweils mit separater
+Bestätigung. Voraussetzung auf Linux ist optional `libsecret-tools`
+(Paket `libsecret-tools` auf Debian/Ubuntu) für die Keyring-
+Löschung; ohne das gibt das Skript eine Anleitung für seahorse /
+kwalletmanager aus.
+
+**3. Manuell — Spuren, die kein Skript anfasst:**
+
+- **Wayland-Portal-Permissions** (RemoteDesktop / GlobalShortcuts):
+  - KDE Plasma 6: *System-Settings → Apps → Anwendungsberechtigungen
+    → „Tastendrücke senden"* → VoiceTypeX entfernen.
+    Analog für *„Globale Verknüpfungen"*.
+  - GNOME: `gsettings list-recursively | grep desktop-portal`
+    bzw. dconf-editor unter `/org/gnome/desktop-portal-permissions/`.
+- **WebView2-State** (Windows): `%LocalAppData%\de.kevin-stenzel.
+  voicetypex\EBWebView\` manuell löschen.
+- **NSIS-Uninstaller-Eintrag** (Windows): über *Win+R → appwiz.cpl*.
 
 ## CI
 
