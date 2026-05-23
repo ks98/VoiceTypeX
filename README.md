@@ -62,15 +62,19 @@ Menü-Hotkey*.
   GPU-Device automatischer CPU-Fallback. `gpu-cuda`/`gpu-metal`/
   `gpu-coreml` als opt-in Features, `fast-cpu` (OpenBLAS) als
   Headless-Fallback.
-- **Lokales LLM:** Zwei Pfade ab Phase 3b. **Embedded** (Default) via
-  llama-cpp-2 0.1.146 mit Vulkan-Backend — kein externer Daemon
-  nötig, GGUF-Modelle direkt im VoiceTypeX-Prozess. Sechs Slots ab
-  Mai 2026: **Gemma 4 E4B** (Pro, 12+ GB RAM, ~5,1 GB Disk),
+- **Lokales LLM:** **Embedded** ist seit Mai 2026 der Standardpfad —
+  llama-cpp-2 0.1.146 mit Vulkan-Backend läuft direkt im VoiceTypeX-
+  Prozess, **kein externer Daemon nötig**. Modi mit `processing = "local"`
+  ohne explizites `local_engine` nutzen automatisch Embedded. Sechs
+  GGUF-Slots: **Gemma 4 E4B** (Pro, 12+ GB RAM, ~5,1 GB Disk),
   **Gemma 4 E2B** (Mittel, 8-12 GB, ~3,1 GB), Gemma 3 1B (Light,
-  <8 GB, ~851 MB), Gemma 3 4B (Legacy-Pro), Llama 3.2 1B, Qwen 2.5
+  <8 GB, ~851 MB), Gemma 3 4B (Vor-Gemma4-Pro), Llama 3.2 1B, Qwen 2.5
   1.5B. Settings-UI hat Hardware-basierte Slot-Empfehlung und
-  Ein-Klick-Download. **Ollama** bleibt als Legacy-Opt-in via
-  `local_engine = "ollama"` im Mode-TOML
+  Ein-Klick-Download. **Ollama** bleibt als Opt-in für User mit
+  eigener Daemon-Installation via `local_engine = "ollama"` im
+  Mode-TOML — die Konfiguration (Endpoint + Keep-Alive) sitzt in der
+  Settings-Page in einem zusammenklappbaren „Ollama-Konfiguration"-
+  Block.
 - **Cloud-Provider (BYOK):** xAI (STT + Grok, Default `grok-4-fast-non-reasoning`),
   OpenAI Whisper + GPT, Groq Whisper, Deepgram, Anthropic Claude
 - **Wayland Auto-Paste:** ashpd (RemoteDesktop-Portal) + reis (libei)

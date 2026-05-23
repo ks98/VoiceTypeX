@@ -18,7 +18,7 @@ Festgelegt — Alternativen werden nicht ohne Rücksprache eingeführt.
 | Async-Runtime | tokio |
 | Audio | cpal + hound (WAV) + rubato (Sinc-Resampling) |
 | Lokales STT | whisper-rs 0.16 + Silero-VAD v6, **Default-Backend `gpu-vulkan`** (Phase 3a, Mai 2026); `gpu-cuda`/`gpu-metal`/`gpu-coreml` opt-in, `fast-cpu` (OpenBLAS) als Headless-Fallback. CPU-Fallback bei fehlendem Vulkan-Device ist whisper.cpp-internal — kein App-Code-Pfad. |
-| Lokales LLM | Phase 3b: **embedded llama-cpp-2 0.1.146** mit Vulkan + `dynamic-link` als Default. Per-Mode-Switch via `local_engine = "embedded"` vs `"ollama"`. Ollama bleibt Legacy-Opt-in fuer User mit bestehender Installation. |
+| Lokales LLM | **Embedded llama-cpp-2 0.1.146** mit Vulkan + `dynamic-link` ist seit Mai 2026 produktiver Standard (kein externer Daemon nötig, GGUF im VoiceTypeX-Prozess). Per-Mode-Switch via `local_engine = "embedded"` (Default) vs `"ollama"`. Ollama bleibt Opt-in für User, die einen eigenen Daemon betreiben. |
 | Cloud-STT | xAI (One-Shot REST), OpenAI Whisper, Groq Whisper, Deepgram |
 | Cloud-LLM | xAI Grok (Default `grok-4-fast-non-reasoning`), OpenAI GPT, Anthropic Claude |
 | HTTP-Client | reqwest (rustls-tls) |
@@ -130,7 +130,7 @@ abstrahiert. Plattform-Selektion zur Laufzeit (Linux nutzt
 | Trait | Datei | Implementierungen |
 |---|---|---|
 | `Transcriber` | `transcription/mod.rs` | `LocalTranscriber` (whisper-rs), `XaiTranscriber`, `OpenAITranscriber`, `GroqTranscriber`, `DeepgramTranscriber` |
-| `Processor` | `processing/mod.rs` | `LlamaEmbeddedProcessor` (embedded llama-cpp-2, Phase 3b Default), `OllamaProcessor` (lokaler Ollama-Daemon, Legacy-Opt-in), `XaiProcessor`/`OpenAIProcessor` (via gemeinsamer `OpenAICompatibleClient`), `AnthropicProcessor` |
+| `Processor` | `processing/mod.rs` | `LlamaEmbeddedProcessor` (embedded llama-cpp-2, **Default-Engine**), `OllamaProcessor` (lokaler Ollama-Daemon, Opt-in), `XaiProcessor`/`OpenAIProcessor` (via gemeinsamer `OpenAICompatibleClient`), `AnthropicProcessor` |
 | `TextInjector` | `injection/mod.rs` | `ClipboardFallbackInjector` (X11/Windows: enigo Ctrl+V), `WaylandLibeiInjector` (Wayland: libei via xdg-desktop-portal.RemoteDesktop) |
 
 **Hotkey-Registrierung** ist plattform-direkt (kein Trait, siehe
@@ -316,7 +316,7 @@ löscht. Die State-Machine selbst ändert sich gegenüber Phase 1 nicht
 
 `Mode.local_engine` waehlt pro Modus zwischen den beiden Pfaden:
 
-### Embedded (`local_engine = "embedded"`) — Phase 3b Default
+### Embedded (`local_engine = "embedded"`) — **Default-Engine ab Mai 2026**
 
 [`processing/embedded.rs`](../src-tauri/src/processing/embedded.rs):
 
@@ -343,7 +343,7 @@ löscht. Die State-Machine selbst ändert sich gegenüber Phase 1 nicht
   Slug → Arc) gecached. Analog gibt es `Mode.whisper_model_slot` +
   `AppContext.extra_transcribers` für Whisper-Overrides.
 
-### Ollama (`local_engine = "ollama"` oder None) — Legacy-Pfad
+### Ollama (`local_engine = "ollama"`) — Opt-in für externe Daemon-Nutzung
 
 [`processing/local.rs`](../src-tauri/src/processing/local.rs):
 
@@ -363,13 +363,20 @@ löscht. Die State-Machine selbst ändert sich gegenüber Phase 1 nicht
 ### Verzweigung im Pipeline-Code
 
 `pipeline/mod.rs::run_local_processing` schaut auf `mode.local_engine`:
-`"embedded"` → `resolve_embedded_llm(ctx, mode)` (globaler Processor
-oder Cache-Lookup über `mode.embedded_llm_slot`), `"ollama"`/None →
-`run_local_processing_ollama` (Ollama-HTTP-Call-Setup mit keep_alive +
-`mode.ollama_model_tag`, Fallback auf deprecated `local_llm_model`).
-Unbekannter Engine-Wert → `Mode`-Fehlermeldung. Sampling-Felder werden
-in beide Pfade über `ProcessOpts.{temperature, top_p, repeat_penalty,
-max_tokens}` durchgereicht.
+`"embedded"` (oder `None` — Default) → `resolve_embedded_llm(ctx, mode)`
+(globaler Processor oder Cache-Lookup über `mode.embedded_llm_slot`),
+`"ollama"` → `run_local_processing_ollama` (Ollama-HTTP-Call-Setup mit
+keep_alive + `mode.ollama_model_tag`, Fallback auf deprecated
+`local_llm_model`). Unbekannter Engine-Wert → `Mode`-Fehlermeldung.
+Sampling-Felder werden in beide Pfade über `ProcessOpts.{temperature,
+top_p, repeat_penalty, max_tokens}` durchgereicht.
+
+**Bestehende User-TOMLs aus Phase 1/2** (mit `local_llm_model` oder
+`ollama_model_tag` aber ohne `local_engine`) werden in
+`Mode::migrate_deprecated_fields` beim Laden explizit auf
+`local_engine = "ollama"` gesetzt — sonst würde der Default-Switch von
+`"ollama"` auf `"embedded"` (Mai 2026) diese Modi auf den falschen
+Engine-Pfad umleiten und mit „GGUF-Slot nicht gefunden" scheitern.
 
 ## Wayland Auto-Paste
 

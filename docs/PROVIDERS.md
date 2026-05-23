@@ -195,13 +195,15 @@ bekommen die volle Speed, alle anderen werden via Vulkan bedient —
 mit einem einzigen Bundle. Standard-Default-Build (ohne das Feature)
 ist Vulkan-only und braucht kein CUDA-Toolkit auf der Build-Maschine.
 
-### Ollama (lokal, kein BYOK-Key — Legacy-Pfad)
+### Ollama (lokal, kein BYOK-Key — Opt-in)
 
-Bleibt als opt-in fuer User, die ihre bestehende Ollama-Installation
+Embedded ist seit Mai 2026 der **Standardpfad** für `processing = "local"`.
+Ollama bleibt als opt-in für User, die ihre bestehende Daemon-Installation
 weiter nutzen wollen oder Modelle laufen, die noch nicht als GGUF im
-Embedded-Pfad slot-basiert ausgewaehlt sind. Aktivierung pro Modus via
-`local_engine = "ollama"` (oder `None`/weglassen — Backward-Compat-
-Default).
+Embedded-Pfad slot-basiert ausgewählt sind. Aktivierung pro Modus via
+`local_engine = "ollama"`. Bestehende Phase-1/2-TOMLs ohne explizites
+`local_engine` werden in `Mode::migrate_deprecated_fields` automatisch
+auf `"ollama"` gesetzt (verifiziert über Tests in `core/modes.rs`).
 
 - **Endpoint (Default):** `POST http://127.0.0.1:11434/api/chat`
 - **Auth:** keine (lokaler HTTP-Server)

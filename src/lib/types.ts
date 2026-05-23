@@ -23,7 +23,12 @@ export interface Mode {
    * spiegelt das Feld bei Save zurueck `ollama_model_tag` ein.
    */
   local_llm_model: string | null;
-  /** Phase 3b: "embedded" | "ollama" (Default = ollama bei null). */
+  /**
+   * Engine für `processing = "local"`. `"embedded"` (Default bei null,
+   * eingebauter llama-cpp-2-Pfad) oder `"ollama"` (externer Daemon, opt-in).
+   * Alte TOMLs ohne explizites Feld aber mit `local_llm_model` werden
+   * backend-seitig automatisch auf `"ollama"` migriert.
+   */
   local_engine: string | null;
   /** Phase 3b: Ollama-Modell-Tag (z.B. "llama3.2:3b") bei engine=ollama. */
   ollama_model_tag: string | null;

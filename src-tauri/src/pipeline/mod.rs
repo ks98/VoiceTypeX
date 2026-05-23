@@ -535,12 +535,14 @@ async fn run_local_processing(
         ..Default::default()
     };
 
-    // Phase 3b: Engine-Wahl pro Modus. `None` faellt auf Ollama zurueck
-    // (Backward-Compat fuer Modi aus Phase 1/2). `"embedded"` aktiviert
-    // den `LlamaEmbeddedProcessor` — wenn der Modus einen anderen Slot
-    // verlangt als der globale Default, gibt der Resolver einen lazy
-    // geladenen Override-Processor zurueck.
-    let engine = mode.local_engine.as_deref().unwrap_or("ollama");
+    // Engine-Wahl pro Modus. `None` faellt jetzt auf `"embedded"` zurueck —
+    // der eingebaute llama-cpp-2-Pfad braucht keinen externen Daemon und
+    // ist seit Phase 3b die produktive Standard-Variante. Bestehende TOMLs
+    // mit Ollama-Konfiguration werden in `Mode::migrate_deprecated_fields`
+    // explizit auf `"ollama"` gesetzt, sodass dieser Default-Switch sie
+    // nicht trifft. `"ollama"` bleibt fuer User mit eigener Daemon-
+    // Installation als Opt-in verfuegbar.
+    let engine = mode.local_engine.as_deref().unwrap_or("embedded");
     match engine {
         "embedded" => {
             let processor: Arc<dyn Processor> = resolve_embedded_llm(ctx, mode);

@@ -75,8 +75,11 @@ cloud_llm_model = "grok-4-fast-non-reasoning"
                                # als grok-4 bei Postprocessing-Aufgaben)
 
 # Nur wenn processing = "local":
-local_engine = "embedded"       # "embedded" (llama-cpp-2) | "ollama" (extern)
-                                # Default bei null/weglassen: "ollama" (Backward-Compat)
+local_engine = "embedded"       # "embedded" (llama-cpp-2, Standard) | "ollama" (externer Daemon)
+                                # Default bei null/weglassen: "embedded" — kein Daemon nötig.
+                                # Alte TOMLs mit `local_llm_model` (Phase 1/2) werden beim
+                                # Laden automatisch auf "ollama" migriert, damit sie nicht
+                                # versehentlich auf den falschen Engine-Pfad umgeleitet werden.
 
 # Nur wenn local_engine = "ollama":
 ollama_model_tag = "qwen2.5:7b" # Ollama-Model-Tag

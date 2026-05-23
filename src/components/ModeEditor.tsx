@@ -137,9 +137,11 @@ export default function ModeEditor({
   const isLocalLLM = draft.processing === "local";
   const isCloudLLM = draft.processing === "cloud";
   const needsSystemPrompt = draft.processing !== "none";
-  // Engine-Default ist Ollama (Backward-Compat), wenn das Feld leer ist.
+  // Engine-Default ist `"embedded"` — der eingebaute llama-cpp-2-Pfad
+  // braucht keinen Daemon. Nur wenn der Modus explizit `"ollama"` sagt,
+  // weichen wir auf den Legacy-Pfad ab.
   const localEngine: "embedded" | "ollama" =
-    draft.local_engine === "embedded" ? "embedded" : "ollama";
+    draft.local_engine === "ollama" ? "ollama" : "embedded";
   const needsOllamaTag = isLocalLLM && localEngine === "ollama";
 
   const samplingValid =
@@ -411,7 +413,7 @@ export default function ModeEditor({
               <>
                 <Field
                   label="Lokale Engine"
-                  hint="embedded = llama-cpp-2 im VoiceTypeX-Prozess (kein Daemon). ollama = externer Ollama-Daemon."
+                  hint="Embedded ist der Standardpfad — kein externer Daemon nötig. Ollama nur, wenn du eine eigene Daemon-Installation nutzen willst."
                 >
                   <select
                     className={inputCls}
@@ -420,8 +422,12 @@ export default function ModeEditor({
                       update("local_engine", e.target.value)
                     }
                   >
-                    <option value="embedded">embedded (llama-cpp-2)</option>
-                    <option value="ollama">ollama (extern)</option>
+                    <option value="embedded">
+                      embedded (Standard, kein Daemon nötig)
+                    </option>
+                    <option value="ollama">
+                      ollama (externer Daemon)
+                    </option>
                   </select>
                 </Field>
 

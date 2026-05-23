@@ -93,16 +93,21 @@ pub struct Mode {
 
     /// Welche lokale LLM-Engine soll diesen Modus bedienen, wenn
     /// `processing == "local"`?
-    /// - `"ollama"` (Default-Fallback) — bestehender Pfad ueber den
-    ///   externen Ollama-Daemon.
-    /// - `"embedded"` (Phase 3b) — interner llama-cpp-2-Pfad ohne
-    ///   externen Daemon.
+    /// - `"embedded"` (Default, seit Mai 2026) — eingebauter
+    ///   llama-cpp-2-Pfad ohne externen Daemon, GGUF aus
+    ///   `Settings.llm_default_slot` bzw. `Mode.embedded_llm_slot`.
+    /// - `"ollama"` — externer Ollama-Daemon (Opt-in fuer User mit
+    ///   eigener Installation).
     ///
-    /// `None` = Ollama (Backward-Compat fuer existierende Modi).
+    /// `None` (Feld weggelassen) faellt in `pipeline/mod.rs` auf
+    /// `"embedded"`. Phase-1/2-TOMLs mit `local_llm_model` aber ohne
+    /// `local_engine` werden in `migrate_deprecated_fields` automatisch
+    /// auf `"ollama"` gesetzt, sonst wuerde der Default-Switch sie auf
+    /// den falschen Engine-Pfad umleiten.
     #[serde(default)]
     pub local_engine: Option<String>,
 
-    /// Ollama-Modell-Tag fuer den Legacy-Pfad (`local_engine =
+    /// Ollama-Modell-Tag fuer den Opt-in-Pfad (`local_engine =
     /// "ollama"`). Beispiel: `"gemma3:4b"`, `"qwen2.5:7b"`. Bei
     /// `engine == "ollama"` Pflicht.
     #[serde(default)]
@@ -191,7 +196,11 @@ impl Mode {
             }
         }
         if self.processing == ProcessingTarget::Local {
-            let engine = self.local_engine.as_deref().unwrap_or("ollama");
+            // Default-Engine ist "embedded" (siehe pipeline/mod.rs). Nur
+            // wenn der Modus explizit Ollama ausgewählt hat, ist ein
+            // Modell-Tag Pflicht — Embedded laeuft mit dem globalen
+            // `Settings.llm_default_slot` ohne weitere Pflicht-Konfig.
+            let engine = self.local_engine.as_deref().unwrap_or("embedded");
             if engine == "ollama"
                 && self.ollama_model_tag.is_none()
                 && self.local_llm_model.is_none()
@@ -240,9 +249,24 @@ impl Mode {
         Ok(())
     }
 
-    /// Migration: alte TOMLs haben `local_llm_model` ohne `ollama_model_tag`.
-    /// Beim Load mappen wir das automatisch (mit WARN-Log), damit
-    /// existierende User-Customizations nicht brechen.
+    /// Migration: alte TOMLs (Phase 1/2, vor Embedded-Default-Switch).
+    ///
+    /// Zwei Faelle:
+    ///
+    /// 1. **`local_llm_model` ohne `ollama_model_tag`**: kopiere den Wert
+    ///    nach `ollama_model_tag` (das ist die neue Pflicht-Schluessel-
+    ///    Position fuer den Ollama-Pfad).
+    ///
+    /// 2. **`local_engine` nicht gesetzt + Indizien fuer Ollama-Konfig
+    ///    vorhanden** (`local_llm_model` oder `ollama_model_tag`): setze
+    ///    `local_engine = "ollama"` explizit. Sonst wuerde der neue Code-
+    ///    Default ("embedded", siehe `pipeline/mod.rs::run_local_processing`)
+    ///    den Modus auf Embedded umleiten — und ein Wert wie `"gemma3:4b"`
+    ///    ist ein Ollama-Tag, kein GGUF-Slot, was zu Lade-Fehlern fuehrt.
+    ///
+    /// Modi ohne jegliche Engine-Hinweise lassen wir unangetastet und der
+    /// Code-Default ("embedded") greift — das ist der gewuenschte Effekt
+    /// fuer neue/frische TOMLs ab dem Embedded-Default-Switch.
     fn migrate_deprecated_fields(&mut self) {
         if self.ollama_model_tag.is_none() && self.local_llm_model.is_some() {
             let val = self.local_llm_model.clone();
@@ -252,6 +276,16 @@ impl Mode {
                 "TOML-Feld `local_llm_model` ist deprecated — automatisch nach `ollama_model_tag` migriert"
             );
             self.ollama_model_tag = val;
+        }
+
+        if self.local_engine.is_none()
+            && (self.ollama_model_tag.is_some() || self.local_llm_model.is_some())
+        {
+            tracing::warn!(
+                mode_id = %self.id,
+                "Mode hat Ollama-Indizien aber kein `local_engine` — setze explizit auf \"ollama\" (Migration: Embedded ist neuer Default)"
+            );
+            self.local_engine = Some("ollama".to_string());
         }
     }
 }
@@ -397,8 +431,11 @@ mod tests {
     use super::*;
 
     fn parse(toml_str: &str) -> Result<Mode> {
-        let mode: Mode =
+        // Spiegelt `load_mode_from_path`: erst Migration, dann Validation.
+        // Sonst greift die Engine-Migration in den Tests nicht.
+        let mut mode: Mode =
             toml::from_str(toml_str).map_err(|e| VoiceTypeError::Mode(e.to_string()))?;
+        mode.migrate_deprecated_fields();
         mode.validate()?;
         Ok(mode)
     }
@@ -468,5 +505,63 @@ mod tests {
         )
         .unwrap_err();
         assert!(matches!(err, VoiceTypeError::Mode(_)));
+    }
+
+    #[test]
+    fn migration_sets_local_engine_ollama_for_deprecated_local_llm_model() {
+        // Phase-1/2-TOML: `local_llm_model` ohne `local_engine` und ohne
+        // `ollama_model_tag`. Nach Migration muessen beide Felder gesetzt
+        // sein, damit der neue Embedded-Default solche Modi nicht in den
+        // falschen Engine-Pfad zwingt.
+        let m = parse(
+            r#"
+            id = "korr-alt"
+            name = "Korrektur (alt)"
+            transcription = "local"
+            processing = "local"
+            local_llm_model = "gemma3:4b"
+            system_prompt = "x"
+        "#,
+        )
+        .unwrap();
+        assert_eq!(m.local_engine.as_deref(), Some("ollama"));
+        assert_eq!(m.ollama_model_tag.as_deref(), Some("gemma3:4b"));
+    }
+
+    #[test]
+    fn migration_sets_local_engine_ollama_for_explicit_ollama_tag() {
+        // TOML mit `ollama_model_tag` aber ohne `local_engine` — gleiche
+        // Migration: Engine wird explizit auf "ollama" gesetzt.
+        let m = parse(
+            r#"
+            id = "korr-tag"
+            name = "Korrektur (tag)"
+            transcription = "local"
+            processing = "local"
+            ollama_model_tag = "llama3.2:3b"
+            system_prompt = "x"
+        "#,
+        )
+        .unwrap();
+        assert_eq!(m.local_engine.as_deref(), Some("ollama"));
+    }
+
+    #[test]
+    fn fresh_local_mode_keeps_engine_none_for_default_embedded() {
+        // Frischer Mode ohne jegliche Ollama-Indizien: `local_engine`
+        // bleibt `None`. Der Code-Default in `run_local_processing`
+        // greift dann auf "embedded".
+        let m = parse(
+            r#"
+            id = "korr-neu"
+            name = "Korrektur (neu)"
+            transcription = "local"
+            processing = "local"
+            embedded_llm_slot = "gemma4-e4b-it-q5_k_m"
+            system_prompt = "x"
+        "#,
+        )
+        .unwrap();
+        assert!(m.local_engine.is_none());
     }
 }

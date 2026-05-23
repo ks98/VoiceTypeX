@@ -302,20 +302,8 @@ export default function Settings(): JSX.Element {
       </Field>
 
       <Field
-        label="Ollama-Endpunkt"
-        hint="Lokales LLM via externer Ollama-Daemon. Standardport ist 11434. Wird benutzt, wenn ein Modus local_engine = ollama setzt (Default fuer Backward-Compat)."
-      >
-        <input
-          type="text"
-          className={inputCls}
-          value={settings.ollama_url}
-          onChange={(e) => void update({ ollama_url: e.target.value })}
-        />
-      </Field>
-
-      <Field
-        label="Embedded LLM-Modell (Phase 3b)"
-        hint="GGUF-Modell fuer den eingebetteten llama-cpp-2-Pfad. Wird ohne externen Daemon im VoiceTypeX-Prozess geladen. Aktiviert pro Modus via local_engine = embedded."
+        label="Lokales LLM-Modell (Embedded, Default)"
+        hint="GGUF-Modell für den eingebauten llama-cpp-2-Pfad. Läuft ohne externen Daemon im VoiceTypeX-Prozess. Standard für alle Modi mit processing=local."
       >
         <select
           className={inputCls}
@@ -388,6 +376,14 @@ export default function Settings(): JSX.Element {
           ) : null}
         </div>
       </Field>
+
+      <OllamaAdvancedSection
+        url={settings.ollama_url}
+        keepAlive={settings.ollama_keep_alive}
+        onUrlChange={(v) => void update({ ollama_url: v })}
+        onKeepAliveChange={(v) => void update({ ollama_keep_alive: v })}
+        inputCls={inputCls}
+      />
 
       </section>
 
@@ -527,6 +523,73 @@ function SectionHeader({ id, title }: SectionHeaderProps): JSX.Element {
     >
       {title}
     </h2>
+  );
+}
+
+/**
+ * Ollama-Konfiguration als collapsed Advanced-Block.
+ *
+ * Begründung: Embedded ist seit dem Default-Switch der Standardpfad —
+ * 95 % der User berühren Ollama nie. Die Konfiguration komplett aus dem
+ * UI zu nehmen wäre aber zu aggressiv (Power-User mit eigener Daemon-
+ * Installation brauchen sie). Daher: collapsible `<details>`, klar als
+ * „nur für Ollama-Benutzer" markiert, mit beiden Settings (`ollama_url`
+ * und `ollama_keep_alive`) zusammen — vorher fehlte Keep-Alive komplett
+ * im UI.
+ */
+function OllamaAdvancedSection({
+  url,
+  keepAlive,
+  onUrlChange,
+  onKeepAliveChange,
+  inputCls,
+}: {
+  url: string;
+  keepAlive: string;
+  onUrlChange: (v: string) => void;
+  onKeepAliveChange: (v: string) => void;
+  inputCls: string;
+}): JSX.Element {
+  return (
+    <details className="rounded-md border border-outline/60 bg-surface/40 p-3">
+      <summary className="text-sm font-medium text-fg-muted cursor-pointer hover:text-fg transition-colors select-none">
+        Ollama-Konfiguration (optional, für externe Daemon-Nutzung)
+      </summary>
+      <div className="flex flex-col gap-4 pt-3 mt-2 border-t border-outline/40">
+        <p className="text-xs text-fg-faint">
+          VoiceTypeX nutzt standardmäßig den eingebauten Embedded-LLM-Pfad
+          (kein externer Daemon nötig). Diese Einstellungen sind nur
+          relevant, wenn ein Modus <code className="text-fg-muted font-mono">local_engine = "ollama"</code>{" "}
+          setzt — z.B. wenn du dein eigenes Ollama-Setup mit Custom-Port
+          oder einem Modell betreiben willst, das nicht als GGUF-Slot
+          verfügbar ist.
+        </p>
+        <Field
+          label="Ollama-Endpunkt"
+          hint="HTTP-URL der Ollama-Daemon. Standardport ist 11434."
+        >
+          <input
+            type="text"
+            className={inputCls}
+            value={url}
+            onChange={(e) => onUrlChange(e.target.value)}
+            placeholder="http://127.0.0.1:11434"
+          />
+        </Field>
+        <Field
+          label="Ollama Keep-Alive"
+          hint='Wie lange Ollama das Modell nach dem letzten Call im RAM/VRAM hält. Duration-String: "5m" (Default), "0" für sofortiges Unload, "-1" für unbegrenzt warm.'
+        >
+          <input
+            type="text"
+            className={`${inputCls} w-32`}
+            value={keepAlive}
+            onChange={(e) => onKeepAliveChange(e.target.value)}
+            placeholder="5m"
+          />
+        </Field>
+      </div>
+    </details>
   );
 }
 

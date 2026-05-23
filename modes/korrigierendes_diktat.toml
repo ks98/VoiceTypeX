@@ -3,19 +3,20 @@ name = "Korrigierendes Diktat"
 description = "Versprecher und Grammatik raus, Inhalt bleibt 1:1. Lokal."
 transcription = "local"
 processing = "local"
-# Ollama-Modell-Tag fuer den Legacy-Pfad (`local_engine = "ollama"`).
-# Bleibt auf `gemma3:4b` fuer Backward-Compat — wer Ollama benutzt, hat
-# das wahrscheinlich schon gepullt. Wenn du Ollama frisch installierst,
-# `ollama pull gemma3:4b` (oder neuer: `ollama pull gemma4:4b` sobald
-# bei Ollama verfuegbar).
-#
-# Fuer den **Embedded-Pfad** (`local_engine = "embedded"`) wird statt
-# dessen `Settings.llm_default_slot` benutzt — Default-Empfehlung
-# basiert auf Hardware-Probe:
-#   12+ GB RAM → Gemma 4 E4B-IT Q5_K_M (April 2026, neuer Pro-Default)
+
+# Engine: embedded = eingebauter llama-cpp-2-Pfad, kein externer Daemon
+# noetig. GGUF-Modell wird aus `Settings.llm_default_slot` geladen
+# (Hardware-Probe waehlt Default):
+#   12+ GB RAM → Gemma 4 E4B-IT Q5_K_M (April 2026, Pro)
 #   8-12 GB   → Gemma 4 E2B-IT Q5_K_M
 #   <8 GB     → Gemma 3 1B-IT Q5_K_M (Gemma 4 zu gross fuer Light)
+#
+# Wer eine eigene Ollama-Installation nutzen will: `local_engine = "ollama"`
+# setzen und `ollama_model_tag = "gemma3:4b"` (oder anderes Tag) ergaenzen.
+# Der Embedded-Pfad ignoriert `ollama_model_tag`.
+local_engine = "embedded"
 ollama_model_tag = "gemma3:4b"
+
 injection_method = "clipboard"
 language = "de"
 
