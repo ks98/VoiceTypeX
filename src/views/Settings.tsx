@@ -11,12 +11,17 @@ import AutoPasteTestSection from "../components/AutoPasteTestSection";
 import ThemeToggle from "../components/ThemeToggle";
 import { useSettingsStore } from "../store";
 import {
+  ipcCleanPartialDownloads,
+  ipcDeleteAllModels,
+  ipcDeleteCachedFile,
   ipcDownloadDefaultModel,
   ipcDownloadLlmDefaultModel,
   ipcGetEffectiveMenuHotkey,
   ipcGetHardwareReport,
   ipcGetSessionInfo,
   ipcGetWhisperBackend,
+  ipcListCachedFiles,
+  type CachedFile,
   type HardwareReport,
   type ModelDownloadProgress,
   type SessionInfo,
@@ -393,6 +398,8 @@ export default function Settings(): JSX.Element {
         </label>
       </Field>
 
+      <CacheManagementField />
+
       <TestTranscriptionSection />
 
       <AutoPasteTestSection />
@@ -564,6 +571,197 @@ function HardwareStatusField({
             {activeBackend.expected_speedup}×). Phase-3-Bundle-Matrix wird das
             adressieren.
           </div>
+        ) : null}
+      </div>
+    </Field>
+  );
+}
+
+/**
+ * Cache-Management-Field: listet alle heruntergeladenen Modell-Files,
+ * erlaubt einzelnes oder bulk-Loeschen. Pflegt keine Settings, Modes
+ * oder Secrets — die haben ihre eigenen User-Daten-Reset-Flows.
+ */
+function CacheManagementField(): JSX.Element {
+  const [files, setFiles] = useState<CachedFile[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+
+  const refresh = async () => {
+    try {
+      const list = await ipcListCachedFiles();
+      setFiles(list);
+    } catch (e) {
+      setStatus(`Liste laden fehlgeschlagen: ${e}`);
+    }
+  };
+
+  useEffect(() => {
+    void refresh();
+  }, []);
+
+  const fmtSize = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} kB`;
+    if (bytes < 1024 * 1024 * 1024)
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  };
+
+  const kindLabel = (kind: CachedFile["kind"]): string => {
+    switch (kind) {
+      case "whisper":
+        return "Whisper";
+      case "vad":
+        return "VAD";
+      case "llm":
+        return "LLM";
+      case "partial":
+        return "Abgebrochen";
+      case "other":
+        return "Sonstiges";
+    }
+  };
+
+  const kindColor = (kind: CachedFile["kind"]): string => {
+    switch (kind) {
+      case "whisper":
+        return "bg-brand/15 text-brand";
+      case "vad":
+        return "bg-status-processing/15 text-status-processing";
+      case "llm":
+        return "bg-status-done/15 text-status-done";
+      case "partial":
+        return "bg-status-error/15 text-status-error";
+      case "other":
+        return "bg-elevated text-fg-muted";
+    }
+  };
+
+  const onDeleteSingle = async (filename: string) => {
+    if (!confirm(`"${filename}" wirklich loeschen?`)) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      const freed = await ipcDeleteCachedFile(filename);
+      setStatus(`Geloescht (${fmtSize(freed)} freigegeben).`);
+      await refresh();
+    } catch (e) {
+      setStatus(`Loeschen fehlgeschlagen: ${e}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onCleanPartials = async () => {
+    setBusy(true);
+    setStatus(null);
+    try {
+      const freed = await ipcCleanPartialDownloads();
+      setStatus(`Partial-Downloads aufgeraeumt (${fmtSize(freed)} freigegeben).`);
+      await refresh();
+    } catch (e) {
+      setStatus(`Aufraeumen fehlgeschlagen: ${e}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onDeleteAll = async () => {
+    if (
+      !confirm(
+        "Alle heruntergeladenen Modelle loeschen? " +
+          "(Whisper, VAD, LLM, Partials — werden beim naechsten Bedarf " +
+          "neu heruntergeladen)",
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setStatus(null);
+    try {
+      const freed = await ipcDeleteAllModels();
+      setStatus(`Alle Modelle geloescht (${fmtSize(freed)} freigegeben).`);
+      await refresh();
+    } catch (e) {
+      setStatus(`Loeschen fehlgeschlagen: ${e}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const totalBytes = files?.reduce((sum, f) => sum + f.size_bytes, 0) ?? 0;
+
+  return (
+    <Field
+      label="Cache verwalten"
+      hint="Heruntergeladene Modell-Files. Einzeln oder gebuendelt loeschen. Settings, Modi und API-Keys sind nicht betroffen."
+    >
+      <div className="flex flex-col gap-3">
+        {files === null ? (
+          <div className="text-sm text-fg-faint">Lade Datei-Liste…</div>
+        ) : files.length === 0 ? (
+          <div className="text-sm text-fg-faint">
+            Keine Files im Modell-Cache (yet — werden beim ersten Download
+            angelegt).
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1.5">
+            {files.map((f) => (
+              <div
+                key={f.filename}
+                className="flex items-center gap-2 text-sm py-1.5 px-2 rounded-md border border-outline bg-surface"
+              >
+                <span
+                  className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${kindColor(f.kind)}`}
+                >
+                  {kindLabel(f.kind)}
+                </span>
+                <span className="flex-1 font-mono text-xs text-fg-muted truncate">
+                  {f.filename}
+                </span>
+                <span className="shrink-0 text-xs text-fg-faint w-20 text-right">
+                  {fmtSize(f.size_bytes)}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void onDeleteSingle(f.filename)}
+                  disabled={busy}
+                >
+                  Loeschen
+                </Button>
+              </div>
+            ))}
+            <div className="text-xs text-fg-faint pt-1">
+              Gesamt: {files.length} File{files.length === 1 ? "" : "s"} ·{" "}
+              {fmtSize(totalBytes)}
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => void onCleanPartials()}
+            disabled={busy}
+          >
+            Abgebrochene Downloads aufraeumen
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => void onDeleteAll()}
+            disabled={busy}
+          >
+            Alle Modelle loeschen
+          </Button>
+          <Button variant="ghost" onClick={() => void refresh()} disabled={busy}>
+            Aktualisieren
+          </Button>
+        </div>
+
+        {status ? (
+          <div className="text-xs text-fg-muted">{status}</div>
         ) : null}
       </div>
     </Field>

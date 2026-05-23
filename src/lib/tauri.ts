@@ -115,6 +115,34 @@ export async function ipcDownloadLlmDefaultModel(): Promise<string> {
   return invoke<string>("download_llm_default_model");
 }
 
+export type CachedFileKind = "whisper" | "vad" | "llm" | "partial" | "other";
+
+export interface CachedFile {
+  filename: string;
+  kind: CachedFileKind;
+  size_bytes: number;
+}
+
+/** Listet alle Files im `app_data_dir/models/`-Cache. */
+export async function ipcListCachedFiles(): Promise<CachedFile[]> {
+  return invoke<CachedFile[]>("list_cached_files");
+}
+
+/** Löscht ein einzelnes File. Returns freigegebene Bytes. */
+export async function ipcDeleteCachedFile(filename: string): Promise<number> {
+  return invoke<number>("delete_cached_file", { filename });
+}
+
+/** Löscht alle Modell-Files (Whisper + VAD + LLM + Partials). Returns freigegebene Bytes. */
+export async function ipcDeleteAllModels(): Promise<number> {
+  return invoke<number>("delete_all_models");
+}
+
+/** Löscht nur abgebrochene Downloads (`.partial`). Returns freigegebene Bytes. */
+export async function ipcCleanPartialDownloads(): Promise<number> {
+  return invoke<number>("clean_partial_downloads");
+}
+
 /**
  * Diagnose: testet den Auto-Paste-Pfad direkt, ohne die normale Pipeline
  * (kein Audio, kein STT, kein LLM). Wartet `delaySecs` Sekunden — User
