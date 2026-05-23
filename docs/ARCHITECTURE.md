@@ -130,7 +130,7 @@ abstrahiert. Plattform-Selektion zur Laufzeit (Linux nutzt
 | Trait | Datei | Implementierungen |
 |---|---|---|
 | `Transcriber` | `transcription/mod.rs` | `LocalTranscriber` (whisper-rs), `XaiTranscriber`, `OpenAITranscriber`, `GroqTranscriber`, `DeepgramTranscriber` |
-| `Processor` | `processing/mod.rs` | `OllamaProcessor` (local), `XaiProcessor`/`OpenAIProcessor` (via gemeinsamer `OpenAICompatibleClient`), `AnthropicProcessor` |
+| `Processor` | `processing/mod.rs` | `LlamaEmbeddedProcessor` (embedded llama-cpp-2, Phase 3b Default), `OllamaProcessor` (lokaler Ollama-Daemon, Legacy-Opt-in), `XaiProcessor`/`OpenAIProcessor` (via gemeinsamer `OpenAICompatibleClient`), `AnthropicProcessor` |
 | `TextInjector` | `injection/mod.rs` | `ClipboardFallbackInjector` (X11/Windows: enigo Ctrl+V), `WaylandLibeiInjector` (Wayland: libei via xdg-desktop-portal.RemoteDesktop) |
 
 **Hotkey-Registrierung** ist plattform-direkt (kein Trait, siehe
@@ -157,8 +157,14 @@ pub struct AppContext {
     pub state_bus: StateBus,
     pub modes: Arc<ModesRegistry>,
     pub recorder_slot: Arc<Mutex<Option<RecorderHandle>>>,
-    pub active_mode: Arc<Mutex<Option<Mode>>>,  // welcher Modus läuft gerade?
-    pub transcriber: Arc<dyn Transcriber>,
+    pub active_mode: Arc<Mutex<Option<Mode>>>,         // welcher Modus läuft gerade?
+    pub effective_menu_hotkey: Arc<RwLock<Option<String>>>, // Wayland: vom Portal zurückgegebener Trigger
+    pub transcriber: Arc<dyn Transcriber>,             // App-Default-Transcriber (Local oder Cloud)
+    pub local_transcriber: Arc<LocalTranscriber>,      // konkret für Streaming-Worker (Phase 2)
+    pub local_llm_processor: Arc<LlamaEmbeddedProcessor>, // Embedded-LLM-Default-Processor (Phase 3b)
+    pub extra_transcribers: Arc<Mutex<HashMap<String, Arc<LocalTranscriber>>>>, // Per-Mode-Whisper-Slot-Cache
+    pub extra_llm_processors: Arc<Mutex<HashMap<String, Arc<LlamaEmbeddedProcessor>>>>, // Per-Mode-LLM-Slot-Cache
+    pub active_streaming_handle: Arc<Mutex<Option<JoinHandle<()>>>>, // Phase-2-Streaming-Worker-Handle
     pub injector: Arc<dyn TextInjector>,
     pub settings: Arc<RwLock<Settings>>,
     pub settings_path: PathBuf,
@@ -249,9 +255,10 @@ Sprechens sieht, was Whisper versteht.
 [Hold-to-record]──────────────────────────────[Release]
 [Recorder cpal-Buffer waechst kontinuierlich]
 [Streaming-Worker]
-   ├─ t+1.5s: Snapshot → Convert 16k Mono → transcribe_streaming_pass → "Heute"
-   ├─ t+2.3s: Snapshot → ...                                          → "Heute scheint"
-   ├─ LocalAgreement-2 stabilisiert Prefix → emit app://partial-transcript
+   ├─ t+2.0s: Snapshot → Convert 16k Mono → transcribe_streaming_pass → "Heute"
+   ├─ t+2.8s: Snapshot → ...                                          → "Heute scheint"
+   ├─ jeder neue Decode → emit app://partial-transcript
+   │  (LocalAgreement-2 berechnet weiterhin Prefix-Konvergenz als Telemetrie)
    └─ Overlay zeigt "Heute scheint" unter "Hoere zu ..."
                                                        [Release]
                                                        └─►abort()
@@ -273,11 +280,20 @@ nutzt `DecodeProfile::Final` (BeamSearch + voller audio_ctx) — er
 liefert den definitiven Text und überschreibt jede Partial-Ausgabe.
 
 **LocalAgreement-2** (`transcription/local_agreement.rs`,
-Machacek et al. arXiv 2307.14743): nur Wort-Prefixe, die in zwei
-aufeinanderfolgenden Decodes identisch sind, gelten als "stabil" und
-werden ins Overlay emittiert. Verhindert das "Zurückspringen" der
-Anzeige, wenn Whisper später eine Position revidiert. Tokenisierung
+Machacek et al. arXiv 2307.14743): berechnet aus zwei
+aufeinanderfolgenden Decodes den stabilen Wort-Prefix. Tokenisierung
 auf Whitespace, Interpunktion bleibt am Wort haften.
+
+**Aktuell nur Telemetrie, kein Emit-Gate.** Der ursprüngliche Plan war,
+nur den stabilen Prefix ins Overlay zu emittieren; in der Praxis dauert
+ein Streaming-Pass auf CPU-only-Hardware 8-12 s, sodass häufig kein
+zweiter Decode vor dem Stop-Hotkey durchläuft und LA-2 alle Emits
+blockiert hätte. Pragmatisch wird daher jeder neue, nicht-leere
+Decode direkt emittiert (Text kann "wabern", wenn ein späterer Pass
+einen früheren revidiert); der Final-Pass nach Stop überschreibt
+ohnehin autoritativ. Die LA-2-Konvergenz wird als
+`tracing::debug!`-Telemetrie weiterhin geloggt, um die Hardware-
+Performance über Sessions hinweg beobachten zu können.
 
 **Abort und State-Übergang**: `finish_recording_and_inject` ruft
 `JoinHandle::abort()` auf den Streaming-Handle, bevor der Final-Pass
@@ -292,9 +308,9 @@ löscht. Die State-Machine selbst ändert sich gegenüber Phase 1 nicht
 
 | Konstante | Wert | Wirkung |
 |---|---|---|
-| `STREAMING_INITIAL_WAIT_MS` | 1500 | Warte vor erstem Decode, damit der Buffer Substanz hat |
+| `STREAMING_INITIAL_WAIT_MS` | 2000 | Warte vor erstem Decode, damit der Buffer Substanz hat |
 | `STREAMING_INTERVAL_MS` | 800 | Decode-Frequenz |
-| `STREAMING_MIN_AUDIO_SAMPLES` | 8000 | Decodes erst ab 0.5 s Audio (16 kHz) |
+| `STREAMING_MIN_AUDIO_SAMPLES` | 16000 | Decodes erst ab 1.0 s Audio (16 kHz) — kürzere Audios landen in whisper.cpp's "single timestamp ending" Skip-Pfad und liefern leere Outputs |
 
 ## Lokales LLM — zwei Pfade ab Phase 3b
 
