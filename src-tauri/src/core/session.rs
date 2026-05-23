@@ -2,11 +2,14 @@
 //! Display-Server-Detection.
 //!
 //! Wir entscheiden zur Laufzeit anhand der Standard-Env-Variablen, ob die
-//! App auf Wayland, X11 oder einer anderen Plattform laeuft. Das hat
-//! Auswirkungen auf Hotkey-Registrierung und Auto-Paste-Shortcut: beides
-//! schlaegt unter Wayland in Phase 1–3 fehl, weil `XGrabKey` und
-//! `XTest` nicht erlaubt sind. Phase 5 wird das via xdg-desktop-portal
-//! und libei reparieren.
+//! App auf Wayland, X11 oder einer anderen Plattform laeuft. Das steuert:
+//!
+//! - Hotkey-Registrierung: Wayland → xdg-desktop-portal.GlobalShortcuts
+//!   (`hotkey::linux_wayland`), X11/Windows → `tauri-plugin-global-shortcut`
+//!   (XGrabKey/RegisterHotKey).
+//! - Auto-Paste: Wayland → libei via xdg-desktop-portal.RemoteDesktop
+//!   (`injection::linux_wayland`), X11/Windows → enigo Ctrl+V
+//!   (`injection::clipboard_fallback`).
 
 use crate::ipc::diagnostics::SessionInfo;
 

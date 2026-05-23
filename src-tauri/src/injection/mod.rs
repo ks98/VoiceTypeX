@@ -1,29 +1,26 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Text-Injection an die aktive Cursor-Position.
 //!
-//! Default-Strategie ist Clipboard-Fallback (siehe CLAUDE.md §4.5):
-//!   1. Clipboard-Inhalt sichern
-//!   2. Neuen Text auf Clipboard setzen
-//!   3. Plattform-Paste-Shortcut senden (Cmd/Ctrl + V)
-//!   4. Nach 200 ms vorherigen Inhalt wiederherstellen
+//! Zwei Strategien, vom Modus per `injection_method` waehlbar:
 //!
-//! Direkte Keystroke-Injection ist Opt-in pro Modus
-//! (`injection_method = "keystrokes"`). In Phase 1 ignorieren wir die Wahl
-//! und nutzen immer Clipboard; ein Hinweis wird geloggt.
+//! - `Clipboard` (Default): Clipboard sichern → neuen Text setzen → Paste-
+//!   Shortcut senden (Ctrl+V / Cmd+V) → nach 200 ms Original wiederherstellen.
+//!   Auf Wayland faellt der Auto-Paste-Schritt auf libei (siehe
+//!   `linux_wayland`) zurueck; auf Compositors ohne RemoteDesktop-Portal
+//!   bleibt der Text im Clipboard mit Notification.
+//! - `Keystrokes` (Opt-in): Text direkt als Folge von Tastendruecken senden
+//!   (enigo). Sinnvoll fuer Terminals und Apps mit nicht-standard Paste-
+//!   Shortcut (Ctrl+Shift+V) oder restriktivem Clipboard-Zugriff.
+//!
+//! Plattform-Routing erfolgt in `make_default_injector`: Wayland nutzt den
+//! dedizierten `WaylandLibeiInjector` (Clipboard + libei via Portal), alle
+//! anderen Plattformen den `ClipboardFallbackInjector` (X11/Windows mit
+//! enigo; macOS-Fallback ohne Auto-Paste).
 
 use crate::core::error::Result;
 use async_trait::async_trait;
 
 pub mod clipboard_fallback;
-
-#[cfg(target_os = "windows")]
-pub mod windows;
-
-#[cfg(target_os = "macos")]
-pub mod macos;
-
-#[cfg(target_os = "linux")]
-pub mod linux_x11;
 
 #[cfg(target_os = "linux")]
 pub mod linux_wayland;
