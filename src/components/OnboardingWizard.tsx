@@ -19,6 +19,7 @@ import Banner from "./Banner";
 import Button from "./Button";
 import Input from "./Input";
 import Logo from "./Logo";
+import { useT, type TranslateFn } from "../i18n";
 
 type Step = 1 | 2 | 3 | 4 | 5;
 const TOTAL_STEPS = 5;
@@ -42,6 +43,7 @@ type DownloadStatus =
 export default function OnboardingWizard({
   onClose,
 }: OnboardingWizardProps): JSX.Element {
+  const t = useT();
   const settings = useSettingsStore((s) => s.settings);
   const update = useSettingsStore((s) => s.update);
 
@@ -156,7 +158,10 @@ export default function OnboardingWizard({
         await ipcTestProviderConnection("xai");
         setKeyStatus({ kind: "ok" });
       } catch (e) {
-        setKeyStatus({ kind: "error", msg: `Test fehlgeschlagen: ${e}` });
+        setKeyStatus({
+          kind: "error",
+          msg: t("common.error_prefix", { message: String(e) }),
+        });
       }
     } catch (e) {
       setKeyStatus({ kind: "error", msg: String(e) });
@@ -183,10 +188,10 @@ export default function OnboardingWizard({
           <div className="flex justify-between items-start mb-4">
             <div>
               <h2 className="text-xl font-semibold text-fg tracking-tight">
-                Willkommen bei VoiceTypeX
+                {t("wizard.header.title")}
               </h2>
               <div className="text-xs text-fg-faint mt-0.5">
-                Setup in {TOTAL_STEPS} kurzen Schritten
+                {t("wizard.header.subtitle", { total: TOTAL_STEPS })}
               </div>
             </div>
             <Button
@@ -194,7 +199,7 @@ export default function OnboardingWizard({
               size="sm"
               onClick={() => void skipAll()}
             >
-              überspringen
+              {t("wizard.header.skip")}
             </Button>
           </div>
           <StepIndicator current={step} total={TOTAL_STEPS} />
@@ -256,7 +261,7 @@ export default function OnboardingWizard({
             onClick={() => setStep((s) => Math.max(1, (s - 1) as Step) as Step)}
             disabled={step === 1}
           >
-            ← Zurück
+            {t("wizard.nav.back")}
           </Button>
           {step < TOTAL_STEPS ? (
             <Button
@@ -267,11 +272,11 @@ export default function OnboardingWizard({
                 )
               }
             >
-              Weiter →
+              {t("wizard.nav.next")}
             </Button>
           ) : (
             <Button onClick={() => void onFinish()}>
-              Setup abschließen
+              {t("wizard.nav.finish")}
             </Button>
           )}
         </div>
@@ -293,21 +298,19 @@ export default function OnboardingWizard({
         <Hero icon={<CloudDownloadIcon />} />
         <div>
           <h3 className="text-lg font-semibold text-fg">
-            Lokales Whisper-Modell
+            {t("wizard.download.title")}
           </h3>
           <p className="text-sm text-fg-muted mt-1">
-            Default ist{" "}
+            {t("wizard.download.intro_prefix")}{" "}
             <code className="text-brand font-mono">
               ggml-large-v3-turbo-q5_0.bin
             </code>{" "}
-            (~547 MB). Beste Balance aus deutscher Erkennung und CPU-Latenz.
-            Wird einmalig nach{" "}
-            <code className="text-brand font-mono">app_data_dir/models/</code>{" "}
-            heruntergeladen.
+            {t("wizard.download.intro_middle")}{" "}
+            <code className="text-brand font-mono">app_data_dir/models/</code>
+            {t("wizard.download.intro_suffix")}
           </p>
           <p className="text-xs text-fg-faint mt-2">
-            Du springst nach dem Klick sofort weiter — der Download läuft im
-            Hintergrund (Fortschritt oben im Header).
+            {t("wizard.download.hint_background")}
           </p>
         </div>
         <Button
@@ -316,14 +319,14 @@ export default function OnboardingWizard({
           className="self-start"
         >
           {modelPath
-            ? "Bereits geladen"
+            ? t("wizard.download.btn.done")
             : downloadStarted
-              ? "Download läuft …"
-              : "Default-Modell jetzt herunterladen"}
+              ? t("wizard.download.btn.running")
+              : t("wizard.download.btn.idle")}
         </Button>
         {modelPath ? (
           <div className="text-xs text-status-done">
-            ✓ Modell konfiguriert: {modelPath}
+            {t("wizard.download.configured", { path: modelPath })}
           </div>
         ) : null}
       </div>
@@ -350,26 +353,22 @@ export default function OnboardingWizard({
         <Hero icon={<KeyIcon />} />
         <div>
           <h3 className="text-lg font-semibold text-fg">
-            xAI-API-Key (optional)
+            {t("wizard.api_key.title")}
           </h3>
           <p className="text-sm text-fg-muted mt-1">
-            xAI bietet hochwertige Cloud-STT (Grok-STT) und LLM (Grok-4)
-            mit demselben Key. Für die Modi „E-Mail", „Slack/Teams",
-            „GitHub Issue" und „Anweisung an Coding-Agent" benötigt. Account und
-            Key:{" "}
-            <code className="text-brand font-mono">console.x.ai</code>.
+            {t("wizard.api_key.intro_prefix")}{" "}
+            <code className="text-brand font-mono">console.x.ai</code>
+            {t("wizard.api_key.intro_suffix")}
           </p>
           <p className="text-xs text-fg-faint mt-1">
-            Der Key wird im OS-Keychain gespeichert, niemals als Klartext
-            auf Disk. Du kannst diesen Schritt überspringen und nur die
-            lokalen Modi nutzen.
+            {t("wizard.api_key.hint_keychain")}
           </p>
         </div>
         <Input
           type="password"
           value={xaiKey}
           onChange={(e) => setXaiKey(e.target.value)}
-          placeholder="xai-…"
+          placeholder={t("wizard.api_key.placeholder")}
           className="font-mono"
         />
         <div className="flex items-center gap-3">
@@ -381,12 +380,12 @@ export default function OnboardingWizard({
             }
           >
             {keyStatus?.kind === "saving"
-              ? "Speichere + teste…"
-              : "Speichern + Verbindung testen"}
+              ? t("wizard.api_key.btn.running")
+              : t("wizard.api_key.btn.idle")}
           </Button>
           {keyStatus?.kind === "ok" ? (
             <span className="text-xs text-status-done">
-              ✓ Verbindung erfolgreich
+              {t("wizard.api_key.ok")}
             </span>
           ) : null}
         </div>
@@ -415,39 +414,41 @@ export default function OnboardingWizard({
     const rec = hardware ? recommendLlmSlot(hardware.total_ram_gb) : null;
     const mismatch = rec !== null && rec.slot !== currentSlot;
 
+    const ramLabel =
+      hardware && hardware.total_ram_gb > 0
+        ? t("wizard.llm.recommendation_ram", {
+            ram: hardware.total_ram_gb.toFixed(1),
+          })
+        : t("wizard.llm.recommendation_system");
+
     return (
       <div className="flex flex-col gap-4">
         <Hero icon={<CloudDownloadIcon />} />
         <div>
           <h3 className="text-lg font-semibold text-fg">
-            Lokales LLM-Modell (optional)
+            {t("wizard.llm.title")}
           </h3>
           <p className="text-sm text-fg-muted mt-1">
-            VoiceTypeX bringt einen eingebetteten LLM-Pfad via{" "}
-            <code className="text-brand font-mono">llama-cpp-2</code> — kein
-            externer Daemon nötig. Wird genutzt von Modi mit{" "}
+            {t("wizard.llm.intro_prefix")}{" "}
+            <code className="text-brand font-mono">llama-cpp-2</code>{" "}
+            {t("wizard.llm.intro_middle")}{" "}
             <code className="text-brand font-mono">
-              local_engine = "embedded"
+              local_engine = &quot;embedded&quot;
             </code>{" "}
-            in der Mode-TOML. Wenn du nur Cloud-Modi nutzt, kannst du diesen
-            Schritt überspringen.
+            {t("wizard.llm.intro_suffix")}
           </p>
           <p className="text-xs text-fg-faint mt-2">
-            Auch dieser Download läuft im Hintergrund — du landest direkt im
-            Abschluss-Step.
+            {t("wizard.llm.hint_background")}
           </p>
         </div>
 
         {rec && hardware ? (
           <div className="rounded-md bg-brand/10 border border-brand/30 px-3 py-2.5 text-sm">
             <div className="text-fg">
-              <span className="text-fg-faint">Empfehlung für </span>
-              <span className="font-medium">
-                {hardware.total_ram_gb > 0
-                  ? `${hardware.total_ram_gb.toFixed(1)} GB RAM`
-                  : "dein System"}
+              <span className="text-fg-faint">
+                {t("wizard.llm.recommendation_prefix")}{" "}
               </span>
-              :{" "}
+              <span className="font-medium">{ramLabel}</span>:{" "}
               <span className="font-medium text-brand">{rec.label}</span>
             </div>
             {mismatch ? (
@@ -456,11 +457,11 @@ export default function OnboardingWizard({
                 onClick={() => onPickSlot(rec.slot)}
                 className="mt-1.5 text-xs underline text-brand hover:text-brand-hover"
               >
-                Empfehlung übernehmen
+                {t("wizard.llm.adopt")}
               </button>
             ) : (
               <div className="mt-1 text-xs text-status-recording">
-                ✓ aktiv
+                {t("wizard.llm.active")}
               </div>
             )}
           </div>
@@ -472,15 +473,15 @@ export default function OnboardingWizard({
           className="self-start"
         >
           {modelPath
-            ? "Bereits geladen"
+            ? t("wizard.llm.btn.done")
             : downloadStarted
-              ? "Download läuft …"
-              : "LLM-Modell jetzt herunterladen"}
+              ? t("wizard.llm.btn.running")
+              : t("wizard.llm.btn.idle")}
         </Button>
 
         {modelPath ? (
           <div className="text-xs text-status-done">
-            ✓ LLM-Modell konfiguriert: {modelPath}
+            {t("wizard.llm.configured", { path: modelPath })}
           </div>
         ) : null}
       </div>
@@ -501,21 +502,23 @@ export default function OnboardingWizard({
         <Hero icon={<CheckIcon />} accent="done" />
         {anyDownloadRunning ? (
           <Banner tone="warning">
-            Ein oder mehrere Modell-Downloads laufen noch. Du kannst das Setup
-            jetzt abschließen — die Downloads laufen im Hintergrund weiter.
+            {t("wizard.finish.warning_downloads_running")}
           </Banner>
         ) : null}
         <div>
           <h3 className="text-lg font-semibold text-fg">
-            System-Check &amp; Fertig
+            {t("wizard.finish.title")}
           </h3>
           {backend ? (
             <div className="mt-3 rounded-md bg-elevated border border-outline p-3 text-sm">
               <div className="text-fg-muted text-xs mb-1">
-                Whisper-Backend dieser Variante
+                {t("wizard.finish.backend_label")}
               </div>
               <div className="text-status-done font-mono text-base">
-                {backend.backend} (~{backend.expected_speedup.toFixed(1)}×)
+                {t("wizard.finish.backend_value", {
+                  backend: backend.backend,
+                  factor: backend.expected_speedup.toFixed(1),
+                })}
               </div>
               <div className="text-xs text-fg-faint mt-1">
                 {backend.description}
@@ -530,27 +533,37 @@ export default function OnboardingWizard({
           ) : null}
         </div>
         <p className="text-sm text-fg-muted">
-          Du kannst jetzt diktieren. Drück{" "}
+          {t("wizard.finish.intro")}{" "}
           <kbd className="px-2 py-0.5 rounded-md bg-elevated border border-outline font-mono text-xs text-fg">
-            Ctrl+Alt+Space
+            {t("wizard.finish.kbd.hotkey")}
           </kbd>
-          , wähle mit den Pfeiltasten einen Modus und bestätige mit{" "}
+          {t("wizard.finish.choose_mode")}{" "}
           <kbd className="px-2 py-0.5 rounded-md bg-elevated border border-outline font-mono text-xs text-fg">
-            Enter
+            {t("wizard.finish.kbd.enter")}
           </kbd>
-          . Derselbe Hotkey stoppt die Aufnahme.
+          {t("wizard.finish.same_stops")}
         </p>
         <ul className="text-sm text-fg-muted list-disc pl-5 flex flex-col gap-1">
           <li>
-            Modus-Liste anpassen: Tab{" "}
-            <strong className="text-fg">Modi</strong>.
+            {t("wizard.finish.bullet_modes_prefix")}{" "}
+            <strong className="text-fg">
+              {t("wizard.finish.bullet_modes_link")}
+            </strong>
+            {t("wizard.finish.bullet_modes_suffix")}
           </li>
           <li>
-            Eigene Modi: UI oder TOML in{" "}
-            <code className="text-brand font-mono">app_config_dir/modes/</code>.
+            {t("wizard.finish.bullet_custom_prefix")}{" "}
+            <code className="text-brand font-mono">
+              app_config_dir/modes/
+            </code>
+            {t("wizard.finish.bullet_custom_suffix")}
           </li>
           <li>
-            Diagnose-Logs: Tab <strong className="text-fg">Logs</strong>.
+            {t("wizard.finish.bullet_logs_prefix")}{" "}
+            <strong className="text-fg">
+              {t("wizard.finish.bullet_logs_link")}
+            </strong>
+            {t("wizard.finish.bullet_logs_suffix")}
           </li>
         </ul>
       </div>
@@ -584,13 +597,9 @@ function MiniProgressStack({
   llmProgress,
   llmFlashVisible,
 }: MiniProgressStackProps): JSX.Element | null {
-  const whisperRow = renderRow(
-    "Whisper",
-    whisperStatus,
-    whisperProgress,
-    whisperFlashVisible,
-  );
-  const llmRow = renderRow("LLM", llmStatus, llmProgress, llmFlashVisible);
+  const t = useT();
+  const whisperRow = renderRow(t, "whisper", whisperStatus, whisperProgress, whisperFlashVisible);
+  const llmRow = renderRow(t, "llm", llmStatus, llmProgress, llmFlashVisible);
   if (whisperRow === null && llmRow === null) return null;
   return (
     <div className="mt-3 flex flex-col gap-1.5">
@@ -600,8 +609,11 @@ function MiniProgressStack({
   );
 }
 
+type ProgressTag = "whisper" | "llm";
+
 function renderRow(
-  tag: string,
+  t: TranslateFn,
+  tag: ProgressTag,
   status: DownloadStatus,
   progress: ModelDownloadProgress | null,
   flashVisible: boolean,
@@ -618,14 +630,14 @@ function renderRow(
         <div className="h-1 flex-1 rounded-full bg-status-done/40 overflow-hidden">
           <div className="h-full w-full bg-status-done" />
         </div>
-        <span className="font-mono">✓ {tag} fertig</span>
+        <span className="font-mono">{t(`wizard.progress.${tag}_done`)}</span>
       </div>
     );
   }
   if (status.kind === "error") {
     return (
       <Banner key={tag} tone="error" dense>
-        {tag}-Download fehlgeschlagen: {status.msg}
+        {t(`wizard.progress.${tag}_failed`, { message: status.msg })}
       </Banner>
     );
   }
@@ -633,12 +645,20 @@ function renderRow(
     progress && progress.total
       ? Math.round((progress.downloaded / progress.total) * 100)
       : null;
+  const ariaLabel =
+    pct !== null
+      ? t(`wizard.progress.${tag}_aria`, { pct })
+      : t(`wizard.progress.${tag}_aria_pending`);
+  const statusText =
+    pct !== null
+      ? t(`wizard.progress.${tag}_running`, { pct })
+      : t(`wizard.progress.${tag}_pending`);
   return (
     <div
       key={tag}
       className="flex items-center gap-2 text-xs text-fg-muted"
       role="status"
-      aria-label={`${tag}-Download${pct !== null ? `: ${pct} Prozent` : ""}`}
+      aria-label={ariaLabel}
     >
       <div className="h-1 flex-1 rounded-full bg-elevated overflow-hidden">
         {pct !== null ? (
@@ -650,51 +670,48 @@ function renderRow(
           <div className="h-full w-1/4 bg-brand/40 animate-pulse" />
         )}
       </div>
-      <span className="font-mono whitespace-nowrap">
-        {tag}: {pct !== null ? `${pct} %` : "läuft …"}
-      </span>
+      <span className="font-mono whitespace-nowrap">{statusText}</span>
     </div>
   );
 }
 
 function StepWelcome(): JSX.Element {
+  const t = useT();
   return (
     <div className="flex flex-col gap-4">
       <Hero icon={<Logo className="h-7 w-7" />} />
       <div>
-        <h3 className="text-lg font-semibold text-fg">Was ist VoiceTypeX?</h3>
+        <h3 className="text-lg font-semibold text-fg">
+          {t("wizard.welcome.title")}
+        </h3>
         <p className="text-sm text-fg-muted mt-1">
-          VoiceTypeX nimmt deine Stimme per Hotkey auf, transkribiert sie
-          (lokal oder via Cloud) und fügt den Text an der aktuellen
-          Cursor-Position ein.
+          {t("wizard.welcome.intro")}
         </p>
       </div>
       <ul className="text-sm text-fg-muted list-disc pl-5 flex flex-col gap-1.5">
         <li>
-          <strong className="text-fg">Lokal:</strong> 100 % offline via
-          whisper.cpp — kostenlos, deine Audio-Daten verlassen niemals den
-          Rechner.
+          <strong className="text-fg">
+            {t("wizard.welcome.bullet_local_emphasis")}
+          </strong>{" "}
+          {t("wizard.welcome.bullet_local")}
         </li>
         <li>
-          <strong className="text-fg">Cloud:</strong> xAI &amp; andere
-          Provider (BYOK) — höhere Qualität, du bringst deinen eigenen
-          API-Key mit.
+          <strong className="text-fg">
+            {t("wizard.welcome.bullet_cloud_emphasis")}
+          </strong>{" "}
+          {t("wizard.welcome.bullet_cloud")}
         </li>
-        <li>
-          Sechs Standard-Modi vorinstalliert (E-Mail, Slack, Issue …),
-          beliebig viele eigene möglich.
-        </li>
+        <li>{t("wizard.welcome.bullet_modes")}</li>
       </ul>
       <p className="text-xs text-fg-faint">
-        Das Setup dauert &lt; 5 Minuten. Du kannst Schritte überspringen
-        und später aus den Einstellungen nachholen.
+        {t("wizard.welcome.footnote_setup")}
       </p>
       <p className="text-xs text-fg-faint">
-        Diesen Assistenten kannst du jederzeit erneut starten —{" "}
+        {t("wizard.welcome.footnote_relaunch_prefix")}{" "}
         <em className="not-italic text-fg-muted">
-          Einstellungen → Diagnose &amp; Tests → Setup-Assistent öffnen
+          {t("wizard.welcome.footnote_relaunch_path")}
         </em>
-        .
+        {t("wizard.welcome.footnote_relaunch_suffix")}
       </p>
     </div>
   );
@@ -709,42 +726,36 @@ function HardwareRecommendation({
   hardware,
   active,
 }: HardwareRecommendationProps): JSX.Element | null {
+  const t = useT();
   const { recommended_variant, recommended_speedup } = hardware;
   if (recommended_variant === active) {
     return (
       <div className="mt-3 rounded-md bg-status-done/10 border border-status-done/40 p-3 text-xs text-status-done">
-        ✓ Diese Variante ist optimal für deine Hardware. Kein Upgrade nötig.
+        {t("wizard.hw_rec.optimal")}
       </div>
     );
   }
-  const variantLabel: Record<string, string> = {
-    cpu: "CPU-only",
-    openblas: "OpenBLAS (CPU-BLAS)",
-    vulkan: "Vulkan (cross-platform GPU)",
-    cuda: "CUDA (NVIDIA-GPU)",
-    metal: "Metal (Apple Silicon)",
-    coreml: "CoreML (Apple Silicon)",
-  };
+  const variantLabel = t(`wizard.variant.${recommended_variant}`);
   return (
     <div className="mt-3 rounded-md bg-status-processing/10 border border-status-processing/40 p-3 text-xs text-status-processing flex flex-col gap-1.5">
       <div>
-        <strong>Empfehlung:</strong> deine Hardware unterstützt{" "}
-        <span className="font-mono">
-          {variantLabel[recommended_variant]}
-        </span>{" "}
-        — eine separate Variante könnte hier ~
-        {recommended_speedup.toFixed(1)}× schneller transkribieren.
+        <strong>{t("wizard.hw_rec.recommendation_label")}</strong>{" "}
+        {t("wizard.hw_rec.body", {
+          label: variantLabel,
+          factor: recommended_speedup.toFixed(1),
+        })}
       </div>
       <div className="text-fg-faint">
-        Detected: CPU {hardware.cpu_logical_cores} Cores
-        {hardware.has_vulkan ? ", Vulkan" : ""}
-        {hardware.has_nvidia_gpu ? ", NVIDIA-GPU" : ""}
-        {hardware.has_amd_gpu ? ", AMD-GPU" : ""}
-        {hardware.is_apple_silicon ? ", Apple-Silicon" : ""}.
+        {t("wizard.hw_rec.detected_prefix", {
+          cores: hardware.cpu_logical_cores,
+        })}
+        {hardware.has_vulkan ? t("wizard.hw_rec.detected_vulkan") : ""}
+        {hardware.has_nvidia_gpu ? t("wizard.hw_rec.detected_nvidia") : ""}
+        {hardware.has_amd_gpu ? t("wizard.hw_rec.detected_amd") : ""}
+        {hardware.is_apple_silicon ? t("wizard.hw_rec.detected_apple") : ""}.
       </div>
       <div className="text-fg-muted">
-        Ab dem ersten offiziellen Release wird die {recommended_variant}-
-        Variante als separater Bundle-Download bereitstehen.
+        {t("wizard.hw_rec.future_bundle", { variant: recommended_variant })}
       </div>
     </div>
   );
@@ -757,8 +768,9 @@ function StepIndicator({
   current: number;
   total: number;
 }): JSX.Element {
+  const t = useT();
   return (
-    <div className="flex items-center gap-1.5" aria-label="Fortschritt">
+    <div className="flex items-center gap-1.5" aria-label={t("wizard.indicator.aria")}>
       {Array.from({ length: total }, (_, i) => i + 1).map((n) => {
         const state =
           n < current ? "done" : n === current ? "active" : "pending";
