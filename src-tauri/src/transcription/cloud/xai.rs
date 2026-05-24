@@ -69,9 +69,9 @@ impl Transcriber for XaiTranscriber {
 
             let status = response.status();
             if !status.is_success() {
-                let body = response.text().await.unwrap_or_default();
+                tracing::warn!(provider = "xai", %status, "transcribe call failed");
                 return Err(VoiceTypeError::Transcription(format!(
-                    "xAI STT HTTP {status}: {body}"
+                    "xAI STT HTTP {status}"
                 )));
             }
 

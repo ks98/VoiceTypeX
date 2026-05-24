@@ -79,8 +79,8 @@ impl OpenAICompatibleClient {
 
             let status = response.status();
             if !status.is_success() {
-                let body = response.text().await.unwrap_or_default();
-                return Err(VoiceTypeError::Processing(format!("HTTP {status}: {body}")));
+                tracing::warn!(provider = "openai_compatible", %status, "process call failed");
+                return Err(VoiceTypeError::Processing(format!("HTTP {status}")));
             }
 
             let parsed: ChatCompletionResponse = response
@@ -111,8 +111,8 @@ impl OpenAICompatibleClient {
             .map_err(|e| VoiceTypeError::Processing(format!("HTTP {url}: {e}")))?;
         let status = response.status();
         if !status.is_success() {
-            let body = response.text().await.unwrap_or_default();
-            return Err(VoiceTypeError::Processing(format!("HTTP {status}: {body}")));
+            tracing::warn!(provider = "openai_compatible", %status, "test_connection failed");
+            return Err(VoiceTypeError::Processing(format!("HTTP {status}")));
         }
         Ok(())
     }

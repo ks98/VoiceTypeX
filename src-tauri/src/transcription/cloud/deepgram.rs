@@ -42,9 +42,9 @@ impl DeepgramTranscriber {
             .map_err(|e| VoiceTypeError::Transcription(format!("HTTP {url}: {e}")))?;
         let status = response.status();
         if !status.is_success() {
-            let body = response.text().await.unwrap_or_default();
+            tracing::warn!(provider = "deepgram", %status, "test_connection failed");
             return Err(VoiceTypeError::Transcription(format!(
-                "Deepgram HTTP {status}: {body}"
+                "Deepgram HTTP {status}"
             )));
         }
         Ok(())
@@ -81,9 +81,9 @@ impl Transcriber for DeepgramTranscriber {
 
             let status = response.status();
             if !status.is_success() {
-                let body = response.text().await.unwrap_or_default();
+                tracing::warn!(provider = "deepgram", %status, "transcribe call failed");
                 return Err(VoiceTypeError::Transcription(format!(
-                    "Deepgram HTTP {status}: {body}"
+                    "Deepgram HTTP {status}"
                 )));
             }
 

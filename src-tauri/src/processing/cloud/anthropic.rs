@@ -54,9 +54,12 @@ impl AnthropicProcessor {
             .map_err(|e| VoiceTypeError::Processing(format!("HTTP {url}: {e}")))?;
         let status = response.status();
         if !status.is_success() {
-            let body = response.text().await.unwrap_or_default();
+            // Body intentionally dropped: it may reflect sensitive headers
+            // (e.g. an auth token echoed by a MITM proxy or misconfigured
+            // gateway) and would otherwise land in the user-visible logs tab.
+            tracing::warn!(provider = "anthropic", %status, "test_connection failed");
             return Err(VoiceTypeError::Processing(format!(
-                "Anthropic HTTP {status}: {body}"
+                "Anthropic HTTP {status}"
             )));
         }
         Ok(())
@@ -102,9 +105,9 @@ impl Processor for AnthropicProcessor {
 
             let status = response.status();
             if !status.is_success() {
-                let body = response.text().await.unwrap_or_default();
+                tracing::warn!(provider = "anthropic", %status, "process call failed");
                 return Err(VoiceTypeError::Processing(format!(
-                    "Anthropic HTTP {status}: {body}"
+                    "Anthropic HTTP {status}"
                 )));
             }
 

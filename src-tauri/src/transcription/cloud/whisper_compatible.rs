@@ -75,9 +75,9 @@ impl WhisperCompatibleClient {
 
             let status = response.status();
             if !status.is_success() {
-                let body = response.text().await.unwrap_or_default();
+                tracing::warn!(provider = "whisper_compatible", %status, "transcribe call failed");
                 return Err(VoiceTypeError::Transcription(format!(
-                    "Whisper-API HTTP {status}: {body}"
+                    "Whisper-API HTTP {status}"
                 )));
             }
 
