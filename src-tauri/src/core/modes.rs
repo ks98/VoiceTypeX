@@ -156,6 +156,9 @@ impl Mode {
     /// `cloud_llm_provider`. Diese Konsistenz ist nicht in TOML kodierbar,
     /// also pruefen wir sie nach dem Deserialize.
     pub fn validate(&self) -> Result<()> {
+        const MAX_SYSTEM_PROMPT_LEN: usize = 32 * 1024;
+        const MAX_DESCRIPTION_LEN: usize = 4 * 1024;
+
         if self.id.is_empty() {
             return Err(VoiceTypeError::Mode("id must not be empty".into()));
         }
@@ -164,6 +167,20 @@ impl Mode {
                 "id '{}' contains whitespace",
                 self.id
             )));
+        }
+        if self.description.len() > MAX_DESCRIPTION_LEN {
+            return Err(VoiceTypeError::Mode(format!(
+                "Mode '{}': description exceeds {} bytes",
+                self.id, MAX_DESCRIPTION_LEN
+            )));
+        }
+        if let Some(prompt) = self.system_prompt.as_deref() {
+            if prompt.len() > MAX_SYSTEM_PROMPT_LEN {
+                return Err(VoiceTypeError::Mode(format!(
+                    "Mode '{}': system_prompt exceeds {} bytes",
+                    self.id, MAX_SYSTEM_PROMPT_LEN
+                )));
+            }
         }
         if self.transcription == TranscriptionTarget::Cloud && self.cloud_stt_provider.is_none() {
             return Err(VoiceTypeError::Mode(format!(

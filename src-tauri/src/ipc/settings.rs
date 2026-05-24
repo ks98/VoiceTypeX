@@ -29,8 +29,30 @@ pub async fn set_settings(
     state: tauri::State<'_, Arc<AppContext>>,
     settings: Settings,
 ) -> IpcResult<()> {
+    validate_settings(&settings)?;
     *state.settings.write() = settings;
     persist_settings(&state)
+}
+
+/// Boundary-validation. Catches user-supplied values that could later
+/// surprise the runtime (e.g. an `ollama_url` that exfiltrates transcripts
+/// to a third party because the user pasted in a fake "faster Ollama"
+/// endpoint from a forum post).
+fn validate_settings(s: &Settings) -> IpcResult<()> {
+    let url = reqwest::Url::parse(&s.ollama_url).map_err(|e| format!("Invalid ollama_url: {e}"))?;
+    if !matches!(url.scheme(), "http" | "https") {
+        return Err(format!(
+            "Invalid ollama_url scheme: {} (only http/https allowed)",
+            url.scheme()
+        ));
+    }
+    if url.host_str().is_none_or(str::is_empty) {
+        return Err("Invalid ollama_url: host missing".into());
+    }
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err("Invalid ollama_url: credentials in URL not allowed".into());
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -66,7 +88,7 @@ pub async fn set_whisper_model_path(
 }
 
 /// Lade das im Settings-Slot konfigurierte Default-Whisper-Modell nach
-/// `app_data_dir/models/`. Sendet waehrend des Downloads
+/// `app_config_dir/models/`. Sendet waehrend des Downloads
 /// `model-download-progress`-Events ans Frontend.
 #[tauri::command]
 pub async fn download_default_model(
@@ -111,7 +133,7 @@ pub async fn download_default_model(
 }
 
 /// **Phase 3b** — Lade das in `Settings.llm_default_slot` konfigurierte
-/// GGUF-LLM-Modell nach `app_data_dir/models/`. Sendet `llm-model-
+/// GGUF-LLM-Modell nach `app_config_dir/models/`. Sendet `llm-model-
 /// download-progress`-Events ans Frontend (separate Channel von Whisper,
 /// damit beide Downloads parallel laufen koennen ohne Progress-Mix).
 #[tauri::command]
