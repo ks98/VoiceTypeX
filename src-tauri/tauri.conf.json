@@ -66,7 +66,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: asset: https://asset.localhost; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost https://api.anthropic.com https://api.openai.com https://api.x.ai https://api.groq.com https://api.deepgram.com https://huggingface.co https://*.huggingface.co"
     }
   },
   "bundle": {
