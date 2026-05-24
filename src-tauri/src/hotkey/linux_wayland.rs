@@ -64,7 +64,7 @@ pub async fn run_global_shortcuts_session(
         .await
         .map_err(|e| VoiceTypeError::Hotkey(format!("bind_shortcuts: {e}")))?;
 
-    tracing::info!(count = shortcuts.len(), "Wayland-Hotkeys registriert");
+    tracing::info!(count = shortcuts.len(), "Wayland hotkeys registered");
 
     // Nach bind_shortcuts list_shortcuts aufrufen, um den tatsaechlich
     // gebundenen Trigger zu lernen. Das ist eigenes Portal-Verhalten:
@@ -90,11 +90,11 @@ pub async fn run_global_shortcuts_session(
                     }
                 }
                 Err(e) => {
-                    tracing::warn!(error = %e, "list_shortcuts.response() fehlgeschlagen");
+                    tracing::warn!(error = %e, "list_shortcuts.response() failed");
                 }
             },
             Err(e) => {
-                tracing::warn!(error = %e, "list_shortcuts(&session) fehlgeschlagen");
+                tracing::warn!(error = %e, "list_shortcuts(&session) failed");
             }
         }
     }
@@ -133,14 +133,14 @@ pub async fn run_global_shortcuts_session(
                         continue;
                     }
                     pressed_state.insert(shortcut_id.clone(), true);
-                    tracing::info!(shortcut_id = %shortcut_id, "Wayland-Hotkey Pressed");
+                    tracing::info!(shortcut_id = %shortcut_id, "Wayland hotkey pressed");
                     let _ = sender.send(HotkeyEvent {
                         id: shortcut_id,
                         kind: HotkeyEventKind::Pressed,
                     });
                 }
                 None => {
-                    tracing::warn!("Wayland-Hotkey-Activated-Stream beendet");
+                    tracing::warn!("Wayland hotkey activated stream ended");
                     break;
                 }
             },
@@ -148,14 +148,14 @@ pub async fn run_global_shortcuts_session(
                 Some(ev) => {
                     let shortcut_id = ev.shortcut_id().to_string();
                     pressed_state.insert(shortcut_id.clone(), false);
-                    tracing::info!(shortcut_id = %shortcut_id, "Wayland-Hotkey Released");
+                    tracing::info!(shortcut_id = %shortcut_id, "Wayland hotkey released");
                     let _ = sender.send(HotkeyEvent {
                         id: shortcut_id,
                         kind: HotkeyEventKind::Released,
                     });
                 }
                 None => {
-                    tracing::warn!("Wayland-Hotkey-Deactivated-Stream beendet");
+                    tracing::warn!("Wayland hotkey deactivated stream ended");
                     break;
                 }
             },

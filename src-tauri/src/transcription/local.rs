@@ -87,7 +87,7 @@ impl LocalTranscriber {
         let path_str = self
             .model_path
             .to_str()
-            .ok_or_else(|| VoiceTypeError::Transcription("Modellpfad nicht UTF-8".into()))?;
+            .ok_or_else(|| VoiceTypeError::Transcription("Model path not UTF-8".into()))?;
         if !self.model_path.exists() {
             return Err(VoiceTypeError::Transcription(format!(
                 "Modell-Datei fehlt: {path_str} (siehe Modell-Downloader)"

@@ -73,7 +73,7 @@ fn load_file_secrets(path: &PathBuf) -> Result<FileSecrets> {
 fn save_file_secrets(secrets: &FileSecrets) -> Result<()> {
     let path = FILE_PATH
         .get()
-        .ok_or_else(|| VoiceTypeError::Secrets("FILE_PATH nicht initialisiert".into()))?;
+        .ok_or_else(|| VoiceTypeError::Secrets("FILE_PATH not initialised".into()))?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|e| VoiceTypeError::Secrets(format!("mkdir {parent:?}: {e}")))?;
@@ -102,7 +102,7 @@ fn set_file_mode_0600(_path: &PathBuf) -> Result<()> {
 fn file_state() -> Result<&'static RwLock<FileSecrets>> {
     FILE_STATE
         .get()
-        .ok_or_else(|| VoiceTypeError::Secrets("FILE_STATE nicht initialisiert".into()))
+        .ok_or_else(|| VoiceTypeError::Secrets("FILE_STATE not initialised".into()))
 }
 
 pub struct SecretStore;
@@ -121,7 +121,7 @@ impl SecretStore {
                 // NoEntry — fallback auf File
             }
             Err(e) => {
-                tracing::warn!(provider, error = %e, "Keyring-Read fehlgeschlagen, Fallback File");
+                tracing::warn!(provider, error = %e, "Keyring read failed — falling back to file");
             }
         }
 
@@ -160,7 +160,7 @@ impl SecretStore {
         match keyring_set(provider, value) {
             Ok(()) => tracing::info!(provider, "secret set: Keyring ok"),
             Err(e) => {
-                tracing::warn!(provider, error = %e, "Keyring-Set fehlgeschlagen (egal — File ist Wahrheit)")
+                tracing::warn!(provider, error = %e, "Keyring set failed (irrelevant — file is source of truth)")
             }
         }
         Ok(())
@@ -177,7 +177,7 @@ impl SecretStore {
         tracing::info!(provider, "secret delete: File ok");
 
         if let Err(e) = keyring_delete(provider) {
-            tracing::warn!(provider, error = %e, "Keyring-Delete fehlgeschlagen (irrelevant)");
+            tracing::warn!(provider, error = %e, "Keyring delete failed (irrelevant)");
         }
         Ok(())
     }

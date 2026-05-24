@@ -71,7 +71,7 @@ impl RecorderHandle {
             .spawn(move || {
                 run_recorder_thread(config, samples_clone, is_recording_clone, stop_rx, meta_tx)
             })
-            .map_err(|e| VoiceTypeError::Audio(format!("Worker-Thread-Spawn: {e}")))?;
+            .map_err(|e| VoiceTypeError::Audio(format!("Worker thread spawn: {e}")))?;
 
         Ok(Self {
             samples,
@@ -102,7 +102,7 @@ impl RecorderHandle {
             tokio::task::spawn_blocking(move || handle.join())
                 .await
                 .map_err(|e| VoiceTypeError::Audio(format!("worker spawn_blocking: {e}")))?
-                .map_err(|_| VoiceTypeError::Audio("Worker-Thread panicked".into()))??;
+                .map_err(|_| VoiceTypeError::Audio("Worker thread panicked".into()))??;
         }
 
         let meta = self.resolve_meta().await?;
@@ -132,10 +132,10 @@ impl RecorderHandle {
         let rx = self
             .meta_rx
             .take()
-            .ok_or_else(|| VoiceTypeError::Audio("Meta bereits konsumiert".into()))?;
+            .ok_or_else(|| VoiceTypeError::Audio("Meta already consumed".into()))?;
         let meta = rx
             .await
-            .map_err(|_| VoiceTypeError::Audio("Worker meldete keine Stream-Meta".into()))?;
+            .map_err(|_| VoiceTypeError::Audio("Worker did not report stream meta".into()))?;
         self.meta = Some(meta);
         Ok(meta)
     }
@@ -182,17 +182,17 @@ fn run_recorder_thread(
     let device = match config.device_name {
         Some(name) => host
             .input_devices()
-            .map_err(|e| VoiceTypeError::Audio(format!("Geraeteliste: {e}")))?
+            .map_err(|e| VoiceTypeError::Audio(format!("Device list: {e}")))?
             .find(|d| d.name().map(|n| n == name).unwrap_or(false))
-            .ok_or_else(|| VoiceTypeError::Audio(format!("Geraet '{name}' nicht gefunden")))?,
+            .ok_or_else(|| VoiceTypeError::Audio(format!("Device '{name}' not found")))?,
         None => host
             .default_input_device()
-            .ok_or_else(|| VoiceTypeError::Audio("Kein Standard-Eingabegeraet".into()))?,
+            .ok_or_else(|| VoiceTypeError::Audio("No default input device".into()))?,
     };
 
     let supported = device
         .default_input_config()
-        .map_err(|e| VoiceTypeError::Audio(format!("Geraete-Config: {e}")))?;
+        .map_err(|e| VoiceTypeError::Audio(format!("Device config: {e}")))?;
 
     let sample_rate = supported.sample_rate().0;
     let channels = supported.channels();

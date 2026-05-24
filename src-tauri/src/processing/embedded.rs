@@ -51,9 +51,8 @@ fn ensure_backend() -> Result<&'static LlamaBackend> {
     if let Some(b) = LLAMA_BACKEND.get() {
         return Ok(b);
     }
-    let backend = LlamaBackend::init().map_err(|e| {
-        VoiceTypeError::Processing(format!("LlamaBackend::init fehlgeschlagen: {e}"))
-    })?;
+    let backend = LlamaBackend::init()
+        .map_err(|e| VoiceTypeError::Processing(format!("LlamaBackend::init failed: {e}")))?;
     // Race ist OK: get_or_init verliert, der erste setzt den Wert.
     Ok(LLAMA_BACKEND.get_or_init(|| backend))
 }
@@ -95,7 +94,7 @@ impl LlamaEmbeddedProcessor {
         let model = LlamaModel::load_from_file(backend, &self.model_path, &params)
             .map_err(|e| VoiceTypeError::Processing(format!("LlamaModel::load_from_file: {e}")))?;
         *guard = Some(model);
-        tracing::info!(model = %self.model_path.display(), "LLM-Modell geladen");
+        tracing::info!(model = %self.model_path.display(), "LLM model loaded");
         Ok(())
     }
 }
@@ -154,10 +153,10 @@ fn run_llama_blocking(
     let guard = model_arc.read();
     let model = guard
         .as_ref()
-        .ok_or_else(|| VoiceTypeError::Processing("LLM-Modell nicht geladen".into()))?;
+        .ok_or_else(|| VoiceTypeError::Processing("LLM model not loaded".into()))?;
     let backend = LLAMA_BACKEND
         .get()
-        .ok_or_else(|| VoiceTypeError::Processing("LlamaBackend nicht initialisiert".into()))?;
+        .ok_or_else(|| VoiceTypeError::Processing("LlamaBackend not initialised".into()))?;
 
     // Chat-Template aus dem GGUF holen. Fast alle modernen Modelle
     // (gemma3, llama3, qwen3, mistral-nemo) haben ein passendes

@@ -269,10 +269,10 @@ impl WorkerState {
                 match parsed {
                     Ok(Some(km)) => self.keymap = Some(km),
                     Ok(None) => {
-                        tracing::warn!("libei: Keymap-Parsing lieferte None");
+                        tracing::warn!("libei: keymap parsing returned None");
                     }
                     Err(e) => {
-                        tracing::warn!(error = %e, "libei: Keymap-Parsing fehlgeschlagen");
+                        tracing::warn!(error = %e, "libei: keymap parsing failed");
                     }
                 }
             }
@@ -302,7 +302,7 @@ impl WorkerState {
             return;
         };
         let Some(keymap) = &self.keymap else {
-            tracing::warn!("libei: send_ctrl_v ohne Keymap");
+            tracing::warn!("libei: send_ctrl_v without keymap");
             return;
         };
         if !self.emulation_active {
@@ -311,11 +311,11 @@ impl WorkerState {
         }
 
         let Some(ctrl_keycode) = find_keycode(keymap, xkb::Keysym::Control_L) else {
-            tracing::warn!("libei: Control_L nicht im Keymap gefunden");
+            tracing::warn!("libei: Control_L not in keymap");
             return;
         };
         let Some(v_keycode) = find_keycode(keymap, xkb::Keysym::v) else {
-            tracing::warn!("libei: keysym 'v' nicht im Keymap gefunden");
+            tracing::warn!("libei: keysym 'v' not in keymap");
             return;
         };
 
@@ -334,7 +334,7 @@ impl WorkerState {
             keyboard.key(key, state);
             device.frame(serial, t);
             if let Err(e) = context.flush() {
-                tracing::warn!(error = %e, "libei: flush fehlgeschlagen waehrend Ctrl+V");
+                tracing::warn!(error = %e, "libei: flush failed during Ctrl+V");
             }
             std::thread::sleep(std::time::Duration::from_millis(1));
             t
@@ -402,7 +402,7 @@ pub fn run_libei_worker(
 
     let stream = UnixStream::from(fd);
     if let Err(e) = stream.set_nonblocking(true) {
-        tracing::error!(error = %e, "libei: set_nonblocking fehlgeschlagen");
+        tracing::error!(error = %e, "libei: set_nonblocking failed");
         let _ = ready_tx.send(false);
         return;
     }
@@ -410,14 +410,14 @@ pub fn run_libei_worker(
     let context = match ei::Context::new(stream) {
         Ok(c) => c,
         Err(e) => {
-            tracing::error!(error = %e, "libei: ei::Context::new fehlgeschlagen");
+            tracing::error!(error = %e, "libei: ei::Context::new failed");
             let _ = ready_tx.send(false);
             return;
         }
     };
     let _handshake = context.handshake();
     if let Err(e) = context.flush() {
-        tracing::error!(error = %e, "libei: erstes flush fehlgeschlagen");
+        tracing::error!(error = %e, "libei: first flush failed");
         let _ = ready_tx.send(false);
         return;
     }
@@ -445,7 +445,7 @@ pub fn run_libei_worker(
             Ok(_) => {}
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
             Err(e) => {
-                tracing::warn!(error = %e, "libei: context.read() fehlgeschlagen — Worker beendet");
+                tracing::warn!(error = %e, "libei: context.read() failed — worker exiting");
                 break;
             }
         }
@@ -509,5 +509,5 @@ pub fn run_libei_worker(
     if let Some(tx) = state.ready_tx.take() {
         let _ = tx.send(false);
     }
-    tracing::info!("libei-Worker beendet");
+    tracing::info!("libei worker exited");
 }

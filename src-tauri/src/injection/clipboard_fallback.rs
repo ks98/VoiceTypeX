@@ -101,7 +101,7 @@ impl TextInjector for ClipboardFallbackInjector {
             tokio::spawn(async move {
                 tokio::time::sleep(Duration::from_millis(RESTORE_DELAY_MS)).await;
                 if let Err(e) = app.clipboard().write_text(prev) {
-                    tracing::warn!(error = %e, "Clipboard-Restore fehlgeschlagen");
+                    tracing::warn!(error = %e, "Clipboard restore failed");
                 }
             });
         }

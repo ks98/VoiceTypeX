@@ -84,7 +84,7 @@ impl StateBus {
                 to: next.label().to_string(),
             });
         }
-        tracing::info!(from = %current.label(), to = %next.label(), "State-Uebergang");
+        tracing::info!(from = %current.label(), to = %next.label(), "State transition");
         // `send_replace` schreibt den Wert immer, auch ohne aktive Receiver —
         // entscheidend, weil Subscriber sich erst spaeter ueber `subscribe()`
         // anhaengen koennen und der State trotzdem korrekt sein muss.

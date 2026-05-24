@@ -157,29 +157,29 @@ impl Mode {
     /// also pruefen wir sie nach dem Deserialize.
     pub fn validate(&self) -> Result<()> {
         if self.id.is_empty() {
-            return Err(VoiceTypeError::Mode("id darf nicht leer sein".into()));
+            return Err(VoiceTypeError::Mode("id must not be empty".into()));
         }
         if self.id.contains(char::is_whitespace) {
             return Err(VoiceTypeError::Mode(format!(
-                "id '{}' enthaelt Leerzeichen",
+                "id '{}' contains whitespace",
                 self.id
             )));
         }
         if self.transcription == TranscriptionTarget::Cloud && self.cloud_stt_provider.is_none() {
             return Err(VoiceTypeError::Mode(format!(
-                "Modus '{}': transcription=cloud, aber kein cloud_stt_provider gesetzt",
+                "Mode '{}': transcription=cloud, but no cloud_stt_provider set",
                 self.id
             )));
         }
         if self.processing == ProcessingTarget::Cloud && self.cloud_llm_provider.is_none() {
             return Err(VoiceTypeError::Mode(format!(
-                "Modus '{}': processing=cloud, aber kein cloud_llm_provider gesetzt",
+                "Mode '{}': processing=cloud, but no cloud_llm_provider set",
                 self.id
             )));
         }
         if self.processing != ProcessingTarget::None && self.system_prompt.is_none() {
             return Err(VoiceTypeError::Mode(format!(
-                "Modus '{}': processing != none, aber kein system_prompt gesetzt",
+                "Mode '{}': processing != none, but no system_prompt set",
                 self.id
             )));
         }
@@ -189,7 +189,7 @@ impl Mode {
                 "embedded" | "ollama" => {}
                 other => {
                     return Err(VoiceTypeError::Mode(format!(
-                        "Modus '{}': local_engine '{other}' unbekannt (erlaubt: \"embedded\", \"ollama\")",
+                        "Mode '{}': local_engine '{other}' unbekannt (erlaubt: \"embedded\", \"ollama\")",
                         self.id
                     )));
                 }
@@ -206,7 +206,7 @@ impl Mode {
                 && self.local_llm_model.is_none()
             {
                 return Err(VoiceTypeError::Mode(format!(
-                    "Modus '{}': local_engine=ollama, aber weder ollama_model_tag noch local_llm_model gesetzt",
+                    "Mode '{}': local_engine=ollama, aber weder ollama_model_tag noch local_llm_model gesetzt",
                     self.id
                 )));
             }
@@ -217,7 +217,7 @@ impl Mode {
         if let Some(t) = self.temperature {
             if !(0.0..=2.0).contains(&t) {
                 return Err(VoiceTypeError::Mode(format!(
-                    "Modus '{}': temperature {t} ausserhalb [0.0, 2.0]",
+                    "Mode '{}': temperature {t} ausserhalb [0.0, 2.0]",
                     self.id
                 )));
             }
@@ -225,7 +225,7 @@ impl Mode {
         if let Some(p) = self.top_p {
             if !(0.0..=1.0).contains(&p) {
                 return Err(VoiceTypeError::Mode(format!(
-                    "Modus '{}': top_p {p} ausserhalb [0.0, 1.0]",
+                    "Mode '{}': top_p {p} ausserhalb [0.0, 1.0]",
                     self.id
                 )));
             }
@@ -233,7 +233,7 @@ impl Mode {
         if let Some(r) = self.repeat_penalty {
             if !(0.5..=2.0).contains(&r) {
                 return Err(VoiceTypeError::Mode(format!(
-                    "Modus '{}': repeat_penalty {r} ausserhalb [0.5, 2.0]",
+                    "Mode '{}': repeat_penalty {r} ausserhalb [0.5, 2.0]",
                     self.id
                 )));
             }
@@ -241,7 +241,7 @@ impl Mode {
         if let Some(m) = self.max_tokens {
             if !(1..=8192).contains(&m) {
                 return Err(VoiceTypeError::Mode(format!(
-                    "Modus '{}': max_tokens {m} ausserhalb [1, 8192]",
+                    "Mode '{}': max_tokens {m} ausserhalb [1, 8192]",
                     self.id
                 )));
             }

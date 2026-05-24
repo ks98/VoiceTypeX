@@ -120,6 +120,30 @@ Code-Änderung ohne entsprechendes Doku-Update gilt als unvollständig. Vor
 - **`README.md`** — user-sichtbare Änderungen: Install, Build, Usage,
   CLI-Flags, Voraussetzungen, Troubleshooting.
 
+### i18n-Pflicht für neue UI-Strings
+
+Jeder neue user-sichtbare String im Frontend muss:
+
+1. Als Key in **`src/i18n/locales/en.json`** angelegt werden (Source-of-Truth).
+2. In **allen vier anderen Locale-Files** (`de.json`, `fr.json`,
+   `es.json`, `it.json`) parallel ergänzt werden — sonst meldet
+   `pnpm i18n:check` fehlende Keys und der `prebuild`-Hook bricht ab.
+3. Im React-Code via `useT()`-Hook eingebunden werden: entweder
+   `t("namespace.key")` für statische Keys, oder
+   `` t(`namespace.${dynamic}`) `` für template-literal-Prefix-Keys.
+   Der Build-Gate validiert beides.
+
+**Backend (Rust):** user-sichtbare Strings (Error-Messages aus
+`VoiceTypeError`, tracing-Logs die im Logs-Tab landen) bleiben
+englisch. Eine vollständige Backend-Error-Code-Internationalisierung
+ist als spätere Phase vorgemerkt. Plattform-Tracing (pipeline,
+injection, audio) muss englisch sein, weil es im Logs-Tab sichtbar ist.
+
+**Modi-Defaults:** wenn ein neuer Default-Modus dazukommt, muss er in
+allen fünf `modes/defaults/{de,en,fr,es,it}/`-Ordnern als TOML angelegt
+werden, mit kulturell-angepasstem `system_prompt` (Anredeformen,
+Höflichkeitsebenen, Diktier-Befehle wie „Punkt"/„point"/„punto").
+
 Regeln:
 
 - **Doku-Update gehört in denselben Commit** wie die Code-Änderung.

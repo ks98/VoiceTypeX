@@ -33,5 +33,5 @@ async fn play_blocking(wav_bytes: &'static [u8]) -> Result<()> {
         Ok(())
     })
     .await
-    .map_err(|e| VoiceTypeError::Audio(format!("Cue-spawn_blocking: {e}")))?
+    .map_err(|e| VoiceTypeError::Audio(format!("Cue spawn_blocking: {e}")))?
 }

@@ -81,29 +81,29 @@ pub async fn handle_menu_hotkey(app: AppHandle, ctx: Arc<AppContext>) -> Result<
         AppState::Idle => {
             if let Some(menu) = app.get_webview_window("menu") {
                 if let Err(e) = menu.show() {
-                    tracing::warn!(error = %e, "menu.show() fehlgeschlagen");
+                    tracing::warn!(error = %e, "menu.show() failed");
                 }
                 // set_focus auf Wayland Compositor-abhaengig. Das menu-
                 // Window startet mit `focus: true` in der Config, das gibt
                 // KDE einen staerkeren Hint als ein nachtraegliches
                 // set_focus auf das overlay-Window.
                 if let Err(e) = menu.set_focus() {
-                    tracing::warn!(error = %e, "menu.set_focus() fehlgeschlagen (Compositor-Quirk)");
+                    tracing::warn!(error = %e, "menu.set_focus() failed (compositor quirk)");
                 }
             }
-            tracing::info!("Menue-Hotkey: Idle → Menue geoeffnet");
+            tracing::info!("Menu hotkey: idle → menu opened");
         }
         AppState::Recording => {
             let active = ctx.active_mode.lock().clone();
             let Some(mode) = active else {
-                tracing::warn!("Recording-State ohne active_mode — Menue-Hotkey-Stop ignoriert");
+                tracing::warn!("Recording state without active_mode — menu hotkey stop ignored");
                 return Ok(());
             };
-            tracing::info!(mode = %mode.id, "Menue-Hotkey: Recording → finish");
+            tracing::info!(mode = %mode.id, "Menu hotkey: recording → finish");
             finish_recording_and_inject(&app, &ctx, &mode).await?;
         }
         other => {
-            tracing::warn!(state = %other.label(), "Menue-Hotkey ignoriert (busy)");
+            tracing::warn!(state = %other.label(), "Menu hotkey ignored (busy)");
         }
     }
     Ok(())
@@ -122,7 +122,7 @@ async fn start_recording(app: &AppHandle, ctx: &Arc<AppContext>, mode: &Mode) ->
     // versteckt (UI-Trigger-Pfad), passiert nichts.
     if let Some(menu) = app.get_webview_window("menu") {
         if let Err(e) = menu.hide() {
-            tracing::warn!(error = %e, "menu.hide() vor Recording fehlgeschlagen");
+            tracing::warn!(error = %e, "menu.hide() before recording failed");
         }
     }
 
@@ -132,12 +132,12 @@ async fn start_recording(app: &AppHandle, ctx: &Arc<AppContext>, mode: &Mode) ->
     // Overlay wieder und der Fokus bleibt bei der Ziel-App.
     if let Some(overlay) = app.get_webview_window("overlay") {
         if let Err(e) = overlay.show() {
-            tracing::warn!(error = %e, "Overlay show() fehlgeschlagen (nicht fatal)");
+            tracing::warn!(error = %e, "Overlay show() failed (non-fatal)");
         }
     }
 
     if let Err(e) = play_start_cue().await {
-        tracing::warn!(error = %e, "Start-Cue fehlgeschlagen (nicht fatal)");
+        tracing::warn!(error = %e, "Start cue failed (non-fatal)");
     }
 
     let mut recorder = RecorderHandle::start(RecorderConfig::default()).inspect_err(|e| {
@@ -189,7 +189,7 @@ async fn start_recording(app: &AppHandle, ctx: &Arc<AppContext>, mode: &Mode) ->
                 // Streaming-Worker-Start fehlgeschlagen ist nicht fatal —
                 // der Final-Pass nach Stop-Hotkey laeuft weiter, der User
                 // bekommt nur kein Live-Partial. WARN, kein Abort.
-                tracing::warn!(error = %e, "await_meta vor Streaming-Worker fehlgeschlagen — laufe ohne Live-Partial");
+                tracing::warn!(error = %e, "await_meta before streaming worker failed — running without live partial");
             }
         }
     }
@@ -218,7 +218,7 @@ async fn streaming_worker(
     // Erste Wartezeit, damit das Mikrofon ueberhaupt etwas Substanzielles
     // im Buffer hat. <1.5 s deutsches Sprach-Audio liefert sonst leere
     // Decodes oder Whisper halluziniert.
-    tracing::info!("Streaming-Worker laeuft (initial_wait={STREAMING_INITIAL_WAIT_MS}ms)");
+    tracing::info!("Streaming worker running (initial_wait={STREAMING_INITIAL_WAIT_MS}ms)");
     sleep(Duration::from_millis(STREAMING_INITIAL_WAIT_MS)).await;
 
     let mut prev_text = String::new();
@@ -249,7 +249,7 @@ async fn streaming_worker(
                 continue;
             }
             Err(e) => {
-                tracing::warn!(iteration, error = %e, "Streaming: Resampling fehlgeschlagen");
+                tracing::warn!(iteration, error = %e, "Streaming: resampling failed");
                 sleep(Duration::from_millis(STREAMING_INTERVAL_MS)).await;
                 continue;
             }
@@ -298,7 +298,7 @@ async fn streaming_worker(
                         },
                     );
                     if let Err(e) = emit_result {
-                        tracing::warn!(error = %e, "Partial-Emit fehlgeschlagen");
+                        tracing::warn!(error = %e, "Partial emit failed");
                     } else {
                         tracing::info!(
                             iteration,
@@ -311,7 +311,7 @@ async fn streaming_worker(
                 prev_text = curr_text;
             }
             Err(e) => {
-                tracing::warn!(iteration, error = %e, "Streaming-Pass fehlgeschlagen");
+                tracing::warn!(iteration, error = %e, "Streaming pass failed");
             }
         }
 
@@ -408,7 +408,7 @@ async fn finish_recording_and_inject(
     ctx.state_bus.transition(AppState::Transcribing)?;
 
     if let Err(e) = play_stop_cue().await {
-        tracing::warn!(error = %e, "Stop-Cue fehlgeschlagen (nicht fatal)");
+        tracing::warn!(error = %e, "Stop cue failed (non-fatal)");
     }
 
     let wav = recorder.stop_and_finalize().await.inspect_err(|e| {
@@ -492,7 +492,7 @@ async fn finish_recording_and_inject(
     // tatsaechlich zu vollziehen, bevor libei tippt.
     if let Some(overlay) = app.get_webview_window("overlay") {
         if let Err(e) = overlay.hide() {
-            tracing::warn!(error = %e, "Overlay hide() vor Inject fehlgeschlagen");
+            tracing::warn!(error = %e, "Overlay hide() before inject failed");
         }
     }
     tokio::time::sleep(std::time::Duration::from_millis(80)).await;
@@ -702,7 +702,7 @@ pub fn register_menu_hotkey(app: &AppHandle, ctx: Arc<AppContext>) -> Result<()>
         let ctx = Arc::clone(&ctx_for_handler);
         tauri::async_runtime::spawn(async move {
             if let Err(e) = handle_menu_hotkey(app.clone(), ctx).await {
-                tracing::error!(error = %e, "Menue-Hotkey-Handler fehlgeschlagen");
+                tracing::error!(error = %e, "Menu hotkey handler failed");
                 let _ = app
                     .notification()
                     .builder()
@@ -718,7 +718,7 @@ pub fn register_menu_hotkey(app: &AppHandle, ctx: Arc<AppContext>) -> Result<()>
         .map_err(|e| {
             VoiceTypeError::Hotkey(format!("register menu-hotkey '{accelerator}': {e}"))
         })?;
-    tracing::info!(hotkey = %accelerator, "Menue-Hotkey registriert");
+    tracing::info!(hotkey = %accelerator, "Menu hotkey registered");
     Ok(())
 }
 
@@ -755,7 +755,7 @@ pub fn spawn_wayland_hotkey_session(app: AppHandle, ctx: Arc<AppContext>) {
         if let Err(e) =
             run_global_shortcuts_session(specs, sender_clone, Some(effective_cache)).await
         {
-            tracing::error!(error = %e, "Wayland-Hotkey-Session beendet mit Fehler");
+            tracing::error!(error = %e, "Wayland hotkey session ended with error");
         }
     });
 
@@ -773,16 +773,16 @@ pub fn spawn_wayland_hotkey_session(app: AppHandle, ctx: Arc<AppContext>) {
                     let ctx = Arc::clone(&ctx_for_dispatch);
                     tauri::async_runtime::spawn(async move {
                         if let Err(e) = handle_menu_hotkey(app.clone(), ctx).await {
-                            tracing::error!(error = %e, "Menue-Hotkey-Handler-Fehler (Wayland)");
+                            tracing::error!(error = %e, "Menu hotkey handler error (Wayland)");
                         }
                     });
                 }
                 Err(broadcast::error::RecvError::Closed) => {
-                    tracing::warn!("Wayland-Hotkey-Channel geschlossen");
+                    tracing::warn!("Wayland hotkey channel closed");
                     break;
                 }
                 Err(broadcast::error::RecvError::Lagged(n)) => {
-                    tracing::warn!(missed = n, "Wayland-Hotkey-Events verworfen (Lag)");
+                    tracing::warn!(missed = n, "Wayland hotkey events dropped (lag)");
                 }
             }
         }
@@ -869,10 +869,10 @@ pub fn spawn_tray_state_listener(app: AppHandle) {
                 match tauri::image::Image::from_bytes(icon_bytes) {
                     Ok(image) => {
                         if let Err(e) = tray.set_icon(Some(image)) {
-                            tracing::warn!(error = %e, "Tray-Icon-Update fehlgeschlagen");
+                            tracing::warn!(error = %e, "Tray icon update failed");
                         }
                     }
-                    Err(e) => tracing::warn!(error = %e, "Tray-Icon-Decode fehlgeschlagen"),
+                    Err(e) => tracing::warn!(error = %e, "Tray icon decode failed"),
                 }
             }
         }

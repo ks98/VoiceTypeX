@@ -84,7 +84,7 @@ impl WaylandLibeiInjector {
         // wenn KWin/Mutter den Token akzeptiert).
         let prior_token = load_restore_token(&self.token_path);
         if prior_token.is_some() {
-            tracing::info!("RemoteDesktop: nutze gespeicherten restore_token");
+            tracing::info!("RemoteDesktop: using stored restore_token");
         }
 
         let (restore_token, eis_fd) = match build_remote_desktop_session(prior_token.as_deref())
@@ -92,7 +92,7 @@ impl WaylandLibeiInjector {
         {
             Ok(v) => v,
             Err(e) => {
-                tracing::warn!(error = %e, "RemoteDesktop-Session-Setup fehlgeschlagen — Fallback auf Clipboard+Notification");
+                tracing::warn!(error = %e, "RemoteDesktop session setup failed — falling back to clipboard+notification");
                 *guard = SessionState::Failed { reason: e.clone() };
                 return None;
             }
@@ -108,7 +108,7 @@ impl WaylandLibeiInjector {
         // den Permission-Dialog.
         if let Some(token) = &restore_token {
             if let Err(e) = save_restore_token(&self.token_path, token) {
-                tracing::warn!(error = %e, "restore_token konnte nicht persistiert werden");
+                tracing::warn!(error = %e, "restore_token could not be persisted");
             }
         }
 

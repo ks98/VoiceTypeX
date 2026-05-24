@@ -1,11 +1,23 @@
 # Modi schreiben
 
 Ein **Modus** ist eine TOML-Datei in `app_config_dir/modes/`. Beim ersten
-Start kopiert VoiceTypeX die 6 mitgelieferten Defaults dort hin.
+Start kopiert VoiceTypeX die 6 mitgelieferten Defaults dort hin —
+**locale-passend**: wenn deine UI-Sprache beim ersten Start `fr` ist,
+bekommst du französische Defaults inklusive übersetzter
+`system_prompt`s. Sprachen-Sets liegen unter
+`modes/defaults/{de,en,fr,es,it}/` im Source und werden via
+`include_str!` ins Binary eingebettet (Backend-Logik in
+[`src-tauri/src/core/default_modes.rs`](../src-tauri/src/core/default_modes.rs)).
 Eigene Modi einfach als weiteres `*.toml` ablegen — der Hot-Reload nimmt
 es ohne App-Neustart auf.
 
-## Mitgelieferte Standard-Modi
+**Spätere Locale-Wechsel betreffen die bereits kopierten Modi NICHT.**
+Wer englische Defaults nach einem späteren Switch nach `en` will:
+modes/-Verzeichnis leeren und App neu starten → Bootstrap kopiert die
+aktive-locale-Defaults rein. (User-eigene Modi gehen dabei verloren —
+vorher sichern.)
+
+## Mitgelieferte Standard-Modi (Beispiel: deutsche Locale)
 
 | Modus | STT | LLM-Postprocessing | Datei |
 |---|---|---|---|
@@ -15,6 +27,11 @@ es ohne App-Neustart auf.
 | Slack/Teams Nachricht | xAI | xAI Grok-fast | `slack_teams.toml` |
 | GitHub Issue | xAI | xAI Grok-fast | `github_issue.toml` |
 | Anweisung an Coding-Agent | xAI (Auto-Sprache) | xAI Grok-fast | `claude_code_anweisung.toml` |
+
+Die Filenames sind über alle Locales identisch (historisch deutsch
+gewählt). `id`/`name`/`description`/`system_prompt`/`language` und
+`initial_prompt` werden pro Locale lokalisiert; STT-/LLM-/Sampling-
+Konfiguration ist identisch.
 
 Modi haben keinen eigenen Hotkey — siehe Abschnitt *Hotkey-Modell*
 weiter unten.

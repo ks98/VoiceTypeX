@@ -31,7 +31,11 @@ nicht im Scope.
 
 Sechs Modi sind vorinstalliert: *Exaktes Diktat*, *Korrigierendes
 Diktat*, *Förmliche E-Mail*, *Slack/Teams Nachricht*, *GitHub Issue*,
-*Anweisung an Coding-Agent*. Eigene Modi via TOML — siehe
+*Anweisung an Coding-Agent*. Die Defaults werden **locale-passend**
+ausgeliefert: bei englischer UI-Locale bekommst du englische Modi
+mit englischen `system_prompt`s, bei französischer/spanischer/
+italienischer Locale die jeweiligen kulturellen Entsprechungen
+(Anredeformen, Diktier-Befehle). Eigene Modi via TOML — siehe
 [`docs/MODES.md`](docs/MODES.md).
 
 **Migration aus älteren Versionen:** Modi hatten bisher je einen eigenen
