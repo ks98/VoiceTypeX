@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Default capabilities fuer das Hauptfenster von VoiceTypeX. Fuer Phase 1 liberal gesetzt; in Phase 6 (Production-Hardening) auf konkrete allow-* Permissions reduzieren.",
-  "windows": ["main", "overlay"],
+  "windows": ["main", "overlay", "menu"],
   "permissions": [
     "core:default",
     "core:window:allow-show",
