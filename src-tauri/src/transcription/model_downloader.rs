@@ -468,6 +468,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::single_element_loop)]
     fn all_vad_models_have_pinned_hashes() {
         for model in [VadModel::SileroV6_2_0] {
             assert!(
