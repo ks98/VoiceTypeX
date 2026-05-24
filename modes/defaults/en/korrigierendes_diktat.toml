@@ -9,7 +9,6 @@ processing = "local"
 # (hardware probe picks the default). Switch to your own Ollama via
 # `local_engine = "ollama"` + `ollama_model_tag = "gemma3:4b"`.
 local_engine = "embedded"
-ollama_model_tag = "gemma3:4b"
 
 injection_method = "clipboard"
 language = "en"

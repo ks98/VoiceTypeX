@@ -15,7 +15,6 @@ processing = "local"
 # setzen und `ollama_model_tag = "gemma3:4b"` (oder anderes Tag) ergaenzen.
 # Der Embedded-Pfad ignoriert `ollama_model_tag`.
 local_engine = "embedded"
-ollama_model_tag = "gemma3:4b"
 
 injection_method = "clipboard"
 language = "de"

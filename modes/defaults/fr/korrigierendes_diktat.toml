@@ -4,7 +4,6 @@ description = "Hésitations et grammaire corrigées, contenu intact. Local."
 transcription = "local"
 processing = "local"
 local_engine = "embedded"
-ollama_model_tag = "gemma3:4b"
 injection_method = "clipboard"
 language = "fr"
 
