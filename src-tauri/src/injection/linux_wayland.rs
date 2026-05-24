@@ -300,10 +300,11 @@ fn load_restore_token(path: &std::path::Path) -> Option<String> {
 }
 
 /// Schreibt den `restore_token` als JSON nach `path`. Erstellt das
-/// Parent-Verzeichnis bei Bedarf. Auf Linux mit chmod 0600 — der Token
-/// ist zwar kein Secret im Sinne von API-Key, aber das File-Permission-
-/// Setup ist konsistent mit dem Secrets-Storage, weil das Token einer
-/// erteilten Tastatur-Inject-Erlaubnis entspricht.
+/// Parent-Verzeichnis bei Bedarf. chmod 0600, weil der Token effektiv
+/// ein persistentes Capability-Token fuer Tastatur-Inject ist: wer ihn
+/// liest, kann ihn gegen denselben Compositor replayen und so dauerhaft
+/// Tastatureingaben ohne weiteren User-Dialog senden. Sollte deshalb
+/// wie ein Authentifizierungs-Geheimnis behandelt werden.
 fn save_restore_token(path: &std::path::Path, token: &str) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
