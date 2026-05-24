@@ -4,12 +4,13 @@ import type { Mode } from "../lib/types";
 import { ipcCreateMode, ipcUpdateMode } from "../lib/tauri";
 import Button from "./Button";
 import Banner from "./Banner";
+import { useT, type TranslateFn } from "../i18n";
 
 // Lokale Input-Klassen — der ModeEditor hat ~17 Sites mit unterschiedlichen
 // Zusatz-Klassen (font-mono, min-h-[120px], ...), die mit der generischen
 // <Input />-Komponente nur via repetitivem Markup ersetzbar waeren. Hier
 // bewusst inline gelassen, mit Focus-Visible-Ring fuer A11y-Paritaet zur
-// Input-Komponente. Konsolidierung der Sites ist eigenes Refactoring.
+// Input-Komponente.
 const inputCls =
   "bg-surface border border-outline rounded-md px-2 py-1.5 text-sm w-full text-fg placeholder:text-fg-faint focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-1 focus-visible:ring-offset-canvas focus:border-brand transition-colors";
 
@@ -23,50 +24,23 @@ const STT_PROVIDERS = ["xai", "openai", "groq", "deepgram"];
 const LLM_PROVIDERS = ["xai", "openai", "anthropic"];
 
 // Slot-Listen spiegeln die Backend-Mappings (ModelSlot::from_setting +
-// LlmModelSlot::from_setting). Gleiche Reihenfolge wie in Settings.tsx,
-// damit der User dieselbe Wahl trifft, egal von wo er kommt.
-const WHISPER_SLOTS: Array<{ value: string; label: string }> = [
-  {
-    value: "large-v3-turbo-q8_0",
-    label: "large-v3-turbo-q8_0 (~874 MB, Default)",
-  },
-  {
-    value: "large-v3-turbo-german-q5_0",
-    label: "large-v3-turbo-german-q5_0 (~574 MB, DE Pro)",
-  },
-  {
-    value: "large-v3-turbo-q5_0",
-    label: "large-v3-turbo-q5_0 (~547 MB, Light)",
-  },
-  { value: "small-q5_1", label: "small-q5_1 (~181 MB, 4 GB RAM)" },
-  { value: "large-v3-turbo", label: "large-v3-turbo F16 (~1,6 GB)" },
+// LlmModelSlot::from_setting). Labels kommen via i18n-Key statt
+// Hardcode, damit Locale-Switch greift.
+const WHISPER_SLOTS: Array<{ value: string; key: string }> = [
+  { value: "large-v3-turbo-q8_0", key: "mode_editor.whisper_slot.large_v3_turbo_q8" },
+  { value: "large-v3-turbo-german-q5_0", key: "mode_editor.whisper_slot.large_v3_turbo_german" },
+  { value: "large-v3-turbo-q5_0", key: "mode_editor.whisper_slot.large_v3_turbo_q5" },
+  { value: "small-q5_1", key: "mode_editor.whisper_slot.small_q5_1" },
+  { value: "large-v3-turbo", key: "mode_editor.whisper_slot.large_v3_turbo_f16" },
 ];
 
-const LLM_SLOTS: Array<{ value: string; label: string }> = [
-  {
-    value: "gemma4-e4b-it-q5_k_m",
-    label: "Gemma 4 E4B-IT Q5_K_M (~5,1 GB, Pro)",
-  },
-  {
-    value: "gemma4-e2b-it-q5_k_m",
-    label: "Gemma 4 E2B-IT Q5_K_M (~3,1 GB, Mittel)",
-  },
-  {
-    value: "gemma3-1b-it-q5_k_m",
-    label: "Gemma 3 1B-IT Q5_K_M (~851 MB, Light)",
-  },
-  {
-    value: "gemma3-4b-it-q5_k_m",
-    label: "Gemma 3 4B-IT Q5_K_M (~2,8 GB, Legacy)",
-  },
-  {
-    value: "llama3.2-1b-instruct-q5_k_m",
-    label: "Llama 3.2 1B-Instruct Q5_K_M (~912 MB, EN)",
-  },
-  {
-    value: "qwen2.5-1.5b-instruct-q5_k_m",
-    label: "Qwen 2.5 1.5B-Instruct Q5_K_M (~1,3 GB, Code)",
-  },
+const LLM_SLOTS: Array<{ value: string; key: string }> = [
+  { value: "gemma4-e4b-it-q5_k_m", key: "mode_editor.llm_slot.gemma4_e4b" },
+  { value: "gemma4-e2b-it-q5_k_m", key: "mode_editor.llm_slot.gemma4_e2b" },
+  { value: "gemma3-1b-it-q5_k_m", key: "mode_editor.llm_slot.gemma3_1b" },
+  { value: "gemma3-4b-it-q5_k_m", key: "mode_editor.llm_slot.gemma3_4b" },
+  { value: "llama3.2-1b-instruct-q5_k_m", key: "mode_editor.llm_slot.llama32_1b" },
+  { value: "qwen2.5-1.5b-instruct-q5_k_m", key: "mode_editor.llm_slot.qwen25_15b" },
 ];
 
 function emptyMode(): Mode {
@@ -95,14 +69,7 @@ function emptyMode(): Mode {
   };
 }
 
-// Spiegelt die Range-Checks aus `Mode::validate()` in `src-tauri/src/core/modes.rs`.
-// Wenn das Backend strenger wird, hier mitziehen — sonst sieht der User
-// erst beim Speichern den Fehler.
-function inRange(
-  value: number | null,
-  min: number,
-  max: number,
-): boolean {
+function inRange(value: number | null, min: number, max: number): boolean {
   if (value === null) return true;
   if (!Number.isFinite(value)) return false;
   return value >= min && value <= max;
@@ -113,13 +80,11 @@ export default function ModeEditor({
   onClose,
   onSaved,
 }: ModeEditorProps): JSX.Element {
+  const t = useT();
   const isEdit = initial !== null;
   const [draft, setDraft] = useState<Mode>(initial ?? emptyMode());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Sampling-Section ist default-collapsed — **außer** der initiale Modus
-  // hat schon Werte gesetzt. Sonst sieht der User beim Edit nicht, dass
-  // sein temperature=0.3 noch da ist, und denkt, er müsse es neu setzen.
   const [samplingOpen, setSamplingOpen] = useState<boolean>(
     initial !== null &&
       (initial.temperature !== null ||
@@ -137,9 +102,6 @@ export default function ModeEditor({
   const isLocalLLM = draft.processing === "local";
   const isCloudLLM = draft.processing === "cloud";
   const needsSystemPrompt = draft.processing !== "none";
-  // Engine-Default ist `"embedded"` — der eingebaute llama-cpp-2-Pfad
-  // braucht keinen Daemon. Nur wenn der Modus explizit `"ollama"` sagt,
-  // weichen wir auf den Legacy-Pfad ab.
   const localEngine: "embedded" | "ollama" =
     draft.local_engine === "ollama" ? "ollama" : "embedded";
   const needsOllamaTag = isLocalLLM && localEngine === "ollama";
@@ -150,46 +112,35 @@ export default function ModeEditor({
     inRange(draft.repeat_penalty, 0.5, 2) &&
     inRange(draft.max_tokens, 1, 8192);
 
-  // Statt black-box-Button: explizit benennen, was noch fehlt. Der erste
-  // Eintrag wird im Footer angezeigt.
   const blockingReasons: string[] = [];
-  if (draft.id.length === 0) blockingReasons.push("ID");
-  else if (!idValid) blockingReasons.push("ID (nur a-z, 0-9, _, -)");
-  if (draft.name.length === 0) blockingReasons.push("Anzeigename");
+  if (draft.id.length === 0) blockingReasons.push(t("mode_editor.reason.id_missing"));
+  else if (!idValid) blockingReasons.push(t("mode_editor.reason.id_invalid"));
+  if (draft.name.length === 0) blockingReasons.push(t("mode_editor.reason.name_missing"));
   if (isCloudSTT && !draft.cloud_stt_provider)
-    blockingReasons.push("Cloud-STT-Provider");
+    blockingReasons.push(t("mode_editor.reason.cloud_stt_provider"));
   if (isCloudLLM && !draft.cloud_llm_provider)
-    blockingReasons.push("Cloud-LLM-Provider");
+    blockingReasons.push(t("mode_editor.reason.cloud_llm_provider"));
   if (needsOllamaTag && !draft.ollama_model_tag)
-    blockingReasons.push("Ollama-Modell-Tag");
+    blockingReasons.push(t("mode_editor.reason.ollama_tag"));
   if (
     needsSystemPrompt &&
     (draft.system_prompt === null || draft.system_prompt.length === 0)
   )
-    blockingReasons.push("System-Prompt");
+    blockingReasons.push(t("mode_editor.reason.system_prompt"));
   if (!samplingValid)
-    blockingReasons.push("Sampling-Wert(e) außerhalb erlaubter Bereiche");
+    blockingReasons.push(t("mode_editor.reason.sampling"));
   const canSave = blockingReasons.length === 0;
 
-  // Dirty-Check fuer Escape/Backdrop — Vergleich gegen Initial (oder leere
-  // Vorlage). JSON-stringify ist genug fuer eine flache Struktur und
-  // billiger als Per-Feld-Vergleiche.
   const baseline = JSON.stringify(initial ?? emptyMode());
   const isDirty = JSON.stringify(draft) !== baseline;
 
   const requestClose = () => {
-    if (
-      isDirty &&
-      !window.confirm("Ungespeicherte Änderungen verwerfen?")
-    ) {
+    if (isDirty && !window.confirm(t("mode_editor.confirm_discard"))) {
       return;
     }
     onClose();
   };
 
-  // Escape-Handler — Browser-Default fuer Modals fehlt, ohne explizite
-  // Bindung schliesst nur der Backdrop-Klick (den wir bewusst nicht
-  // handhaben). Mit Dirty-Check.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -206,9 +157,6 @@ export default function ModeEditor({
     setSaving(true);
     setError(null);
     try {
-      // Felder, die fuer den aktuellen Modus-Typ irrelevant sind, beim
-      // Speichern auf null setzen — sonst landen veraltete Werte aus
-      // einem frueheren Modus-Typ im TOML.
       const cleaned: Mode = {
         ...draft,
         cloud_stt_provider: isCloudSTT ? draft.cloud_stt_provider : null,
@@ -223,8 +171,6 @@ export default function ModeEditor({
           isLocalLLM && localEngine === "embedded"
             ? draft.embedded_llm_slot
             : null,
-        // Deprecated-Feld leeren — Backend migriert ohnehin von hier
-        // nach `ollama_model_tag`, aber sauberer ist explizit null.
         local_llm_model: null,
         whisper_model_slot: isLocalSTT ? draft.whisper_model_slot : null,
         initial_prompt: isLocalSTT ? draft.initial_prompt : null,
@@ -253,20 +199,20 @@ export default function ModeEditor({
       <div className="bg-surface border border-outline rounded-lg max-w-3xl w-full max-h-[90vh] shadow-2xl flex flex-col overflow-hidden">
         <div className="p-5 border-b border-outline shrink-0">
           <h2 id="mode-editor-title" className="text-lg font-semibold text-fg">
-            {isEdit ? `Modus bearbeiten: ${draft.name}` : "Neuer Modus"}
+            {isEdit
+              ? t("mode_editor.title_edit", { name: draft.name })
+              : t("mode_editor.title_new")}
           </h2>
         </div>
 
-        {/* Body: scrollt unabhaengig vom Sticky-Footer. */}
         <div className="p-5 flex flex-col gap-6 overflow-y-auto flex-1 min-h-0">
           {error ? <Banner tone="error">{error}</Banner> : null}
 
-          {/* ──────────────────────── Section 1 — Basis ────────────────────── */}
-          <Section title="Basis">
+          <Section title={t("mode_editor.section.basics")}>
             <div className="grid grid-cols-2 gap-3">
               <Field
-                label="ID"
-                hint="kurz, ohne Leerzeichen, [a-zA-Z0-9_-]"
+                label={t("mode_editor.id.label")}
+                hint={t("mode_editor.id.hint")}
               >
                 <input
                   className={`${inputCls} disabled:opacity-50`}
@@ -276,11 +222,11 @@ export default function ModeEditor({
                 />
                 {!idValid && draft.id ? (
                   <div className="text-xs text-status-error">
-                    Nur a-z, 0-9, _ und - erlaubt
+                    {t("mode_editor.id.invalid")}
                   </div>
                 ) : null}
               </Field>
-              <Field label="Anzeigename">
+              <Field label={t("mode_editor.name.label")}>
                 <input
                   className={inputCls}
                   value={draft.name}
@@ -288,7 +234,7 @@ export default function ModeEditor({
                 />
               </Field>
             </div>
-            <Field label="Beschreibung">
+            <Field label={t("mode_editor.description.label")}>
               <input
                 className={inputCls}
                 value={draft.description}
@@ -297,10 +243,9 @@ export default function ModeEditor({
             </Field>
           </Section>
 
-          {/* ─────────────────── Section 2 — Transkription ────────────────── */}
-          <Section title="Transkription (Speech-to-Text)">
+          <Section title={t("mode_editor.section.stt")}>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="STT-Ziel">
+              <Field label={t("mode_editor.stt.target")}>
                 <select
                   className={inputCls}
                   value={draft.transcription}
@@ -311,13 +256,13 @@ export default function ModeEditor({
                     )
                   }
                 >
-                  <option value="local">local (whisper.cpp)</option>
-                  <option value="cloud">cloud (Provider)</option>
+                  <option value="local">{t("mode_editor.stt.opt_local")}</option>
+                  <option value="cloud">{t("mode_editor.stt.opt_cloud")}</option>
                 </select>
               </Field>
               <Field
-                label="Sprache (ISO-Code)"
-                hint="z.B. de, en. Leer = Whisper detektiert automatisch."
+                label={t("mode_editor.stt.language.label")}
+                hint={t("mode_editor.stt.language.hint")}
               >
                 <input
                   className={inputCls}
@@ -331,7 +276,7 @@ export default function ModeEditor({
             </div>
 
             {isCloudSTT ? (
-              <Field label="Cloud-STT-Provider">
+              <Field label={t("mode_editor.stt.cloud_provider")}>
                 <select
                   className={inputCls}
                   value={draft.cloud_stt_provider ?? ""}
@@ -339,7 +284,7 @@ export default function ModeEditor({
                     update("cloud_stt_provider", e.target.value || null)
                   }
                 >
-                  <option value="">— wählen —</option>
+                  <option value="">{t("mode_editor.stt.choose")}</option>
                   {STT_PROVIDERS.map((p) => (
                     <option key={p} value={p}>
                       {p}
@@ -352,8 +297,8 @@ export default function ModeEditor({
             {isLocalSTT ? (
               <>
                 <Field
-                  label="Whisper-Modell"
-                  hint="Override pro Modus. „Global verwenden“ nutzt den in den Einstellungen gewählten Default-Slot."
+                  label={t("mode_editor.stt.whisper_slot.label")}
+                  hint={t("mode_editor.stt.whisper_slot.hint")}
                 >
                   <select
                     className={inputCls}
@@ -365,21 +310,23 @@ export default function ModeEditor({
                       )
                     }
                   >
-                    <option value="">Global verwenden</option>
+                    <option value="">
+                      {t("mode_editor.stt.whisper_slot.global")}
+                    </option>
                     {WHISPER_SLOTS.map((s) => (
                       <option key={s.value} value={s.value}>
-                        {s.label}
+                        {t(s.key)}
                       </option>
                     ))}
                   </select>
                 </Field>
                 <Field
-                  label="Initial-Prompt (Glossar)"
-                  hint="Optional. Hinweise auf Eigennamen, Fachbegriffe oder Schreibweisen, die Whisper als Kontext bekommen soll."
+                  label={t("mode_editor.stt.initial_prompt.label")}
+                  hint={t("mode_editor.stt.initial_prompt.hint")}
                 >
                   <textarea
                     className={`${inputCls} min-h-[60px]`}
-                    placeholder="z.B. Eigennamen: Wittenstein, OPC-UA, Tauri."
+                    placeholder={t("mode_editor.stt.initial_prompt.placeholder")}
                     value={draft.initial_prompt ?? ""}
                     onChange={(e) =>
                       update("initial_prompt", e.target.value || null)
@@ -390,9 +337,8 @@ export default function ModeEditor({
             ) : null}
           </Section>
 
-          {/* ────────────────── Section 3 — Nachbearbeitung ───────────────── */}
-          <Section title="Nachbearbeitung (LLM)">
-            <Field label="Postprocessing">
+          <Section title={t("mode_editor.section.llm")}>
+            <Field label={t("mode_editor.llm.processing")}>
               <select
                 className={inputCls}
                 value={draft.processing}
@@ -403,71 +349,65 @@ export default function ModeEditor({
                   )
                 }
               >
-                <option value="none">none (passthrough)</option>
-                <option value="local">local (embedded oder Ollama)</option>
-                <option value="cloud">cloud (LLM-Provider)</option>
+                <option value="none">{t("mode_editor.llm.opt_none")}</option>
+                <option value="local">{t("mode_editor.llm.opt_local")}</option>
+                <option value="cloud">{t("mode_editor.llm.opt_cloud")}</option>
               </select>
             </Field>
 
             {isLocalLLM ? (
               <>
                 <Field
-                  label="Lokale Engine"
-                  hint="Embedded ist der Standardpfad — kein externer Daemon nötig. Ollama nur, wenn du eine eigene Daemon-Installation nutzen willst."
+                  label={t("mode_editor.llm.engine.label")}
+                  hint={t("mode_editor.llm.engine.hint")}
                 >
                   <select
                     className={inputCls}
                     value={localEngine}
-                    onChange={(e) =>
-                      update("local_engine", e.target.value)
-                    }
+                    onChange={(e) => update("local_engine", e.target.value)}
                   >
                     <option value="embedded">
-                      embedded (Standard, kein Daemon nötig)
+                      {t("mode_editor.llm.engine.opt_embedded")}
                     </option>
                     <option value="ollama">
-                      ollama (externer Daemon)
+                      {t("mode_editor.llm.engine.opt_ollama")}
                     </option>
                   </select>
                 </Field>
 
                 {localEngine === "embedded" ? (
                   <Field
-                    label="Embedded-GGUF-Modell"
-                    hint="Override pro Modus. „Global verwenden“ nutzt den in den Einstellungen gewählten Default-Slot."
+                    label={t("mode_editor.llm.embedded_slot.label")}
+                    hint={t("mode_editor.llm.embedded_slot.hint")}
                   >
                     <select
                       className={inputCls}
                       value={draft.embedded_llm_slot ?? ""}
                       onChange={(e) =>
-                        update(
-                          "embedded_llm_slot",
-                          e.target.value || null,
-                        )
+                        update("embedded_llm_slot", e.target.value || null)
                       }
                     >
-                      <option value="">Global verwenden</option>
+                      <option value="">
+                        {t("mode_editor.llm.embedded_slot.global")}
+                      </option>
                       {LLM_SLOTS.map((s) => (
                         <option key={s.value} value={s.value}>
-                          {s.label}
+                          {t(s.key)}
                         </option>
                       ))}
                     </select>
                   </Field>
                 ) : (
                   <Field
-                    label="Ollama-Modell-Tag"
-                    hint="Pflichtfeld bei engine=ollama. Beispiele: llama3.2:3b, qwen2.5:7b, gemma3:4b."
+                    label={t("mode_editor.llm.ollama_tag.label")}
+                    hint={t("mode_editor.llm.ollama_tag.hint")}
                   >
                     <input
                       className={`${inputCls} font-mono`}
                       placeholder="llama3.2:3b"
                       value={draft.ollama_model_tag ?? ""}
                       onChange={(e) =>
-                        update(
-                          "ollama_model_tag",
-                          e.target.value || null,
-                        )
+                        update("ollama_model_tag", e.target.value || null)
                       }
                     />
                   </Field>
@@ -477,18 +417,15 @@ export default function ModeEditor({
 
             {isCloudLLM ? (
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Cloud-LLM-Provider">
+                <Field label={t("mode_editor.llm.cloud_provider")}>
                   <select
                     className={inputCls}
                     value={draft.cloud_llm_provider ?? ""}
                     onChange={(e) =>
-                      update(
-                        "cloud_llm_provider",
-                        e.target.value || null,
-                      )
+                      update("cloud_llm_provider", e.target.value || null)
                     }
                   >
-                    <option value="">— wählen —</option>
+                    <option value="">{t("mode_editor.stt.choose")}</option>
                     {LLM_PROVIDERS.map((p) => (
                       <option key={p} value={p}>
                         {p}
@@ -497,8 +434,8 @@ export default function ModeEditor({
                   </select>
                 </Field>
                 <Field
-                  label="Modell-ID"
-                  hint="z.B. grok-4-fast-non-reasoning, gpt-4o-mini, claude-sonnet-4-6"
+                  label={t("mode_editor.llm.cloud_model.label")}
+                  hint={t("mode_editor.llm.cloud_model.hint")}
                 >
                   <input
                     className={`${inputCls} font-mono`}
@@ -513,8 +450,8 @@ export default function ModeEditor({
 
             {needsSystemPrompt ? (
               <Field
-                label="System-Prompt"
-                hint="Wird als System-Message ans LLM geschickt. Beschreibt die Aufgabe (z.B. „Korrigiere die Grammatik, lass den Stil unverändert“)."
+                label={t("mode_editor.llm.system_prompt.label")}
+                hint={t("mode_editor.llm.system_prompt.hint")}
               >
                 <textarea
                   className={`${inputCls} min-h-[120px] font-mono`}
@@ -527,22 +464,21 @@ export default function ModeEditor({
             ) : null}
           </Section>
 
-          {/* ─────────────────── Section 4 — Sampling ─────────────────────── */}
           {needsSystemPrompt ? (
             <Section
-              title="Sampling-Parameter"
+              title={t("mode_editor.section.sampling")}
               collapsible
               open={samplingOpen}
               onToggle={() => setSamplingOpen((o) => !o)}
             >
               <p className="text-xs text-fg-faint">
-                Leer = Provider-/Engine-Default. Nur ändern, wenn du weißt,
-                was die Werte tun.
+                {t("mode_editor.sampling.intro")}
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <NumField
+                  t={t}
                   label="temperature"
-                  hint="0.0–2.0. Niedriger = deterministischer."
+                  hint={t("mode_editor.sampling.temperature.hint")}
                   value={draft.temperature}
                   onChange={(v) => update("temperature", v)}
                   min={0}
@@ -550,8 +486,9 @@ export default function ModeEditor({
                   step={0.1}
                 />
                 <NumField
+                  t={t}
                   label="top_p"
-                  hint="0.0–1.0. Nucleus-Sampling-Schwelle."
+                  hint={t("mode_editor.sampling.top_p.hint")}
                   value={draft.top_p}
                   onChange={(v) => update("top_p", v)}
                   min={0}
@@ -559,8 +496,9 @@ export default function ModeEditor({
                   step={0.05}
                 />
                 <NumField
+                  t={t}
                   label="repeat_penalty"
-                  hint="0.5–2.0. >1.0 bestraft Wiederholungen."
+                  hint={t("mode_editor.sampling.repeat_penalty.hint")}
                   value={draft.repeat_penalty}
                   onChange={(v) => update("repeat_penalty", v)}
                   min={0.5}
@@ -568,8 +506,9 @@ export default function ModeEditor({
                   step={0.05}
                 />
                 <NumField
+                  t={t}
                   label="max_tokens"
-                  hint="1–8192. Output-Token-Limit."
+                  hint={t("mode_editor.sampling.max_tokens.hint")}
                   value={draft.max_tokens}
                   onChange={(v) => update("max_tokens", v)}
                   min={1}
@@ -581,11 +520,10 @@ export default function ModeEditor({
             </Section>
           ) : null}
 
-          {/* ────────────────────── Section 5 — Output ────────────────────── */}
-          <Section title="Output">
+          <Section title={t("mode_editor.section.output")}>
             <Field
-              label="Inject-Methode"
-              hint="clipboard fügt per Strg+V ein (schnell, benötigt funktionierende Zwischenablage). keystrokes simuliert Tastenanschläge (langsamer, aber kein Clipboard-Bedarf)."
+              label={t("mode_editor.output.inject.label")}
+              hint={t("mode_editor.output.inject.hint")}
             >
               <select
                 className={inputCls}
@@ -597,33 +535,42 @@ export default function ModeEditor({
                   )
                 }
               >
-                <option value="clipboard">clipboard (empfohlen)</option>
-                <option value="keystrokes">keystrokes</option>
+                <option value="clipboard">
+                  {t("mode_editor.output.inject.opt_clipboard")}
+                </option>
+                <option value="keystrokes">
+                  {t("mode_editor.output.inject.opt_keystrokes")}
+                </option>
               </select>
             </Field>
           </Section>
         </div>
 
-        {/* Sticky-Footer: bleibt sichtbar, auch wenn der Body scrollt. */}
         <div className="p-5 border-t border-outline flex justify-between items-center gap-3 shrink-0 bg-surface">
           <div className="text-xs text-fg-faint min-w-0 flex-1">
             {blockingReasons.length > 0 ? (
               <span>
-                Noch nötig:{" "}
+                {t("mode_editor.footer.blocking_prefix")}{" "}
                 <span className="text-fg-muted">
                   {blockingReasons.slice(0, 3).join(", ")}
                   {blockingReasons.length > 3
-                    ? ` (+${blockingReasons.length - 3})`
+                    ? ` ${t("mode_editor.footer.blocking_more", {
+                        count: blockingReasons.length - 3,
+                      })}`
                     : ""}
                 </span>
               </span>
             ) : null}
           </div>
           <Button variant="secondary" onClick={requestClose}>
-            Abbrechen
+            {t("mode_editor.btn.cancel")}
           </Button>
           <Button onClick={() => void onSave()} disabled={!canSave || saving}>
-            {saving ? "Speichere…" : isEdit ? "Speichern" : "Anlegen"}
+            {saving
+              ? t("mode_editor.btn.saving")
+              : isEdit
+                ? t("mode_editor.btn.save_edit")
+                : t("mode_editor.btn.save_new")}
           </Button>
         </div>
       </div>
@@ -689,6 +636,7 @@ function Field({ label, hint, children }: FieldProps): JSX.Element {
 }
 
 interface NumFieldProps {
+  t: TranslateFn;
   label: string;
   hint?: string;
   value: number | null;
@@ -700,6 +648,7 @@ interface NumFieldProps {
 }
 
 function NumField({
+  t,
   label,
   hint,
   value,
@@ -721,7 +670,7 @@ function NumField({
         className={`${inputCls} ${
           outOfRange ? "border-status-error focus:border-status-error" : ""
         }`}
-        placeholder="(Default)"
+        placeholder={t("mode_editor.numfield.placeholder")}
         value={value === null ? "" : String(value)}
         onChange={(e) => {
           const raw = e.target.value.trim();
@@ -736,7 +685,7 @@ function NumField({
       />
       {outOfRange ? (
         <div className="text-xs text-status-error">
-          Erlaubt: {min} – {max}
+          {t("mode_editor.numfield.range", { min, max })}
         </div>
       ) : null}
     </Field>
