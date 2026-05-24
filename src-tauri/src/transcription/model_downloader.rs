@@ -546,4 +546,45 @@ mod tests {
             ModelSlot::LargeV3Turbo
         );
     }
+
+    /// Integrations-Test gegen Hugging Face: zieht das echte Silero-VAD-File
+    /// (~885 kB, kleinstes gepinntes File) und verifiziert dessen SHA-256
+    /// gegen den im Code gepinnten Hash. Schlaegt fehl, wenn das HF-Repo
+    /// das File austauscht — dann faellt der echte Download-Pfad live
+    /// auseinander, ohne dass die Struktur-Tests etwas mitbekommen.
+    ///
+    /// `#[ignore]` weil CI-Container und Sandbox-Worktrees haeufig keinen
+    /// Netzwerkzugriff haben. Lokal ausfuehren mit:
+    ///     cargo test --lib silero_vad -- --ignored
+    /// Im Release-Job sollte ein dedizierter Step diesen Test mit dem
+    /// `--ignored`-Flag laufen lassen, damit ein Repo-Drift vor dem Tag
+    /// auffliegt.
+    #[tokio::test]
+    #[ignore = "needs network access to huggingface.co"]
+    async fn silero_vad_real_download_hash_matches_pinned() {
+        let dest_dir =
+            std::env::temp_dir().join(format!("voicetypex-vad-hash-test-{}", std::process::id()));
+        tokio::fs::create_dir_all(&dest_dir)
+            .await
+            .expect("create temp dir");
+
+        // Falls ein vorheriger Test-Lauf das File schon abgelegt hat:
+        // weg damit, sonst nimmt `download_to_file` den existierenden
+        // Hash-Match-Pfad und prueft das Wire-Protokoll nicht mehr.
+        let expected_file = dest_dir.join(VadModel::SileroV6_2_0.filename());
+        if expected_file.exists() {
+            tokio::fs::remove_file(&expected_file)
+                .await
+                .expect("cleanup pre-existing test file");
+        }
+
+        let result = download_vad(VadModel::SileroV6_2_0, &dest_dir, |_| {}).await;
+
+        // Cleanup vor dem Assert, damit bei Fehlschlag kein Test-File
+        // im /tmp herumliegt.
+        let _ = tokio::fs::remove_dir_all(&dest_dir).await;
+
+        let path = result.expect("Silero-VAD download must succeed");
+        assert!(path.ends_with(VadModel::SileroV6_2_0.filename()));
+    }
 }
