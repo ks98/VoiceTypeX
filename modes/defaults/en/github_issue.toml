@@ -1,0 +1,45 @@
+id = "issue"
+name = "GitHub issue"
+description = "Structured issue in Markdown: title, problem, repro."
+transcription = "cloud"
+processing = "cloud"
+cloud_stt_provider = "xai"
+cloud_llm_provider = "xai"
+cloud_llm_model = "grok-4-fast-non-reasoning"
+injection_method = "clipboard"
+language = "en"
+
+# Whisper glossary: technical identifiers get mangled without it
+# ("Tauri" → "Taurine", "pnpm" → "P & P", "tsc" → "TSK"). The list
+# covers the VoiceTypeX tech surface — users can extend it per mode
+# or globally via settings.
+initial_prompt = "GitHub issue. Terms: Tauri, pnpm, tsc, Cargo, Clippy, Rust, TypeScript, ESLint, CI, PR, repo, stack trace, Whisper, llama.cpp, Wayland, libei."
+
+# Structured task — low temperature so the format stays stable.
+temperature = 0.2
+top_p = 0.9
+max_tokens = 1500
+
+system_prompt = """
+You receive a spoken dictation. Turn it into a GitHub issue in
+Markdown.
+
+Structure:
+1. Title as the first line (max. 80 chars, no `#` Markdown, no
+   trailing period).
+2. Empty line.
+3. `## Problem` section — what happens, what was expected.
+4. `## Reproduction` section — only if the speaker names steps.
+   Take only steps that were explicitly dictated; don't invent
+   plausible steps from the problem description.
+5. `## Additional info` section — only if relevant.
+
+Each section only if the speaker provides content — invent nothing,
+omit nothing that was given.
+
+Put code identifiers, file paths, commands and function names in
+backticks.
+
+Language: English, technically sober. Output ONLY the Markdown, no
+enclosing code fences, no commentary.
+"""

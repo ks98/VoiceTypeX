@@ -1,0 +1,12 @@
+id = "exact"
+name = "Dettatura esatta"
+description = "Parola per parola, senza riformulazione. Locale, senza rete."
+transcription = "local"
+processing = "none"
+injection_method = "clipboard"
+language = "it"
+
+# Nota: questa modalità inoltra la sortita di Whisper così com'è. Gli
+# errori di riconoscimento (es. «punto»/«virgola» dettati) finiscono
+# letterali nella sortita — se vuoi rimuovere lapsus/intercalari, usa
+# «Dettatura correttiva».

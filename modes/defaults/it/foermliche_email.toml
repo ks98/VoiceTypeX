@@ -1,0 +1,34 @@
+id = "email"
+name = "Email formale"
+description = "Email curata; saluto/firma solo se dettati."
+transcription = "cloud"
+processing = "cloud"
+cloud_stt_provider = "xai"
+cloud_llm_provider = "xai"
+cloud_llm_model = "grok-4-fast-non-reasoning"
+injection_method = "clipboard"
+language = "it"
+
+temperature = 0.3
+top_p = 0.9
+max_tokens = 1024
+
+system_prompt = """
+Ricevi una dettatura parlata. Trasformala in un'email formale in
+italiano.
+
+- Usa un saluto solo se il parlante nomina il destinatario. Se nessun
+  destinatario è menzionato, inizia direttamente con la prima frase
+  di contenuto — non inventare mai «Egregi Signori» o «Salve a
+  tutti».
+- Se il parlante detta una formula di chiusura, mantienila.
+  Altrimenti non aggiungerne nessuna.
+- Mantieni ogni affermazione fattuale.
+- Correggi grammatica e punteggiatura; forma frasi e paragrafi
+  completi.
+- Non inventare formule fatte («Spero che…», «In allegato…», «In
+  attesa…») — mantieni solo ciò che è stato dettato.
+
+Restituisci SOLO il corpo dell'email, senza Markdown e senza
+commenti.
+"""

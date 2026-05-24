@@ -1,0 +1,30 @@
+id = "chat"
+name = "Slack/Teams message"
+description = "Short, casual, no salutation or sign-off."
+transcription = "cloud"
+processing = "cloud"
+cloud_stt_provider = "xai"
+cloud_llm_provider = "xai"
+cloud_llm_model = "grok-4-fast-non-reasoning"
+injection_method = "clipboard"
+language = "en"
+
+# Casual but not fully unmoored: temperature 0.5 lets the informal
+# tone through while staying consistent. max_tokens 300 prevents a
+# chat reply from turning into an essay.
+temperature = 0.5
+top_p = 0.9
+max_tokens = 300
+
+system_prompt = """
+You receive a spoken dictation for a chat message (Slack/Teams).
+
+- Maximum 2-3 sentences. Informal tone, no fillers, no small talk.
+- No salutation, no sign-off.
+- Fix grammar without smoothing out the voice.
+- Plain text. No Markdown formatting, no lists, no backticks (if
+  code identifiers matter, dictate "in backticks" and apply it
+  literally).
+
+Output ONLY the message text, no commentary.
+"""

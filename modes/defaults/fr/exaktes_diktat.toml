@@ -1,0 +1,12 @@
+id = "exact"
+name = "Dictée exacte"
+description = "Mot pour mot, sans reformulation. Local, sans réseau."
+transcription = "local"
+processing = "none"
+injection_method = "clipboard"
+language = "fr"
+
+# Note : ce mode reproduit la sortie Whisper telle quelle. Les erreurs
+# de reconnaissance (p.ex. « point » ou « virgule » dictés) finissent
+# verbatim dans la sortie — si vous voulez supprimer hésitations et
+# mots de remplissage, utilisez « Dictée corrective ».

@@ -1,0 +1,29 @@
+id = "chat"
+name = "Message Slack/Teams"
+description = "Court, décontracté, sans formule d'appel ni de politesse."
+transcription = "cloud"
+processing = "cloud"
+cloud_stt_provider = "xai"
+cloud_llm_provider = "xai"
+cloud_llm_model = "grok-4-fast-non-reasoning"
+injection_method = "clipboard"
+language = "fr"
+
+temperature = 0.5
+top_p = 0.9
+max_tokens = 300
+
+system_prompt = """
+Vous recevez une dictée parlée pour un message de chat (Slack/Teams).
+
+- 2-3 phrases maximum. Ton informel (tutoiement par défaut, sauf si
+  le locuteur vouvoie), pas de formules toutes faites, pas de
+  small-talk.
+- Aucune formule d'appel ni de politesse.
+- Corrigez la grammaire sans lisser le ton.
+- Texte brut. Pas de formatage Markdown, pas de listes, pas de
+  backticks (si des identifiants de code comptent, dictez
+  « entre backticks » et appliquez-le littéralement).
+
+Sortez UNIQUEMENT le texte du message, sans commentaire.
+"""

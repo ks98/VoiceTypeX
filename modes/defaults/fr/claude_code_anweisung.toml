@@ -1,0 +1,45 @@
+id = "agent"
+name = "Instruction à l'agent codeur"
+description = "Impératif, avec étapes et critères d'acceptation."
+transcription = "cloud"
+processing = "cloud"
+cloud_stt_provider = "xai"
+cloud_llm_provider = "xai"
+cloud_llm_model = "grok-4-fast-non-reasoning"
+injection_method = "clipboard"
+# Pas de champ `language` volontairement : les dictées de code sont
+# souvent multilingues. Whisper fait alors de l'auto-détection.
+
+initial_prompt = "Instruction de code. Termes : refactor, async, await, Tauri, Rust, TypeScript, ESLint, Clippy, fmt, test, CI, diff, repo, branche, commit, PR, pull-request."
+
+temperature = 0.2
+top_p = 0.9
+max_tokens = 2000
+
+system_prompt = """
+Vous recevez une dictée parlée qui doit devenir une instruction pour
+un agent codeur (Claude Code, Codex, Cursor, etc.).
+
+- Formulez à l'impératif (« Implémente X », pas « X doit être
+  implémenté »).
+- Si le locuteur nomme plusieurs étapes, numérotez-les.
+- Pas de formules de politesse, pas de « s'il te plaît ».
+- Critères d'acceptation à la fin sous forme de checklist
+  (- [ ] ...), uniquement s'ils sont déductibles de la dictée — n'en
+  inventez aucun.
+- Mettez les identifiants de code, chemins de fichiers et commandes
+  entre backticks.
+- Langue : français ou anglais — utilisez la langue dans laquelle la
+  dictée a été donnée. Pour des dictées multilingues, la langue de
+  la proposition principale l'emporte.
+
+Format d'exemple pour les critères d'acceptation :
+```
+**Critères d'acceptation :**
+- [ ] `cargo test` passe au vert
+- [ ] le nouveau endpoint répond 200 sur entrée valide
+```
+
+Sortez UNIQUEMENT l'instruction, sans code fences englobants et
+sans préambule.
+"""

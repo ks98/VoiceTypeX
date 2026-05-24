@@ -113,7 +113,13 @@ pub async fn reset_app_factory(state: tauri::State<'_, Arc<AppContext>>) -> IpcR
             Err(e) => accumulated_errors.push(format!("read modes_dir: {e}")),
         }
     }
-    if let Err(e) = bootstrap_defaults_if_empty(&state.modes_dir) {
+    // Factory reset uses the locale that's currently in Settings (will
+    // be reset to Default below, which has `locale = None` → English
+    // defaults). If the user wanted DE-specific defaults back, they
+    // would need to re-detect via a fresh first-run after deleting the
+    // entire profile dir. Acceptable: factory reset is a hard reset.
+    let locale_for_bootstrap = state.settings.read().locale.clone();
+    if let Err(e) = bootstrap_defaults_if_empty(&state.modes_dir, locale_for_bootstrap.as_deref()) {
         accumulated_errors.push(format!("bootstrap defaults: {e}"));
     }
 

@@ -1,0 +1,44 @@
+id = "agent"
+name = "Istruzione all'agente di codice"
+description = "Imperativo, con passi e criteri di accettazione."
+transcription = "cloud"
+processing = "cloud"
+cloud_stt_provider = "xai"
+cloud_llm_provider = "xai"
+cloud_llm_model = "grok-4-fast-non-reasoning"
+injection_method = "clipboard"
+# Nessun campo `language` di proposito: le dettature di codice
+# mescolano spesso le lingue. Whisper fa allora auto-detect.
+
+initial_prompt = "Istruzione di codice. Termini: refactor, async, await, Tauri, Rust, TypeScript, ESLint, Clippy, fmt, test, CI, diff, repo, branch, commit, PR, pull request."
+
+temperature = 0.2
+top_p = 0.9
+max_tokens = 2000
+
+system_prompt = """
+Ricevi una dettatura parlata che deve diventare un'istruzione per un
+agente di codice (Claude Code, Codex, Cursor, ecc.).
+
+- Formula all'imperativo («Implementa X», non «X deve essere
+  implementato»).
+- Se il parlante nomina più passi, numerali.
+- Senza formule di cortesia, senza «per favore».
+- Criteri di accettazione alla fine come checklist (- [ ] ...), solo
+  se sono ricavabili dalla dettatura — non inventarli.
+- Metti identificatori di codice, percorsi file e comandi tra
+  backtick.
+- Lingua: italiano o inglese — usa la lingua in cui è stata data la
+  dettatura. Per dettature miste, vince la lingua della frase
+  principale.
+
+Formato esempio per i criteri di accettazione:
+```
+**Criteri di accettazione:**
+- [ ] `cargo test` passa verde
+- [ ] il nuovo endpoint risponde 200 su input valido
+```
+
+Restituisci SOLO l'istruzione, senza code fences avvolgenti e senza
+preambolo.
+"""

@@ -1,43 +1,179 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Default-Modi werden via `include_str!` ins Binary eingebettet und beim
-//! ersten App-Start nach `app_config_dir/modes/` kopiert. Damit kann der
-//! User die Modi editieren, ohne System-Schreibrechte zu brauchen, und
-//! der Hot-Reload-Watcher beobachtet das User-Verzeichnis.
+//! Default modes embedded via `include_str!` into the binary and copied
+//! to `app_config_dir/modes/` on first app start. This way the user can
+//! edit modes without needing system write rights, and the hot-reload
+//! watcher observes the user directory.
+//!
+//! Per-locale defaults: each supported UI language ships its own set
+//! of 6 mode TOMLs under `modes/defaults/<locale>/`. Bootstrap copies
+//! the locale-matching set when the user's `modes/` dir is empty.
+//! User edits never get overwritten — the function bails as soon as
+//! it finds any `.toml`.
 
 use crate::core::error::{Result, VoiceTypeError};
 use std::path::Path;
 
-const DEFAULTS: &[(&str, &str)] = &[
+// Locale -> array of (filename, embedded content). Order doesn't
+// matter; the bootstrap copies all entries.
+type DefaultSet = &'static [(&'static str, &'static str)];
+
+const DEFAULTS_DE: DefaultSet = &[
     (
         "exaktes_diktat.toml",
-        include_str!("../../../modes/exaktes_diktat.toml"),
+        include_str!("../../../modes/defaults/de/exaktes_diktat.toml"),
     ),
     (
         "korrigierendes_diktat.toml",
-        include_str!("../../../modes/korrigierendes_diktat.toml"),
+        include_str!("../../../modes/defaults/de/korrigierendes_diktat.toml"),
     ),
     (
         "foermliche_email.toml",
-        include_str!("../../../modes/foermliche_email.toml"),
+        include_str!("../../../modes/defaults/de/foermliche_email.toml"),
     ),
     (
         "slack_teams.toml",
-        include_str!("../../../modes/slack_teams.toml"),
+        include_str!("../../../modes/defaults/de/slack_teams.toml"),
     ),
     (
         "github_issue.toml",
-        include_str!("../../../modes/github_issue.toml"),
+        include_str!("../../../modes/defaults/de/github_issue.toml"),
     ),
     (
         "claude_code_anweisung.toml",
-        include_str!("../../../modes/claude_code_anweisung.toml"),
+        include_str!("../../../modes/defaults/de/claude_code_anweisung.toml"),
     ),
 ];
 
-/// Stelle sicher, dass `dir` mindestens die Default-Modi enthaelt. Das
-/// Verzeichnis wird angelegt, falls es nicht existiert. Vorhandene Dateien
-/// werden NICHT ueberschrieben (User-Anpassungen bleiben erhalten).
-pub fn bootstrap_defaults_if_empty(dir: &Path) -> Result<()> {
+const DEFAULTS_EN: DefaultSet = &[
+    (
+        "exaktes_diktat.toml",
+        include_str!("../../../modes/defaults/en/exaktes_diktat.toml"),
+    ),
+    (
+        "korrigierendes_diktat.toml",
+        include_str!("../../../modes/defaults/en/korrigierendes_diktat.toml"),
+    ),
+    (
+        "foermliche_email.toml",
+        include_str!("../../../modes/defaults/en/foermliche_email.toml"),
+    ),
+    (
+        "slack_teams.toml",
+        include_str!("../../../modes/defaults/en/slack_teams.toml"),
+    ),
+    (
+        "github_issue.toml",
+        include_str!("../../../modes/defaults/en/github_issue.toml"),
+    ),
+    (
+        "claude_code_anweisung.toml",
+        include_str!("../../../modes/defaults/en/claude_code_anweisung.toml"),
+    ),
+];
+
+const DEFAULTS_FR: DefaultSet = &[
+    (
+        "exaktes_diktat.toml",
+        include_str!("../../../modes/defaults/fr/exaktes_diktat.toml"),
+    ),
+    (
+        "korrigierendes_diktat.toml",
+        include_str!("../../../modes/defaults/fr/korrigierendes_diktat.toml"),
+    ),
+    (
+        "foermliche_email.toml",
+        include_str!("../../../modes/defaults/fr/foermliche_email.toml"),
+    ),
+    (
+        "slack_teams.toml",
+        include_str!("../../../modes/defaults/fr/slack_teams.toml"),
+    ),
+    (
+        "github_issue.toml",
+        include_str!("../../../modes/defaults/fr/github_issue.toml"),
+    ),
+    (
+        "claude_code_anweisung.toml",
+        include_str!("../../../modes/defaults/fr/claude_code_anweisung.toml"),
+    ),
+];
+
+const DEFAULTS_ES: DefaultSet = &[
+    (
+        "exaktes_diktat.toml",
+        include_str!("../../../modes/defaults/es/exaktes_diktat.toml"),
+    ),
+    (
+        "korrigierendes_diktat.toml",
+        include_str!("../../../modes/defaults/es/korrigierendes_diktat.toml"),
+    ),
+    (
+        "foermliche_email.toml",
+        include_str!("../../../modes/defaults/es/foermliche_email.toml"),
+    ),
+    (
+        "slack_teams.toml",
+        include_str!("../../../modes/defaults/es/slack_teams.toml"),
+    ),
+    (
+        "github_issue.toml",
+        include_str!("../../../modes/defaults/es/github_issue.toml"),
+    ),
+    (
+        "claude_code_anweisung.toml",
+        include_str!("../../../modes/defaults/es/claude_code_anweisung.toml"),
+    ),
+];
+
+const DEFAULTS_IT: DefaultSet = &[
+    (
+        "exaktes_diktat.toml",
+        include_str!("../../../modes/defaults/it/exaktes_diktat.toml"),
+    ),
+    (
+        "korrigierendes_diktat.toml",
+        include_str!("../../../modes/defaults/it/korrigierendes_diktat.toml"),
+    ),
+    (
+        "foermliche_email.toml",
+        include_str!("../../../modes/defaults/it/foermliche_email.toml"),
+    ),
+    (
+        "slack_teams.toml",
+        include_str!("../../../modes/defaults/it/slack_teams.toml"),
+    ),
+    (
+        "github_issue.toml",
+        include_str!("../../../modes/defaults/it/github_issue.toml"),
+    ),
+    (
+        "claude_code_anweisung.toml",
+        include_str!("../../../modes/defaults/it/claude_code_anweisung.toml"),
+    ),
+];
+
+/// Pick the default set for a given raw locale string (BCP-47 prefix
+/// match). Unknown locales fall back to English — same policy as the
+/// frontend's `pickSupported`. Keeping the mapping in sync with the
+/// frontend is a code-review concern.
+fn defaults_for_locale(raw_locale: Option<&str>) -> DefaultSet {
+    let prefix = raw_locale
+        .and_then(|s| s.split(['-', '_']).next())
+        .map(|s| s.to_ascii_lowercase())
+        .unwrap_or_default();
+    match prefix.as_str() {
+        "de" => DEFAULTS_DE,
+        "fr" => DEFAULTS_FR,
+        "es" => DEFAULTS_ES,
+        "it" => DEFAULTS_IT,
+        _ => DEFAULTS_EN,
+    }
+}
+
+/// Ensure that `dir` holds at least the default modes for the given
+/// locale. The directory is created if missing. Existing files are NOT
+/// overwritten (user edits stay intact).
+pub fn bootstrap_defaults_if_empty(dir: &Path, locale: Option<&str>) -> Result<()> {
     std::fs::create_dir_all(dir)
         .map_err(|e| VoiceTypeError::Mode(format!("create_dir_all({}): {e}", dir.display())))?;
 
@@ -57,11 +193,12 @@ pub fn bootstrap_defaults_if_empty(dir: &Path) -> Result<()> {
         return Ok(());
     }
 
-    for (name, content) in DEFAULTS {
+    let defaults = defaults_for_locale(locale);
+    for (name, content) in defaults {
         let path = dir.join(name);
         std::fs::write(&path, content)
             .map_err(|e| VoiceTypeError::Mode(format!("write({}): {e}", path.display())))?;
-        tracing::info!(file = %path.display(), "Default-Modus angelegt");
+        tracing::info!(file = %path.display(), locale = ?locale, "Default mode created");
     }
     Ok(())
 }

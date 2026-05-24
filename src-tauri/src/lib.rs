@@ -105,16 +105,48 @@ pub fn run() {
             std::fs::create_dir_all(&model_dir)?;
             std::fs::create_dir_all(&config_dir)?;
 
-            // Backend-Detection fuer Secrets: keyring vs. file. Erkennt
-            // automatisch defekte oder konfliktreiche Linux-Keyring-Setups
-            // (z.B. gnome-keyring + kwallet gleichzeitig).
+            // Secrets backend detection: keyring vs. file. Recognises
+            // broken or conflicting Linux keyring setups automatically
+            // (e.g. gnome-keyring + kwallet running simultaneously).
             crate::secrets::init_backend(config_dir.clone());
 
-            // 6 Default-Modi anlegen, falls modes/ leer
-            bootstrap_defaults_if_empty(&modes_dir)
+            // Load settings first — the bootstrap_defaults_if_empty call
+            // below needs the locale to pick the right default-mode set,
+            // and downstream pipeline construction needs custom model
+            // paths. On corrupt JSON, Settings::default falls in (with a
+            // warn log).
+            let mut initial_settings = Settings::load_or_default(&settings_path);
+
+            // First-run locale detection: if Settings.locale is unset,
+            // adopt the OS locale and persist. This runs centrally in
+            // the backend (not the frontend) so the three webviews
+            // (main, overlay, menu) don't race on the settings file —
+            // single writer is this setup hook.
+            if initial_settings.locale.is_none() {
+                let detected = tauri_plugin_os::locale();
+                tracing::info!(detected = ?detected, "First-run locale detection");
+                initial_settings.locale = detected;
+                if let Err(e) = initial_settings.save(&settings_path) {
+                    // Persist failed → reset in-memory value to None so
+                    // the persisted state and runtime state stay
+                    // consistent. Consequence: detection re-runs next
+                    // start. Heavy enough for ERROR — if the settings
+                    // file isn't writable, other settings actions will
+                    // fail too.
+                    tracing::error!(
+                        error = %e,
+                        "First-run locale persist failed — detection will re-run on every start",
+                    );
+                    initial_settings.locale = None;
+                }
+            }
+
+            // 6 default modes for the active locale, bootstrap only if
+            // the modes dir is still empty (user edits are preserved).
+            bootstrap_defaults_if_empty(&modes_dir, initial_settings.locale.as_deref())
                 .map_err(|e| format!("bootstrap defaults: {e}"))?;
 
-            // Modi laden + Hot-Reload aktivieren
+            // Load modes + activate hot-reload watcher.
             let modes_registry = Arc::new(
                 ModesRegistry::load(modes_dir.clone())
                     .map_err(|e| format!("ModesRegistry::load: {e}"))?,
@@ -122,38 +154,6 @@ pub fn run() {
             modes_registry
                 .start_watching(modes_dir.clone())
                 .map_err(|e| format!("start_watching: {e}"))?;
-
-            // Settings VOR der Pipeline-Konstruktion laden — sonst wuerde
-            // der Modell-Pfad hartkodiert sein und User-Settings (Custom-
-            // Pfad oder anderer Default-Slot) wuerden beim Bootstrap
-            // ignoriert. Bei korruptem JSON fallen Defaults rein
-            // (load_or_default loggt eine Warnung).
-            let mut initial_settings = Settings::load_or_default(&settings_path);
-
-            // First-Run-Locale-Detection: wenn settings.locale noch nicht
-            // gesetzt ist, OS-Locale uebernehmen und persistieren. Das
-            // passiert hier zentral im Backend (nicht im Frontend), damit
-            // die drei Webview-Fenster (main, overlay, menu) nicht
-            // unabhaengig schreiben — der Single-Writer ist der Setup-Hook.
-            if initial_settings.locale.is_none() {
-                let detected = tauri_plugin_os::locale();
-                tracing::info!(detected = ?detected, "First-run locale detection");
-                initial_settings.locale = detected;
-                if let Err(e) = initial_settings.save(&settings_path) {
-                    // Persistenz fehlgeschlagen → in-Memory-Wert wieder
-                    // auf None setzen, damit Persistenz- und Laufzeit-
-                    // Zustand konsistent bleiben. Konsequenz: beim
-                    // naechsten Start laeuft die Detection erneut.
-                    // Schwerwiegend genug fuer ERROR-Level — wenn die
-                    // Settings-Datei nicht schreibbar ist, werden auch
-                    // andere Settings-Aktionen scheitern.
-                    tracing::error!(
-                        error = %e,
-                        "First-run locale persist failed — Detection laeuft bei jedem Start erneut",
-                    );
-                    initial_settings.locale = None;
-                }
-            }
 
             // Pipeline-Komponenten
             let state_bus = StateBus::new();

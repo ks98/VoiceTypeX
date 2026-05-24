@@ -1,0 +1,12 @@
+id = "exact"
+name = "Dictado exacto"
+description = "Palabra por palabra, sin reformulación. Local, sin red."
+transcription = "local"
+processing = "none"
+injection_method = "clipboard"
+language = "es"
+
+# Nota: este modo entrega la salida de Whisper tal cual. Errores de
+# reconocimiento (p.ej. «punto»/«coma» dictados) terminan literales
+# en la salida — si quieres eliminar lapsus/muletillas, usa
+# «Dictado correctivo».

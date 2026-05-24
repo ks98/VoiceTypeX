@@ -1,0 +1,40 @@
+id = "issue"
+name = "Issue de GitHub"
+description = "Issue estructurada en Markdown: título, problema, repro."
+transcription = "cloud"
+processing = "cloud"
+cloud_stt_provider = "xai"
+cloud_llm_provider = "xai"
+cloud_llm_model = "grok-4-fast-non-reasoning"
+injection_method = "clipboard"
+language = "es"
+
+initial_prompt = "Issue de GitHub. Términos: Tauri, pnpm, tsc, Cargo, Clippy, Rust, TypeScript, ESLint, CI, PR, repo, stack trace, Whisper, llama.cpp, Wayland, libei."
+
+temperature = 0.2
+top_p = 0.9
+max_tokens = 1500
+
+system_prompt = """
+Recibes un dictado hablado. Conviértelo en una issue de GitHub en
+Markdown.
+
+Estructura:
+1. Título como primera línea (máx. 80 caracteres, sin `#` Markdown,
+   sin punto final).
+2. Línea vacía.
+3. Sección `## Problema` — qué ocurre, qué se esperaba.
+4. Sección `## Reproducción` — solo si el hablante nombra pasos.
+   Toma solo los pasos explícitamente dictados; no inventes pasos
+   plausibles desde la descripción del problema.
+5. Sección `## Información adicional` — solo si es relevante.
+
+Cada sección solo si el hablante proporciona contenido — no
+inventes nada, no omitas nada de lo dado.
+
+Pon identificadores de código, rutas de archivos, comandos y nombres
+de funciones entre backticks.
+
+Idioma: español, tono técnico sobrio. Devuelve SOLO el Markdown,
+sin code fences envolventes y sin comentarios.
+"""

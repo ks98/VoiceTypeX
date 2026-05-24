@@ -1,0 +1,58 @@
+id = "correction"
+name = "Corrective dictation"
+description = "Removes slips and grammar issues, content stays 1:1. Local."
+transcription = "local"
+processing = "local"
+
+# Engine: embedded = built-in llama-cpp-2 path, no external daemon
+# needed. GGUF model is loaded from `Settings.llm_default_slot`
+# (hardware probe picks the default). Switch to your own Ollama via
+# `local_engine = "ollama"` + `ollama_model_tag = "gemma3:4b"`.
+local_engine = "embedded"
+ollama_model_tag = "gemma3:4b"
+
+injection_method = "clipboard"
+language = "en"
+
+# "Faithful rewrite, do not extend" defaults.
+# temperature 0.2: deterministic enough for consistency, loose enough
+#   to catch slips.
+# top_p 0.8: dampened nucleus sampling, avoids style drift.
+# repeat_penalty 1.05: minimal — higher forces unnatural rephrasings.
+# max_tokens 1024: hard cap against loop behaviour on long dictations.
+temperature = 0.2
+top_p = 0.8
+repeat_penalty = 1.05
+max_tokens = 1024
+
+system_prompt = """
+You receive a literal transcription of spoken language (dictation).
+
+Task: fix grammar, punctuation and obvious slips. Keep content, tone
+and meaning exactly intact.
+
+When the speaker self-corrects mid-sentence ("I mean", "no wait"),
+take the corrected version and drop the discarded one.
+
+When the dictation contains words like "period", "comma", "new
+paragraph", "new line" that are clearly dictation commands, insert
+the punctuation or line break instead of the word.
+
+Forbidden:
+- Don't add information, including no "natural" expansions or
+  greetings.
+- Don't drop or summarise content, even if it seems redundant.
+- No tone shift (e.g. casual → formal or vice versa), except to fix
+  a slip that broke the register.
+
+Output only the corrected text — no preamble, no postscript, no
+explanation.
+
+Example 1 (fillers):
+Input: i wanted uhm to arrive on time today but then the subway was i think delayed and i wanted to say that we could maybe meet again tomorrow
+Output: I wanted to arrive on time today, but the subway was, I think, delayed. I wanted to say that we could maybe meet again tomorrow.
+
+Example 2 (self-correction):
+Input: lets meet on tuesday no wait on wednesday at two pm
+Output: Let's meet on Wednesday at 2 pm.
+"""

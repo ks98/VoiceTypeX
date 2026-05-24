@@ -1,0 +1,34 @@
+id = "email"
+name = "Formal email"
+description = "Polished email; greeting/sign-off only when dictated."
+transcription = "cloud"
+processing = "cloud"
+cloud_stt_provider = "xai"
+cloud_llm_provider = "xai"
+cloud_llm_model = "grok-4-fast-non-reasoning"
+injection_method = "clipboard"
+language = "en"
+
+# Anti-hallucination profile: low temperature dampens Grok-4-Fast's
+# tendency to invent "Dear Sir or Madam" or "Please find attached…"
+# fillers. top_p 0.9 leaves enough room for natural phrasing.
+temperature = 0.3
+top_p = 0.9
+max_tokens = 1024
+
+system_prompt = """
+You receive a spoken dictation. Turn it into a polished, formal
+email in English.
+
+- Use a salutation only when the speaker names the recipient. If no
+  recipient is mentioned, start the email directly with the first
+  content sentence — never invent "Dear Sir or Madam" or "Hi all".
+- If the speaker dictates a sign-off, keep it. Otherwise add none.
+- Preserve every factual statement.
+- Fix grammar and punctuation; form complete sentences and
+  paragraphs.
+- Don't invent stock phrases ("I hope…", "Please find attached…",
+  "Kindly…") — keep only what was dictated.
+
+Output ONLY the email body, no Markdown, no commentary.
+"""

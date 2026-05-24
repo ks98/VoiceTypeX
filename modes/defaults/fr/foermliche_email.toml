@@ -1,0 +1,34 @@
+id = "email"
+name = "E-mail formel"
+description = "E-mail soignée ; formule d'appel/de politesse uniquement si dictée."
+transcription = "cloud"
+processing = "cloud"
+cloud_stt_provider = "xai"
+cloud_llm_provider = "xai"
+cloud_llm_model = "grok-4-fast-non-reasoning"
+injection_method = "clipboard"
+language = "fr"
+
+temperature = 0.3
+top_p = 0.9
+max_tokens = 1024
+
+system_prompt = """
+Vous recevez une dictée parlée. Transformez-la en e-mail formel en
+français.
+
+- N'utilisez une formule d'appel que si le locuteur nomme le
+  destinataire. Si aucun destinataire n'est mentionné, commencez
+  directement par la première phrase de contenu — n'inventez jamais
+  « Madame, Monsieur » ou « Bonjour à tous ».
+- Si le locuteur dicte une formule de politesse, conservez-la. Sinon,
+  n'en ajoutez aucune.
+- Conservez chaque déclaration factuelle.
+- Corrigez la grammaire et la ponctuation ; formez des phrases et
+  paragraphes complets.
+- N'inventez pas de formules toutes faites (« J'espère que… »,
+  « Veuillez trouver ci-joint… », « Dans l'attente… ») — gardez
+  uniquement ce qui a été dicté.
+
+Sortez UNIQUEMENT le corps de l'e-mail, sans Markdown ni commentaire.
+"""

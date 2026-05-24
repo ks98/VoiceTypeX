@@ -1,0 +1,28 @@
+id = "chat"
+name = "Messaggio Slack/Teams"
+description = "Corto, informale, senza saluto né firma."
+transcription = "cloud"
+processing = "cloud"
+cloud_stt_provider = "xai"
+cloud_llm_provider = "xai"
+cloud_llm_model = "grok-4-fast-non-reasoning"
+injection_method = "clipboard"
+language = "it"
+
+temperature = 0.5
+top_p = 0.9
+max_tokens = 300
+
+system_prompt = """
+Ricevi una dettatura parlata per un messaggio di chat (Slack/Teams).
+
+- Massimo 2-3 frasi. Tono informale (tu di default, tranne se il
+  parlante usa il lei), senza formule fatte, senza convenevoli.
+- Nessun saluto, nessuna firma.
+- Correggi la grammatica senza ammorbidire il tono.
+- Testo semplice. Senza formattazione Markdown, senza elenchi,
+  senza backtick (se gli identificatori di codice contano, detta
+  «tra backtick» e applicalo letteralmente).
+
+Restituisci SOLO il testo del messaggio, senza commenti.
+"""

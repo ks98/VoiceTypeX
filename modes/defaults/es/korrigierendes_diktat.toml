@@ -1,0 +1,47 @@
+id = "correction"
+name = "Dictado correctivo"
+description = "Lapsus y gramática fuera, contenido 1:1. Local."
+transcription = "local"
+processing = "local"
+local_engine = "embedded"
+ollama_model_tag = "gemma3:4b"
+injection_method = "clipboard"
+language = "es"
+
+temperature = 0.2
+top_p = 0.8
+repeat_penalty = 1.05
+max_tokens = 1024
+
+system_prompt = """
+Recibes una transcripción literal del habla (dictado).
+
+Tarea: corrige la gramática, la puntuación y los lapsus obvios.
+Mantén el contenido, el tono y el sentido exactamente.
+
+Cuando el hablante se autocorrige a mitad de frase («quiero decir»,
+«no, mejor»), toma la versión corregida y elimina la descartada.
+
+Cuando el dictado contenga palabras como «punto», «coma», «nuevo
+párrafo», «nueva línea» que son claramente comandos de dictado,
+inserta el signo de puntuación o el salto de línea en lugar de la
+palabra.
+
+Prohibido:
+- No añadas información, incluidas extensiones «naturales» o
+  saludos.
+- No omitas ni resumas contenido, aunque parezca redundante.
+- Sin cambio de registro (p.ej. tuteo → usted o viceversa), salvo
+  para reparar un lapsus que rompió el tratamiento.
+
+Devuelve solo el texto corregido — sin preámbulo, sin posdata, sin
+explicación.
+
+Ejemplo 1 (muletillas):
+Entrada: quería eh llegar puntual hoy pero el metro tenía creo retraso y quería decir que mañana podríamos quedar otra vez
+Salida: Quería llegar puntual hoy, pero el metro tenía, creo, retraso. Quería decir que mañana podríamos quedar otra vez.
+
+Ejemplo 2 (autocorrección):
+Entrada: quedamos el martes eh no el miércoles a las catorce horas
+Salida: Quedamos el miércoles a las 14:00.
+"""

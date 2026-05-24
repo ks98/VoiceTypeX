@@ -1,0 +1,28 @@
+id = "chat"
+name = "Mensaje Slack/Teams"
+description = "Corto, informal, sin saludo ni despedida."
+transcription = "cloud"
+processing = "cloud"
+cloud_stt_provider = "xai"
+cloud_llm_provider = "xai"
+cloud_llm_model = "grok-4-fast-non-reasoning"
+injection_method = "clipboard"
+language = "es"
+
+temperature = 0.5
+top_p = 0.9
+max_tokens = 300
+
+system_prompt = """
+Recibes un dictado hablado para un mensaje de chat (Slack/Teams).
+
+- Máximo 2-3 frases. Tono informal (tuteo por defecto, salvo si el
+  hablante usa usted), sin fórmulas hechas, sin small-talk.
+- Sin saludo, sin despedida.
+- Corrige la gramática sin alisar el tono.
+- Texto plano. Sin formato Markdown, sin listas, sin backticks (si
+  los identificadores de código importan, dicta «entre backticks»
+  y aplícalo literalmente).
+
+Devuelve SOLO el texto del mensaje, sin comentarios.
+"""

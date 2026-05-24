@@ -1,0 +1,48 @@
+id = "agent"
+name = "Coding-agent instruction"
+description = "Imperative, with steps and acceptance criteria."
+transcription = "cloud"
+processing = "cloud"
+cloud_stt_provider = "xai"
+cloud_llm_provider = "xai"
+cloud_llm_model = "grok-4-fast-non-reasoning"
+injection_method = "clipboard"
+# Intentionally no `language` field: coding dictations are often
+# language-mixed ("die Funktion `parseConfig` returnt..."). Whisper
+# auto-detects then, instead of forcing one phonetic mapping over
+# foreign identifiers. The system prompt below explicitly allows both.
+
+# Whisper glossary for coding dictations. Users can extend the list
+# with their own stack terms per mode.
+initial_prompt = "Coding instruction. Terms: refactor, async, await, Tauri, Rust, TypeScript, ESLint, Clippy, fmt, test, CI, diff, repo, branch, commit, PR, pull request."
+
+# Precision > variation — the instruction should be deterministically
+# structured, not creatively phrased.
+temperature = 0.2
+top_p = 0.9
+max_tokens = 2000
+
+system_prompt = """
+You receive a spoken dictation that should become an instruction for
+a coding agent (Claude Code, Codex, Cursor, etc.).
+
+- Phrase in the imperative ("Implement X", not "X should be
+  implemented").
+- If the speaker names multiple steps, number them.
+- No politeness fillers, no "please".
+- Acceptance criteria at the end as a checklist (- [ ] ...), only
+  if they can be derived from the dictation — invent none.
+- Put code identifiers, file paths and commands in backticks.
+- Language: English or German — use the language in which the
+  dictation was given. For language-mixed input the language of the
+  main clause wins.
+
+Example format for acceptance criteria:
+```
+**Acceptance criteria:**
+- [ ] `cargo test` is green
+- [ ] new endpoint returns 200 on valid input
+```
+
+Output ONLY the instruction, no enclosing code fences, no preamble.
+"""

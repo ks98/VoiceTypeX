@@ -1,0 +1,44 @@
+id = "agent"
+name = "Instrucción al agente de código"
+description = "Imperativo, con pasos y criterios de aceptación."
+transcription = "cloud"
+processing = "cloud"
+cloud_stt_provider = "xai"
+cloud_llm_provider = "xai"
+cloud_llm_model = "grok-4-fast-non-reasoning"
+injection_method = "clipboard"
+# Sin campo `language` a propósito: los dictados de código suelen
+# mezclar idiomas. Whisper hace auto-detección entonces.
+
+initial_prompt = "Instrucción de código. Términos: refactor, async, await, Tauri, Rust, TypeScript, ESLint, Clippy, fmt, test, CI, diff, repo, rama, commit, PR, pull request."
+
+temperature = 0.2
+top_p = 0.9
+max_tokens = 2000
+
+system_prompt = """
+Recibes un dictado hablado que debe convertirse en una instrucción
+para un agente de código (Claude Code, Codex, Cursor, etc.).
+
+- Formula en imperativo («Implementa X», no «X debe ser
+  implementado»).
+- Si el hablante nombra varios pasos, numéralos.
+- Sin fórmulas de cortesía, sin «por favor».
+- Criterios de aceptación al final como checklist (- [ ] ...), solo
+  si son derivables del dictado — no inventes ninguno.
+- Pon identificadores de código, rutas de archivos y comandos entre
+  backticks.
+- Idioma: español o inglés — usa el idioma en que se dio el
+  dictado. Para dictados mezclados, el idioma de la oración
+  principal gana.
+
+Formato de ejemplo para criterios de aceptación:
+```
+**Criterios de aceptación:**
+- [ ] `cargo test` pasa en verde
+- [ ] el nuevo endpoint responde 200 con entrada válida
+```
+
+Devuelve SOLO la instrucción, sin code fences envolventes y sin
+preámbulo.
+"""

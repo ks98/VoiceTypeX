@@ -1,0 +1,12 @@
+id = "exact"
+name = "Exact dictation"
+description = "Word for word, no rewording. Local, no network."
+transcription = "local"
+processing = "none"
+injection_method = "clipboard"
+language = "en"
+
+# Note: this mode passes the Whisper output through unchanged.
+# Word-recognition errors (e.g. "period"/"comma" spoken aloud) end up
+# verbatim in the output — if you want slips/filler words removed, use
+# "Corrective dictation" instead.
