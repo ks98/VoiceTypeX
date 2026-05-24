@@ -32,7 +32,7 @@ impl OllamaProcessor {
                 // Lokale Inferenz kann mehr Zeit brauchen als Cloud — 5 min.
                 .timeout(std::time::Duration::from_secs(300))
                 .build()
-                .unwrap_or_else(|_| reqwest::Client::new()),
+                .expect("reqwest client builder (timeout)"),
         }
     }
 }
