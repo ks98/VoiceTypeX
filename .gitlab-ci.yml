@@ -99,6 +99,12 @@ test:linux:
     # opt-in und braucht CUDA-Toolkit auf dem Runner — separater
     # Job bei Bedarf.
     - cargo test --manifest-path src-tauri/Cargo.toml --lib
+    # Frontend-Logik-Tests (Vitest) — reine pure-function-Tests,
+    # plattformunabhaengig, einmal auf Linux reicht. i18n-check
+    # selbst laeuft als prebuild-Hook von `pnpm build` und ist
+    # damit von build:linux abgedeckt.
+    - pnpm install --frozen-lockfile
+    - pnpm test
   rules:
     - if: '$CI_COMMIT_TAG'
       when: never
