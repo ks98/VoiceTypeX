@@ -8,8 +8,10 @@ import Settings from "./views/Settings";
 import Modes from "./views/Modes";
 import Logs from "./views/Logs";
 import { useSettingsStore, useUIStore } from "./store";
+import { useT } from "./i18n";
 
 export default function App(): JSX.Element {
+  const t = useT();
   const activeTab = useUIStore((s) => s.activeTab);
   const setActiveTab = useUIStore((s) => s.setActiveTab);
   const settings = useSettingsStore((s) => s.settings);
@@ -38,12 +40,6 @@ export default function App(): JSX.Element {
   const showOnboarding =
     settings !== null && settings.onboarding_done === false;
 
-  const titleMap: Record<typeof activeTab, string> = {
-    settings: "Einstellungen",
-    modes: "Modi",
-    logs: "Logs",
-  };
-
   return (
     // `h-screen` statt `min-h-screen`: bei langen Views (Settings hat
     // ~1100 Zeilen) wuerde min-h-screen den aeusseren Container mit dem
@@ -56,11 +52,9 @@ export default function App(): JSX.Element {
       <div className="flex-1 flex flex-col min-w-0">
         <header className="px-8 pt-6 pb-4 border-b border-outline">
           <h1 className="text-xl font-semibold tracking-tight text-fg">
-            {titleMap[activeTab]}
+            {t(`app.tabs.${activeTab}`)}
           </h1>
-          <p className="text-xs text-fg-muted mt-0.5">
-            Diktiere — VoiceTypeX schreibt es.
-          </p>
+          <p className="text-xs text-fg-muted mt-0.5">{t("app.tagline")}</p>
         </header>
         <main className="flex-1 px-8 py-6 overflow-auto">
           {activeTab === "settings" ? <Settings /> : null}

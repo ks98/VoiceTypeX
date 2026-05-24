@@ -572,6 +572,60 @@ React 18 + TypeScript strict + Tailwind v3 + Zustand.
   OnboardingWizard-Step-1-Hero. Bei Geometry-Anpassung
   beide Stellen (SVG-Source + Logo.tsx) synchron halten.
 
+## Internationalisierung (i18n)
+
+Eigener leichter Hook-Layer statt i18next — ~70 LOC, keine Runtime-Dep
+ausser dem nativen `Intl.*`-API. Zielsprachen Release-1: `de`, `en`,
+`fr`, `es`, `it`. Englisch ist Source-of-Truth (`src/i18n/locales/en.json`).
+
+**Datenfluss:**
+
+```
+tauri_plugin_os::locale()        Settings.locale            useI18nStore
+ (Backend, First-Run)     ──►   (persistiert, JSON)  ──►   (Frontend, Zustand)
+                                       │                          │
+                                       ▼                          ▼
+                            pickSupported(raw)              useT() / useLocale()
+                            ↓                                     │
+                            "de"|"en"|"fr"|"es"|"it"              ▼
+                                                            React-Components
+```
+
+- **Backend** macht die First-Run-Detection im `setup`-Hook
+  ([`lib.rs::run`](../src-tauri/src/lib.rs)) und persistiert den rohen
+  OS-Locale-String in `Settings.locale`. Single-Writer-Pattern, damit
+  die drei Webviews (main, overlay, menu) nicht race-en. Deserialize-
+  Validator filtert Hand-Edits in der Settings-Datei (BCP-47-aehnliche
+  ASCII-Form, max. 35 Zeichen).
+- **Frontend-Bootstrap** in [`main.tsx`](../src/main.tsx) holt
+  `Settings.locale` via IPC, mappt es via `pickSupported()` auf eine
+  der unterstuetzten Sprachen (Region-Suffix ignoriert,
+  Fallback `en`), und setzt den `useI18nStore` *vor* dem React-Render.
+- **`useT()`-Hook** ([`src/i18n/index.ts`](../src/i18n/index.ts)) ist
+  via `useCallback([locale])` stabil. Eager-Loaded Dictionaries (5
+  Locales × ~5 KB), Fallback-Kette `current → en → key`.
+- **Plural-Regeln** kommen von `Intl.PluralRules` — Convention
+  `key.one`, `key.other` (CLDR-Forms). Numerische `params.count`-Werte
+  triggern automatisch die Plural-Auswahl.
+- **Build-Gate** [`scripts/i18n-check.mjs`](../scripts/i18n-check.mjs)
+  laeuft als `prebuild` und im Standalone-Target `pnpm i18n:check`:
+  prueft Locale-Parity gegen `en.json`, scannt `t("...")`-Aufrufe auf
+  Existenz (inkl. Plural-Base-Forms), und validiert Template-Literal-
+  Praefixe (`t(\`app.tabs.${id}\`)` muss zu mindestens einem Key in
+  `en.json` passen).
+
+**Phase-0-Scope (Stand jetzt):** Infrastruktur + Pilot-Strings im
+App-Header und in der Sidebar. Die flaechendeckende Migration der ~400
+UI-Strings, des Backend-Error-Mappings, der Default-Modi (pro Locale
+eigene `system_prompt`s) sowie der User-sichtbare Sprach-Switcher
+kommen in Phasen 1–6.
+
+**Phase-6-Fallstrick (notiert in `src/i18n/index.ts`):** ein User-
+sichtbarer Locale-Switch muss zusaetzlich zum `useI18nStore.setLocale`
+ein `ipcSetSettings({...locale})` sowie ein Tauri-Event an die anderen
+Webviews emittieren, weil Zustand-Stores nicht cross-Window geteilt
+sind.
+
 ## Hardware-Detection
 
 [`core/hardware.rs`](../src-tauri/src/core/hardware.rs) detektiert beim

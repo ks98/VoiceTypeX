@@ -66,6 +66,13 @@ export interface Settings {
   whisper_n_threads: number | null;
   menu_hotkey: string;
   last_selected_mode_id: string | null;
+  /**
+   * UI-Locale (BCP-47). `null` = noch nie gesetzt — Backend fuellt das
+   * beim ersten Start aus der OS-Locale. Das Frontend mappt den Wert
+   * via `pickSupported()` auf eine der unterstuetzten Sprachen
+   * [en, de, fr, es, it].
+   */
+  locale: string | null;
 }
 
 export interface LogLine {

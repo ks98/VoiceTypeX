@@ -47,6 +47,11 @@ Menü-Hotkey*.
 - **Backend:** Rust 2021+ mit tokio
 - **Frontend:** React 18 + TypeScript strict + Vite + TailwindCSS +
   shadcn/ui + Zustand
+- **Internationalisierung:** eigener `useT()`-Hook (~70 LOC, kein i18next)
+  mit `Intl.PluralRules`/`Intl.NumberFormat`. Zielsprachen Release-1:
+  `de`, `en`, `fr`, `es`, `it`. OS-Locale-Detection im Backend
+  (`tauri_plugin_os::locale()`), persistiert in `Settings.locale`. Build-
+  Gate `pnpm i18n:check` validiert Locale-Parity und Used-Key-Existenz
 - **Audio:** cpal + hound (WAV) + rubato (Sinc-Resampling auf 16 kHz)
 - **Lokales STT:** whisper-rs 0.16 mit Silero-VAD v6 (verhindert
   Stille-Halluzinationen). Default-Modell ab Mai 2026:
@@ -98,6 +103,8 @@ Konventionen + Mindset: [`CLAUDE.md`](CLAUDE.md).
 pnpm install
 pnpm tauri dev          # Dev-Build mit HMR fürs Frontend
 pnpm tauri build        # Bundles (.deb, .rpm, AppImage, NSIS) — auf Tags v* in CI
+pnpm test               # Frontend-Tests (Vitest, reine Logik wie i18n-Translate)
+pnpm i18n:check         # Locale-Parity-Gate (läuft auch automatisch im prebuild)
 ```
 
 Für Linux-Bundle-Build inkl. RPM zusätzlich `rpmbuild` installieren

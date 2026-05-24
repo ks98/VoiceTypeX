@@ -1,17 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { useUIStore } from "../store";
+import { useT } from "../i18n";
 import Logo from "./Logo";
 import ThemeToggle from "./ThemeToggle";
 
 // Reihenfolge nach Nutzungs-Frequenz: Power-User oeffnet das Hauptfenster
 // meistens um Modi zu triggern oder zu editieren, nicht zum Konfigurieren.
-const TABS = [
-  { id: "modes", label: "Modi" },
-  { id: "settings", label: "Einstellungen" },
-  { id: "logs", label: "Logs" },
-] as const;
+const TAB_IDS = ["modes", "settings", "logs"] as const;
 
 export default function Sidebar(): JSX.Element {
+  const t = useT();
   const activeTab = useUIStore((s) => s.activeTab);
   const setActiveTab = useUIStore((s) => s.setActiveTab);
 
@@ -24,24 +22,24 @@ export default function Sidebar(): JSX.Element {
             VoiceTypeX
           </div>
           <div className="text-xxs text-fg-faint leading-tight">
-            Diktat in jede App
+            {t("app.sub_tagline")}
           </div>
         </div>
       </div>
-      {TABS.map((tab) => (
+      {TAB_IDS.map((id) => (
         <button
-          key={tab.id}
+          key={id}
           type="button"
-          onClick={() => setActiveTab(tab.id)}
-          aria-current={activeTab === tab.id ? "page" : undefined}
+          onClick={() => setActiveTab(id)}
+          aria-current={activeTab === id ? "page" : undefined}
           className={
             "px-3 py-2 rounded-md text-sm text-left whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 " +
-            (activeTab === tab.id
+            (activeTab === id
               ? "bg-elevated text-fg font-medium"
               : "text-fg-muted hover:text-fg hover:bg-elevated/60")
           }
         >
-          {tab.label}
+          {t(`app.tabs.${id}`)}
         </button>
       ))}
       {/* Theme-Toggle in den Sidebar-Footer — gehoert nicht zur App-

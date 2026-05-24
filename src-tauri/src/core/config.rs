@@ -100,6 +100,51 @@ pub struct Settings {
     /// Enter erreichbar ist.
     #[serde(default)]
     pub last_selected_mode_id: Option<String>,
+
+    /// UI-Locale (BCP-47 wie "de", "en-US", "fr"). `None` = noch nie
+    /// gesetzt; in dem Fall fuellt `lib.rs::run` beim ersten App-Start
+    /// die Detection aus `tauri_plugin_os::locale()` ein.
+    ///
+    /// Persistiert wird der rohe OS-Locale-String — das Frontend mappt
+    /// via `pickSupported()` auf eine der unterstuetzten Anzeige-
+    /// Sprachen [en, de, fr, es, it]. Damit bleibt das Backend frei von
+    /// "supported set"-Wissen und ein spaeterer Sprachen-Ausbau braucht
+    /// nur Frontend-Aenderungen.
+    ///
+    /// **Achtung — Re-Detection-Semantik:** explizit auf `None` setzen
+    /// triggert beim naechsten App-Start erneute OS-Detection. Der
+    /// UI-Switcher "Auto/System" sollte daher den aktuellen OS-Locale-
+    /// Wert *speichern*, nicht `None` schreiben — sonst hat man Log-
+    /// Noise und Datei-Save bei jedem Start.
+    ///
+    /// **Validierung beim Deserialisieren:** Inhalte aus der Settings-
+    /// Datei werden auf BCP-47-aehnliche Form gepruegft (ASCII-
+    /// alphanumerisch + `-`/`_`, max. 35 Zeichen). Unguelt iges (z.B.
+    /// per Hand-Edit oder corrupt-write) wird zu `None` neutralisiert
+    /// — die Anwendung re-detected dann beim naechsten Start statt zu
+    /// crashen oder den Wert ungeprueft weiterzureichen.
+    #[serde(default, deserialize_with = "deserialize_locale")]
+    pub locale: Option<String>,
+}
+
+/// Validiert deserialisierte Locale-Strings als BCP-47-aehnlich.
+/// Defense-in-depth: das eigentliche Mapping auf die unterstuetzte
+/// Sprache passiert im Frontend (`pickSupported`), aber wenn jemand
+/// die Settings-Datei manipuliert hat, soll der Wert hier schon
+/// gefiltert werden — sonst landet er ungeprueft z.B. in einer
+/// zukuenftigen `Intl.PluralRules`-Konstruktion (`RangeError`) oder
+/// als Substring in einem Dateipfad (Path-Traversal).
+fn deserialize_locale<'de, D>(d: D) -> std::result::Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let opt: Option<String> = Option::deserialize(d)?;
+    Ok(opt.filter(|s| {
+        !s.is_empty()
+            && s.len() <= 35
+            && s.chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    }))
 }
 
 /// Manueller `Default`-Impl statt `#[derive(Default)]`: das Derive
@@ -121,6 +166,7 @@ impl Default for Settings {
             whisper_n_threads: None,
             menu_hotkey: default_menu_hotkey(),
             last_selected_mode_id: None,
+            locale: None,
         }
     }
 }

@@ -128,7 +128,32 @@ pub fn run() {
             // Pfad oder anderer Default-Slot) wuerden beim Bootstrap
             // ignoriert. Bei korruptem JSON fallen Defaults rein
             // (load_or_default loggt eine Warnung).
-            let initial_settings = Settings::load_or_default(&settings_path);
+            let mut initial_settings = Settings::load_or_default(&settings_path);
+
+            // First-Run-Locale-Detection: wenn settings.locale noch nicht
+            // gesetzt ist, OS-Locale uebernehmen und persistieren. Das
+            // passiert hier zentral im Backend (nicht im Frontend), damit
+            // die drei Webview-Fenster (main, overlay, menu) nicht
+            // unabhaengig schreiben — der Single-Writer ist der Setup-Hook.
+            if initial_settings.locale.is_none() {
+                let detected = tauri_plugin_os::locale();
+                tracing::info!(detected = ?detected, "First-run locale detection");
+                initial_settings.locale = detected;
+                if let Err(e) = initial_settings.save(&settings_path) {
+                    // Persistenz fehlgeschlagen → in-Memory-Wert wieder
+                    // auf None setzen, damit Persistenz- und Laufzeit-
+                    // Zustand konsistent bleiben. Konsequenz: beim
+                    // naechsten Start laeuft die Detection erneut.
+                    // Schwerwiegend genug fuer ERROR-Level — wenn die
+                    // Settings-Datei nicht schreibbar ist, werden auch
+                    // andere Settings-Aktionen scheitern.
+                    tracing::error!(
+                        error = %e,
+                        "First-run locale persist failed — Detection laeuft bei jedem Start erneut",
+                    );
+                    initial_settings.locale = None;
+                }
+            }
 
             // Pipeline-Komponenten
             let state_bus = StateBus::new();
