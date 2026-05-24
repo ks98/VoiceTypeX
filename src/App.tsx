@@ -45,7 +45,13 @@ export default function App(): JSX.Element {
   };
 
   return (
-    <div className="min-h-screen flex bg-canvas text-fg">
+    // `h-screen` statt `min-h-screen`: bei langen Views (Settings hat
+    // ~1100 Zeilen) wuerde min-h-screen den aeusseren Container mit dem
+    // Inhalt wachsen lassen — dann scrollt die ganze Seite statt nur
+    // `<main>`, und die Sidebar inkl. ThemeToggle (mt-auto ans Sidebar-
+    // Ende) verschwindet aus dem Viewport. Mit fixer Hoehe greift
+    // `overflow-auto` auf `<main>`, Sidebar bleibt sichtbar.
+    <div className="h-screen flex bg-canvas text-fg">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <header className="px-8 pt-6 pb-4 border-b border-outline">
