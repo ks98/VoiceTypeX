@@ -108,4 +108,4 @@ export function getCurrentLocale(): SupportedLocale {
 
 export { SUPPORTED_LOCALES, DEFAULT_LOCALE };
 export type { SupportedLocale };
-export { pickSupported } from "./detect";
+export { pickSupported, LOCALE_NATIVE_NAMES } from "./detect";

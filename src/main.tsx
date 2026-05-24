@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { listen } from "@tauri-apps/api/event";
 import App from "./App";
 import Menu from "./views/Menu";
 import Overlay from "./views/Overlay";
@@ -44,6 +45,16 @@ const view =
 // Promise-Chain statt top-level-await: das Build-Target ist es2021
 // (vite.config.ts), und TLA ist erst ES2022. Tauri haelt die WebView-
 // Anforderungen bewusst konservativ.
+// Cross-window-Locale-Sync: jedes Webview-Fenster (main, overlay, menu)
+// abonniert "i18n://locale-changed". Wenn der User in Settings die
+// Sprache wechselt, wird das Event emittiert und alle drei Stores
+// werden lokal aktualisiert. Subscriber wird VOR dem Render registriert,
+// damit auch ein zeitlich knapp gleichzeitiges Event nicht verloren geht.
+void listen<{ locale: string }>("i18n://locale-changed", (event) => {
+  const next = pickSupported(event.payload.locale);
+  useI18nStore.setState({ locale: next });
+});
+
 ipcGetSettings()
   .then((settings) => {
     const picked = pickSupported(settings.locale);

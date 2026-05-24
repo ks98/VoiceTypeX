@@ -32,3 +32,17 @@ export function pickSupported(
     ? (prefix as SupportedLocale)
     : DEFAULT_LOCALE;
 }
+
+/**
+ * Native-Sprachname pro Locale fuer den User-Switcher in Settings.
+ * Bewusst nicht ueber `t()` geloest, weil der Switcher Sprachen
+ * anzeigt, die der User _noch nicht_ aktiv hat — stattdessen jede
+ * Sprache in ihrer eigenen Form (klassische Locale-Picker-UX).
+ */
+export const LOCALE_NATIVE_NAMES: Record<SupportedLocale, string> = {
+  en: "English",
+  de: "Deutsch",
+  fr: "Français",
+  es: "Español",
+  it: "Italiano",
+};

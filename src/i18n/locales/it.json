@@ -453,5 +453,10 @@
   "menu.empty.button_loading": "Caricamento …",
   "menu.empty.button_load": "Carica modalità standard",
   "menu.empty.hint_after_load": "Nessuna modalità disponibile — VoiceTypeX creerà 6 modalità standard al prossimo riavvio.",
-  "menu.empty.hint_error": "Impossibile caricare le modalità: {message}"
+  "menu.empty.hint_error": "Impossibile caricare le modalità: {message}",
+
+  "settings.section.language": "Lingua",
+  "settings.subnav.language": "Lingua",
+  "settings.language.label": "Lingua dell'interfaccia",
+  "settings.language.hint": "Cambia immediatamente la lingua dell'interfaccia. Il menu tray e i nomi delle modalità predefinite seguono al prossimo riavvio."
 }

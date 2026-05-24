@@ -614,17 +614,40 @@ tauri_plugin_os::locale()        Settings.locale            useI18nStore
   Praefixe (`t(\`app.tabs.${id}\`)` muss zu mindestens einem Key in
   `en.json` passen).
 
-**Phase-0-Scope (Stand jetzt):** Infrastruktur + Pilot-Strings im
-App-Header und in der Sidebar. Die flaechendeckende Migration der ~400
-UI-Strings, des Backend-Error-Mappings, der Default-Modi (pro Locale
-eigene `system_prompt`s) sowie der User-sichtbare Sprach-Switcher
-kommen in Phasen 1–6.
+**Cross-Window-Sync:** Jedes Webview-Fenster (main, overlay, menu)
+hat seinen eigenen `useI18nStore`. Der Sprach-Switcher in Settings
+ruft drei Dinge auf:
+1. `ipcSetSettings({...locale})` — persistiert in `Settings.locale`.
+2. `useI18nStore.setState({locale})` — sofortiges UI-Update im
+   eigenen Fenster.
+3. `emit("i18n://locale-changed", {locale})` — Tauri-Event, das die
+   anderen Fenster in [`src/main.tsx`](../src/main.tsx) ueber einen
+   `listen()`-Subscriber empfangen und ihren Store aktualisieren.
 
-**Phase-6-Fallstrick (notiert in `src/i18n/index.ts`):** ein User-
-sichtbarer Locale-Switch muss zusaetzlich zum `useI18nStore.setLocale`
-ein `ipcSetSettings({...locale})` sowie ein Tauri-Event an die anderen
-Webviews emittieren, weil Zustand-Stores nicht cross-Window geteilt
-sind.
+**Was beim Locale-Wechsel NICHT live mitwandert** (bleibt bis App-
+Neustart unveraendert):
+- **Tray-Menue** (`Open settings`/`Quit` etc.) — Tauri-2 hat keinen
+  Live-Swap fuer MenuItems; das Backend liest die Locale einmalig im
+  `setup`-Hook und baut das Menue damit.
+- **Default-Modi** (Name, Description, `system_prompt`) — sie werden
+  beim First-Run einmalig nach `app_config_dir/modes/` kopiert und
+  sind dann User-Content. Ein Locale-Wechsel danach faellt zurueck
+  auf "User editiert oder loescht und re-bootstrappt manuell".
+- **Backend-Error-Messages** in Bannern — die Strings kommen
+  englisch aus dem Backend (Phase 4 hat sie auf normales Englisch
+  normalisiert, statt vorher ASCII-transliteriertem Deutsch). Eine
+  vollstaendige Error-Code-Internationalisierung (strukturierte
+  `UserError`-Enum + Frontend-Mapping) ist als spaeterer Refactor
+  vorgemerkt — User sehen die englischen Strings bisher unabhaengig
+  von der UI-Locale.
+
+**Pflicht beim Hinzufuegen neuer UI-Strings:**
+1. Key in `en.json` ergaenzen (Source-of-Truth).
+2. Uebersetzungen in `de.json`, `fr.json`, `es.json`, `it.json`
+   parallel ergaenzen (sonst meldet `pnpm i18n:check` fehlende Keys).
+3. Im React-Code via `t("namespace.key")` oder
+   `t(\`namespace.${dynamic}\`)` einbinden (Template-Praefixe werden
+   vom Build-Gate gegen den Key-Stand validiert).
 
 ## Hardware-Detection
 

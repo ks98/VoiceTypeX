@@ -453,5 +453,10 @@
   "menu.empty.button_loading": "Cargando …",
   "menu.empty.button_load": "Cargar modos estándar",
   "menu.empty.hint_after_load": "No hay modos disponibles — VoiceTypeX creará 6 modos estándar en el próximo reinicio.",
-  "menu.empty.hint_error": "No se pudieron cargar los modos: {message}"
+  "menu.empty.hint_error": "No se pudieron cargar los modos: {message}",
+
+  "settings.section.language": "Idioma",
+  "settings.subnav.language": "Idioma",
+  "settings.language.label": "Idioma de la UI",
+  "settings.language.hint": "Cambia el idioma de la interfaz inmediatamente. El menú de bandeja y los nombres de los modos por defecto siguen al próximo reinicio."
 }

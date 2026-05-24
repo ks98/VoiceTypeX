@@ -32,7 +32,17 @@ import {
   type WhisperBackendInfo,
 } from "../lib/tauri";
 import { recommendLlmSlot } from "../lib/recommend";
-import { useT, type TranslateFn } from "../i18n";
+import { emit } from "@tauri-apps/api/event";
+import {
+  LOCALE_NATIVE_NAMES,
+  SUPPORTED_LOCALES,
+  pickSupported,
+  useI18nStore,
+  useLocale,
+  useT,
+  type SupportedLocale,
+  type TranslateFn,
+} from "../i18n";
 
 const inputCls =
   "bg-surface border border-outline rounded-md px-3 py-2 text-sm text-fg placeholder:text-fg-faint focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/40";
@@ -55,6 +65,7 @@ const LLM_SLOT_KEYS: Record<string, string> = {
 };
 
 const SUBNAV_ITEMS = [
+  { id: "language", key: "settings.subnav.language" },
   { id: "hardware", key: "settings.subnav.hardware" },
   { id: "audio-hotkey", key: "settings.subnav.audio_hotkey" },
   { id: "local-models", key: "settings.subnav.local_models" },
@@ -198,6 +209,21 @@ export default function Settings(): JSX.Element {
       <SettingsSubNav />
       <div className="flex-1 flex flex-col gap-8 max-w-2xl min-w-0">
         {error ? <Banner tone="error">{error}</Banner> : null}
+
+        <section
+          id="language"
+          className="scroll-mt-6 flex flex-col gap-4"
+          aria-labelledby="language-heading"
+        >
+          <SectionHeader
+            id="language-heading"
+            title={t("settings.section.language")}
+          />
+          <LanguageField
+            currentLocale={settings.locale}
+            onPick={(loc) => void update({ locale: loc })}
+          />
+        </section>
 
         <section
           id="hardware"
@@ -543,6 +569,57 @@ function SectionHeader({ id, title }: SectionHeaderProps): JSX.Element {
     >
       {title}
     </h2>
+  );
+}
+
+/**
+ * Sprach-Switcher. Liest die aktuell *aktive* (resolved) Locale aus
+ * useLocale, schreibt die *rohe* Locale (= konkreter SupportedLocale-
+ * Code) zurueck in Settings und emittiert ein Tauri-Event, damit die
+ * anderen Webview-Fenster (overlay, menu) ihren useI18nStore
+ * mitziehen koennen.
+ */
+function LanguageField({
+  currentLocale,
+  onPick,
+}: {
+  currentLocale: string | null;
+  onPick: (locale: string) => void;
+}): JSX.Element {
+  const t = useT();
+  const activeLocale = useLocale();
+  const resolved = pickSupported(currentLocale);
+  return (
+    <Field
+      label={t("settings.language.label")}
+      hint={t("settings.language.hint")}
+    >
+      <select
+        className={`${inputCls} w-72`}
+        value={resolved}
+        onChange={(e) => {
+          const next = e.target.value as SupportedLocale;
+          onPick(next);
+          useI18nStore.setState({ locale: next });
+          // Cross-window-sync: overlay + menu hoeren auf dieses Event
+          // in main.tsx und aktualisieren ihren Store, ohne Neustart.
+          void emit("i18n://locale-changed", { locale: next });
+        }}
+      >
+        {SUPPORTED_LOCALES.map((loc) => (
+          <option key={loc} value={loc}>
+            {LOCALE_NATIVE_NAMES[loc]}
+          </option>
+        ))}
+      </select>
+      {activeLocale !== resolved ? (
+        // Sollte nie passieren — defensive Anzeige, falls Backend/
+        // Frontend out of sync sind.
+        <div className="text-xs text-status-error">
+          UI: {activeLocale} ≠ Settings: {resolved}
+        </div>
+      ) : null}
+    </Field>
   );
 }
 

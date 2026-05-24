@@ -453,5 +453,10 @@
   "menu.empty.button_loading": "Loading …",
   "menu.empty.button_load": "Load standard modes",
   "menu.empty.hint_after_load": "No modes available — VoiceTypeX will create 6 standard modes on next restart.",
-  "menu.empty.hint_error": "Could not load modes: {message}"
+  "menu.empty.hint_error": "Could not load modes: {message}",
+
+  "settings.section.language": "Language",
+  "settings.subnav.language": "Language",
+  "settings.language.label": "UI language",
+  "settings.language.hint": "Switches the interface language immediately. Tray menu and default-mode names follow on the next app restart."
 }

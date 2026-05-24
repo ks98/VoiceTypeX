@@ -48,10 +48,12 @@ Menü-Hotkey*.
 - **Frontend:** React 18 + TypeScript strict + Vite + TailwindCSS +
   shadcn/ui + Zustand
 - **Internationalisierung:** eigener `useT()`-Hook (~70 LOC, kein i18next)
-  mit `Intl.PluralRules`/`Intl.NumberFormat`. Zielsprachen Release-1:
-  `de`, `en`, `fr`, `es`, `it`. OS-Locale-Detection im Backend
-  (`tauri_plugin_os::locale()`), persistiert in `Settings.locale`. Build-
-  Gate `pnpm i18n:check` validiert Locale-Parity und Used-Key-Existenz
+  mit `Intl.PluralRules`. Vollstaendig in `de`, `en`, `fr`, `es`, `it`
+  ausgeliefert: alle UI-Strings (~400), Tray-Menue, per-Locale Default-
+  Modi mit kulturell angepassten `system_prompt`s. OS-Locale-Detection
+  im Backend (`tauri_plugin_os::locale()`), Live-Switch via Settings
+  ohne App-Neustart. Build-Gate `pnpm i18n:check` validiert Locale-
+  Parity und Used-Key-Existenz.
 - **Audio:** cpal + hound (WAV) + rubato (Sinc-Resampling auf 16 kHz)
 - **Lokales STT:** whisper-rs 0.16 mit Silero-VAD v6 (verhindert
   Stille-Halluzinationen). Default-Modell ab Mai 2026:

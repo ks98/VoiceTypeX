@@ -453,5 +453,10 @@
   "menu.empty.button_loading": "Lade …",
   "menu.empty.button_load": "Standard-Modi laden",
   "menu.empty.hint_after_load": "Keine Modi vorhanden — VoiceTypeX legt beim nächsten Neustart 6 Standard-Modi an.",
-  "menu.empty.hint_error": "Konnte Modi nicht laden: {message}"
+  "menu.empty.hint_error": "Konnte Modi nicht laden: {message}",
+
+  "settings.section.language": "Sprache",
+  "settings.subnav.language": "Sprache",
+  "settings.language.label": "UI-Sprache",
+  "settings.language.hint": "Schaltet die Oberflächensprache sofort um. Tray-Menü und Default-Modi-Namen folgen beim nächsten App-Neustart."
 }

@@ -453,5 +453,10 @@
   "menu.empty.button_loading": "Chargement …",
   "menu.empty.button_load": "Charger les modes standards",
   "menu.empty.hint_after_load": "Aucun mode disponible — VoiceTypeX créera 6 modes standards au prochain redémarrage.",
-  "menu.empty.hint_error": "Impossible de charger les modes : {message}"
+  "menu.empty.hint_error": "Impossible de charger les modes : {message}",
+
+  "settings.section.language": "Langue",
+  "settings.subnav.language": "Langue",
+  "settings.language.label": "Langue de l'interface",
+  "settings.language.hint": "Change immédiatement la langue de l'interface. Le menu tray et les noms des modes par défaut suivent au prochain redémarrage."
 }
