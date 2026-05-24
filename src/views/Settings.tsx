@@ -221,7 +221,7 @@ export default function Settings(): JSX.Element {
           />
           <LanguageField
             currentLocale={settings.locale}
-            onPick={(loc) => void update({ locale: loc })}
+            onPick={(loc) => update({ locale: loc })}
           />
         </section>
 
@@ -584,7 +584,7 @@ function LanguageField({
   onPick,
 }: {
   currentLocale: string | null;
-  onPick: (locale: string) => void;
+  onPick: (locale: string) => Promise<void>;
 }): JSX.Element {
   const t = useT();
   const activeLocale = useLocale();
@@ -599,11 +599,17 @@ function LanguageField({
         value={resolved}
         onChange={(e) => {
           const next = e.target.value as SupportedLocale;
-          onPick(next);
-          useI18nStore.setState({ locale: next });
-          // Cross-window-sync: overlay + menu hoeren auf dieses Event
-          // in main.tsx und aktualisieren ihren Store, ohne Neustart.
-          void emit("i18n://locale-changed", { locale: next });
+          // Persist FIRST, dann UI updaten + Event broadcasten.
+          // Wenn ipcSetSettings fehlschlaegt, vermeiden wir den
+          // inkonsistenten Zustand "UI ist auf neuer Sprache, aber
+          // Settings sind nicht persistiert". Der Settings-Store
+          // setzt im Fehlerfall `error`, das via Banner sichtbar wird.
+          void onPick(next).then(() => {
+            useI18nStore.setState({ locale: next });
+            // Cross-window-sync: overlay + menu hoeren auf dieses
+            // Event in main.tsx und ziehen ihren Store nach.
+            void emit("i18n://locale-changed", { locale: next });
+          });
         }}
       >
         {SUPPORTED_LOCALES.map((loc) => (
@@ -613,8 +619,10 @@ function LanguageField({
         ))}
       </select>
       {activeLocale !== resolved ? (
-        // Sollte nie passieren — defensive Anzeige, falls Backend/
-        // Frontend out of sync sind.
+        // Defensive — sollte nach erfolgreichem Persist nie auftreten.
+        // Beim seltenen Race (mehrere Switcher gleichzeitig in parallel-
+        // geoeffneten Settings) hilft es zumindest, den Drift sichtbar
+        // zu machen.
         <div className="text-xs text-status-error">
           UI: {activeLocale} ≠ Settings: {resolved}
         </div>

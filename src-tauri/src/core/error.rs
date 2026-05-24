@@ -1,45 +1,46 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Strukturierte Fehler-Taxonomie fuer alle Pipeline-Stufen.
+//! Structured error taxonomy for all pipeline stages.
 //!
-//! Bevorzugt `VoiceTypeError` an oeffentlichen Modul-Grenzen, damit der Caller
-//! die Fehlerklasse mustermassig behandeln kann (z.B. Notification-Text pro
-//! Stufe). Fuer ad-hoc Fehler innerhalb einer Stufe ist `anyhow::Error` mit
-//! `.context(...)` legitim und wird via `From` automatisch konvertiert.
+//! Prefer `VoiceTypeError` at public module boundaries so the caller can
+//! pattern-match on the error class (e.g. notification text per stage).
+//! For ad-hoc errors inside a stage, `anyhow::Error` with `.context(...)`
+//! is legitimate and gets auto-converted via `From`.
 //!
-//! Jeder Fehler hat zusaetzlich:
-//! - `kind()`: maschinenlesbare Klassifikation fuer Frontend-Filterung
-//! - `is_retryable()`: ob Wiederholung (Backoff) sinnvoll ist
-//! - `recovery_hint()`: deutscher User-facing Hinweistext
+//! Every error also has:
+//! - `kind()`: machine-readable classification for frontend filtering
+//! - `is_retryable()`: whether a retry (backoff) is sensible
+//! - `recovery_hint()`: a short user-facing hint string (English; UI
+//!   layer localises further if needed)
 
 use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum VoiceTypeError {
-    #[error("Audio-Stufe: {0}")]
+    #[error("Audio stage: {0}")]
     Audio(String),
 
-    #[error("Transkription: {0}")]
+    #[error("Transcription: {0}")]
     Transcription(String),
 
-    #[error("Nachbearbeitung: {0}")]
+    #[error("Post-processing: {0}")]
     Processing(String),
 
-    #[error("Text-Injection: {0}")]
+    #[error("Text injection: {0}")]
     Injection(String),
 
     #[error("Hotkey: {0}")]
     Hotkey(String),
 
-    #[error("Modus: {0}")]
+    #[error("Mode: {0}")]
     Mode(String),
 
-    #[error("Konfiguration: {0}")]
+    #[error("Configuration: {0}")]
     Config(String),
 
-    #[error("Secrets / Keychain: {0}")]
+    #[error("Secrets / keychain: {0}")]
     Secrets(String),
 
-    #[error("State-Uebergang ungueltig: {from} -> {to}")]
+    #[error("Invalid state transition: {from} -> {to}")]
     InvalidStateTransition { from: String, to: String },
 
     #[error(transparent)]
@@ -49,34 +50,34 @@ pub enum VoiceTypeError {
     Other(#[from] anyhow::Error),
 }
 
-/// Maschinenlesbare Fehlerklasse, unabhaengig von der Stufe.
+/// Machine-readable error class, independent of pipeline stage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorKind {
-    /// Konfiguration fehlt oder ist ungueltig (User muss handeln).
+    /// Configuration missing or invalid (user action needed).
     Configuration,
-    /// API-Key fehlt oder ist abgelaufen.
+    /// API key missing or expired.
     Authentication,
-    /// HTTP-Fehler vom Provider — meist 4xx/5xx-Status.
+    /// HTTP error from the provider — usually 4xx/5xx status.
     HttpStatus,
-    /// Network-Fehler: Timeout, DNS, Connection-Refused (transient).
+    /// Network error: timeout, DNS, connection-refused (transient).
     Network,
-    /// Hardware-Problem (Mikrofon, Audio-Geraet).
+    /// Hardware issue (microphone, audio device).
     Hardware,
-    /// User-Eingabe ungueltig (z.B. Mode-TOML kaputt).
+    /// User input invalid (e.g. mode TOML broken).
     InvalidInput,
-    /// Plattform-Limitation (z.B. Wayland ohne Phase-5-Support).
+    /// Platform limitation (e.g. Wayland without phase-5 support).
     Unsupported,
-    /// Interner Bug oder unerwarteter Zustand.
+    /// Internal bug or unexpected state.
     Internal,
-    /// IO-Fehler (Filesystem, etc.).
+    /// IO error (filesystem etc.).
     Io,
-    /// Sonstiges, nicht weiter klassifiziert.
+    /// Other, not further classified.
     Other,
 }
 
 impl VoiceTypeError {
-    /// Klassifiziere den Fehler in eine machine-readable Kategorie.
-    /// Heuristik: wir matchen auf das Variant + den Inhalt der String-Message.
+    /// Classify the error into a machine-readable category.
+    /// Heuristic: match on variant + string-message contents.
     pub fn kind(&self) -> ErrorKind {
         match self {
             Self::Audio(msg) => classify_audio(msg),
@@ -84,7 +85,7 @@ impl VoiceTypeError {
             Self::Processing(msg) => classify_network_or_other(msg),
             Self::Injection(msg) => classify_injection(msg),
             Self::Hotkey(msg) => {
-                if msg.contains("Wayland") {
+                if msg.to_ascii_lowercase().contains("wayland") {
                     ErrorKind::Unsupported
                 } else {
                     ErrorKind::Internal
@@ -99,13 +100,13 @@ impl VoiceTypeError {
         }
     }
 
-    /// Lohnt es sich, die Operation zu wiederholen? Transient-Errors
-    /// (Network, 5xx) ja, alles andere nein.
+    /// Worth retrying? Transient errors (network, 5xx) yes,
+    /// everything else no.
     pub fn is_retryable(&self) -> bool {
         match self.kind() {
             ErrorKind::Network => true,
             ErrorKind::HttpStatus => {
-                // 5xx ist retry-bar, 4xx nicht. Heuristik via Message.
+                // 5xx is retryable, 4xx is not. Heuristic via message.
                 let msg = self.to_string();
                 msg.contains("HTTP 5") || msg.contains("HTTP 429")
             }
@@ -113,44 +114,48 @@ impl VoiceTypeError {
         }
     }
 
-    /// Deutscher Hinweistext fuer den User, was er tun kann.
+    /// Short English user-facing hint for what to do. The frontend
+    /// banner currently shows this string directly; full per-locale
+    /// translation of recovery hints is a follow-up refactor.
     pub fn recovery_hint(&self) -> &'static str {
         match self.kind() {
-            ErrorKind::Configuration => {
-                "Pruefe deine Einstellungen — moeglicherweise fehlt ein Pflichtfeld."
-            }
+            ErrorKind::Configuration => "Check your settings — a required field may be missing.",
             ErrorKind::Authentication => {
-                "API-Key fehlt oder ist ungueltig. Setze ihn unter Einstellungen → Cloud-API-Keys."
+                "API key missing or invalid. Set it under Settings → Cloud API keys."
             }
             ErrorKind::HttpStatus => {
-                "Der Provider hat den Request abgelehnt. Pruefe Modell-ID und API-Limits."
+                "The provider rejected the request. Check the model ID and API limits."
             }
             ErrorKind::Network => {
-                "Verbindungsproblem. Pruefe Internet/Firewall — wir versuchen es automatisch erneut."
+                "Connection problem. Check internet/firewall — we'll retry automatically."
             }
             ErrorKind::Hardware => {
-                "Audio-Hardware-Problem. Pruefe das Eingabegeraet in Einstellungen → Audio."
+                "Audio hardware problem. Check the input device under Settings → Audio."
             }
-            ErrorKind::InvalidInput => {
-                "Eingabe-Validierung fehlgeschlagen. Korrigiere die Felder."
-            }
+            ErrorKind::InvalidInput => "Input validation failed. Please correct the fields.",
             ErrorKind::Unsupported => {
-                "Funktion in deiner Umgebung nicht verfuegbar (z.B. Wayland in Phase 1–3)."
+                "Feature not available in your environment (e.g. Wayland in early phases)."
             }
-            ErrorKind::Internal => {
-                "Interner Fehler — bitte als Bug melden."
-            }
-            ErrorKind::Io => "Dateisystem-Fehler. Pruefe Schreibrechte und freien Speicherplatz.",
-            ErrorKind::Other => "Unspezifischer Fehler. Details siehe Logs-Tab.",
+            ErrorKind::Internal => "Internal error — please report as a bug.",
+            ErrorKind::Io => "Filesystem error. Check write permissions and free disk space.",
+            ErrorKind::Other => "Unspecified error. See the Logs tab for details.",
         }
     }
 }
 
+/// Heuristic for Audio-stage errors. Accepts both the new English
+/// strings ("no default input device", "not found") and the old
+/// German ones ("kein standard-eingabegeraet", "nicht gefunden") so
+/// historical error sources don't regress to the `else` fallback.
 fn classify_audio(msg: &str) -> ErrorKind {
     let m = msg.to_ascii_lowercase();
-    if m.contains("kein standard-eingabegeraet") || m.contains("nicht gefunden") {
+    if m.contains("no default input device")
+        || m.contains("kein standard-eingabegeraet")
+        || m.contains("not found")
+        || m.contains("nicht gefunden")
+    {
         ErrorKind::Hardware
-    } else if m.contains("permission") || m.contains("zugriff") {
+    } else if m.contains("permission") || m.contains("zugriff") || m.contains("denied") {
         ErrorKind::Configuration
     } else {
         ErrorKind::Hardware
@@ -160,7 +165,7 @@ fn classify_audio(msg: &str) -> ErrorKind {
 fn classify_network_or_other(msg: &str) -> ErrorKind {
     let m = msg.to_ascii_lowercase();
     if m.contains("http 4") || m.contains("http 5") {
-        // Aus den http {status}-Formatstrings unserer Clients.
+        // From the http {status}-format strings in our clients.
         if m.contains("http 401") || m.contains("http 403") {
             ErrorKind::Authentication
         } else {
@@ -168,9 +173,16 @@ fn classify_network_or_other(msg: &str) -> ErrorKind {
         }
     } else if m.contains("http") || m.contains("timeout") || m.contains("connection") {
         ErrorKind::Network
-    } else if m.contains("api-key") || m.contains("nicht gesetzt") {
+    } else if m.contains("api key")
+        || m.contains("api-key")
+        || m.contains("nicht gesetzt")
+        || m.contains("not set")
+    {
         ErrorKind::Authentication
-    } else if m.contains("nicht implementiert") || m.contains("phase ") {
+    } else if m.contains("not implemented")
+        || m.contains("nicht implementiert")
+        || m.contains("phase ")
+    {
         ErrorKind::Unsupported
     } else {
         ErrorKind::Other
@@ -179,7 +191,7 @@ fn classify_network_or_other(msg: &str) -> ErrorKind {
 
 fn classify_injection(msg: &str) -> ErrorKind {
     let m = msg.to_ascii_lowercase();
-    if m.contains("wayland") || m.contains("nicht implementiert") {
+    if m.contains("wayland") || m.contains("not implemented") || m.contains("nicht implementiert") {
         ErrorKind::Unsupported
     } else {
         ErrorKind::Internal
@@ -193,10 +205,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn audio_no_device_classifies_as_hardware() {
-        let e = VoiceTypeError::Audio("Kein Standard-Eingabegeraet".into());
+    fn audio_no_device_classifies_as_hardware_en() {
+        let e = VoiceTypeError::Audio("No default input device".into());
         assert_eq!(e.kind(), ErrorKind::Hardware);
         assert!(!e.is_retryable());
+    }
+
+    #[test]
+    fn audio_no_device_classifies_as_hardware_de_legacy() {
+        // Backwards-compat: pre-phase-4 audio code still produces
+        // German strings (see audio/recorder.rs). Classifier must
+        // accept both until those are normalised too.
+        let e = VoiceTypeError::Audio("Kein Standard-Eingabegeraet".into());
+        assert_eq!(e.kind(), ErrorKind::Hardware);
+    }
+
+    #[test]
+    fn audio_permission_classifies_as_configuration() {
+        let e = VoiceTypeError::Audio("permission denied".into());
+        assert_eq!(e.kind(), ErrorKind::Configuration);
     }
 
     #[test]
@@ -220,14 +247,20 @@ mod tests {
     }
 
     #[test]
-    fn missing_api_key_classifies_as_authentication() {
+    fn missing_api_key_classifies_as_authentication_en() {
+        let e = VoiceTypeError::Transcription("No API key set for 'xai'".into());
+        assert_eq!(e.kind(), ErrorKind::Authentication);
+    }
+
+    #[test]
+    fn missing_api_key_classifies_as_authentication_de_legacy() {
         let e = VoiceTypeError::Transcription("API-Key fuer Provider 'xai' nicht gesetzt".into());
         assert_eq!(e.kind(), ErrorKind::Authentication);
     }
 
     #[test]
     fn wayland_hotkey_is_unsupported() {
-        let e = VoiceTypeError::Hotkey("Wayland-Support kommt in Phase 5".into());
+        let e = VoiceTypeError::Hotkey("Wayland support is coming later".into());
         assert_eq!(e.kind(), ErrorKind::Unsupported);
     }
 
@@ -243,7 +276,7 @@ mod tests {
 
     #[test]
     fn mode_validation_is_invalid_input() {
-        let e = VoiceTypeError::Mode("id darf nicht leer sein".into());
+        let e = VoiceTypeError::Mode("id must not be empty".into());
         assert_eq!(e.kind(), ErrorKind::InvalidInput);
     }
 

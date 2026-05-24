@@ -128,12 +128,16 @@ pub async fn run_test_transcription(
 
     let start = Instant::now();
     let n_threads = state.settings.read().whisper_n_threads;
+    // Test-Endpoint laesst die Sprache offen — Whisper auto-detect.
+    // Vorher hardcoded "de", was englische Tester zerschossen hat.
+    // Wer eine konkrete Sprache testen will, nutzt einen Modus mit
+    // gesetztem language-Feld.
     let result = state
         .transcriber
         .transcribe_oneshot(
             &wav,
             TranscribeOpts {
-                language: Some("de".to_string()),
+                language: None,
                 initial_prompt: None,
                 n_threads,
             },

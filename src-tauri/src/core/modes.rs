@@ -396,16 +396,16 @@ impl ModesRegistry {
                         Ok(new_modes) => {
                             *modes.write() = new_modes;
                             let _ = tx.send(ModesEvent::Reloaded);
-                            tracing::info!("modes/ neu geladen");
+                            tracing::info!("modes/ reloaded");
                         }
                         Err(e) => {
-                            tracing::error!(error = %e, "Modes-Reload fehlgeschlagen");
+                            tracing::error!(error = %e, "Modes reload failed");
                             let _ = tx.send(ModesEvent::Error(e.to_string()));
                         }
                     }
                 }
                 Err(e) => {
-                    tracing::error!(error = %e, "notify-Watcher meldete Fehler");
+                    tracing::error!(error = %e, "notify watcher reported error");
                 }
             })
             .map_err(|e| VoiceTypeError::Mode(format!("notify::watcher: {e}")))?;

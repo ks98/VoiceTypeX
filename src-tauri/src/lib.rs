@@ -265,7 +265,7 @@ pub fn run() {
                 "wayland" => {
                     spawn_wayland_hotkey_session(app_handle.clone(), Arc::clone(&ctx));
                     tracing::info!(
-                        "Wayland-Hotkeys via xdg-portal angemeldet — Trigger-Buttons als Fallback bleiben verfuegbar"
+                        "Wayland hotkeys registered via xdg-portal — trigger buttons remain available as fallback"
                     );
                 }
                 "x11" | "windows" => {
@@ -275,7 +275,7 @@ pub fn run() {
                 other => {
                     tracing::warn!(
                         display_server = %other,
-                        "Globale Hotkeys nicht unterstuetzt — UI-Trigger als Workaround"
+                        "Global hotkeys not supported — UI triggers as workaround"
                     );
                 }
             }
