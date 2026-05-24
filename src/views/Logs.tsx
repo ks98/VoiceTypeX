@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Banner from "../components/Banner";
 import Button from "../components/Button";
 import { ipcGetRecentLogs } from "../lib/tauri";
+import { useT } from "../i18n";
 
 type LevelFilter = "all" | "warn" | "error";
 
@@ -26,6 +27,7 @@ function matchesFilter(line: string, filter: LevelFilter): boolean {
 }
 
 export default function Logs(): JSX.Element {
+  const t = useT();
   const [lines, setLines] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [paused, setPaused] = useState(false);
@@ -106,9 +108,9 @@ export default function Logs(): JSX.Element {
   const handleCopy = async (): Promise<void> => {
     try {
       await navigator.clipboard.writeText(displayLines.join("\n"));
-      setCopyStatus("Kopiert");
+      setCopyStatus(t("logs.copy.status_ok"));
     } catch (e) {
-      setCopyStatus(`Fehler: ${String(e)}`);
+      setCopyStatus(t("common.error_prefix", { message: String(e) }));
     }
     window.setTimeout(() => setCopyStatus(null), 2000);
   };
@@ -123,23 +125,27 @@ export default function Logs(): JSX.Element {
             onClick={togglePause}
             aria-pressed={paused}
           >
-            {paused ? "Pausiert ⏸" : "Live ⏵"}
+            {paused ? t("logs.toggle.paused") : t("logs.toggle.live")}
           </Button>
           {paused && missedCount > 0 ? (
             <span className="text-xs text-fg-faint">
-              +{missedCount} neue waehrend Pause
+              {t("logs.missed", { count: missedCount })}
             </span>
           ) : null}
         </div>
         <div className="flex items-center gap-2">
-          <div role="group" aria-label="Level-Filter" className="flex gap-1">
+          <div
+            role="group"
+            aria-label={t("logs.filter.group_label")}
+            className="flex gap-1"
+          >
             <Button
               variant={filter === "all" ? "secondary" : "ghost"}
               size="sm"
               onClick={() => setFilter("all")}
               aria-pressed={filter === "all"}
             >
-              Alle
+              {t("logs.filter.all")}
             </Button>
             <Button
               variant={filter === "warn" ? "secondary" : "ghost"}
@@ -147,7 +153,7 @@ export default function Logs(): JSX.Element {
               onClick={() => setFilter("warn")}
               aria-pressed={filter === "warn"}
             >
-              Warnungen
+              {t("logs.filter.warn")}
             </Button>
             <Button
               variant={filter === "error" ? "secondary" : "ghost"}
@@ -155,11 +161,11 @@ export default function Logs(): JSX.Element {
               onClick={() => setFilter("error")}
               aria-pressed={filter === "error"}
             >
-              Fehler
+              {t("logs.filter.error")}
             </Button>
           </div>
           <Button variant="ghost" size="sm" onClick={() => void handleCopy()}>
-            Kopieren
+            {t("logs.copy.action")}
           </Button>
           {copyStatus ? (
             <span
@@ -176,15 +182,15 @@ export default function Logs(): JSX.Element {
       {displayLines.length === 0 ? (
         <Banner tone="info" dense>
           {filter === "all"
-            ? "Noch keine Logs gesammelt."
-            : "Keine Eintraege fuer diesen Filter."}
+            ? t("logs.empty.all")
+            : t("logs.empty.filtered")}
         </Banner>
       ) : null}
       <pre
         ref={preRef}
         role="log"
         aria-live="polite"
-        aria-label="Log-Stream"
+        aria-label={t("logs.aria.stream")}
         className="bg-surface border border-outline rounded-md p-3 text-xs font-mono text-fg-muted overflow-auto flex-1 min-h-0"
       >
         {displayLines.join("\n")}

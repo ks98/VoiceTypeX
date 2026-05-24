@@ -2,6 +2,7 @@
 import { useState } from "react";
 import Button from "./Button";
 import { ipcTestAutoPaste } from "../lib/tauri";
+import { useT } from "../i18n";
 
 const DEFAULT_TEXT = "VoiceTypeX Auto-Paste-Test";
 const DELAY_SECS = 3;
@@ -12,6 +13,7 @@ const DELAY_SECS = 3;
  * fokussieren. Trennt das libei-Tippen vom Pipeline-Fokus-Race.
  */
 export default function AutoPasteTestSection() {
+  const t = useT();
   const [running, setRunning] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [lastResult, setLastResult] = useState<string | null>(null);
@@ -27,24 +29,27 @@ export default function AutoPasteTestSection() {
       }
       setCountdown(0);
       await ipcTestAutoPaste(text, 0);
-      setLastResult("Inject ausgeloest — Text sollte im Ziel-Fenster sein.");
+      setLastResult(t("autopaste.status.success"));
     } catch (e) {
-      setLastResult(`Fehler: ${e}`);
+      setLastResult(t("common.error_prefix", { message: String(e) }));
     } finally {
       setRunning(false);
     }
   };
 
+  const btnLabel = running
+    ? countdown > 0
+      ? t("autopaste.btn.countdown", { seconds: countdown })
+      : t("autopaste.btn.injecting")
+    : t("autopaste.btn.idle");
+
   return (
     <div className="rounded-md border border-outline bg-surface p-4">
       <h3 className="text-base font-semibold text-fg mb-2">
-        Auto-Paste-Test (Diagnose)
+        {t("autopaste.title")}
       </h3>
       <p className="text-sm text-fg-muted mb-3">
-        Klick startet einen {DELAY_SECS}-Sekunden-Countdown. Fokussiere in
-        dieser Zeit das Ziel-Fenster (Kate, Notepad, Browser-Adressleiste,
-        …). Danach wird der Text via Clipboard + Strg+V eingefügt — ohne
-        Audio-/STT-/LLM-Pipeline.
+        {t("autopaste.intro", { seconds: DELAY_SECS })}
       </p>
       <div className="flex flex-col gap-2">
         <input
@@ -58,11 +63,7 @@ export default function AutoPasteTestSection() {
           disabled={running || text.trim().length === 0}
           className="self-start"
         >
-          {running
-            ? countdown > 0
-              ? `Tippe in ${countdown} s … (jetzt Ziel-Fenster fokussieren)`
-              : "Inject läuft …"
-            : "Auto-Paste testen"}
+          {btnLabel}
         </Button>
         {lastResult && (
           <div className="text-xs text-fg-muted mt-1">{lastResult}</div>

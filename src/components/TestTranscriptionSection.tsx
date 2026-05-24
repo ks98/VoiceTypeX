@@ -7,10 +7,12 @@ import {
   type TestTranscriptionResult,
   type WhisperBackendInfo,
 } from "../lib/tauri";
+import { useT } from "../i18n";
 
 const TEST_DURATION = 5;
 
 export default function TestTranscriptionSection(): JSX.Element {
+  const t = useT();
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<TestTranscriptionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -45,34 +47,37 @@ export default function TestTranscriptionSection(): JSX.Element {
     }
   };
 
+  const btnLabel = running
+    ? countdown !== null
+      ? t("transcription_test.btn.recording", { seconds: countdown })
+      : t("transcription_test.btn.transcribing")
+    : t("transcription_test.btn.idle");
+
   return (
     <div className="flex flex-col gap-3 border border-outline rounded-md p-4 bg-surface">
       <div>
-        <h2 className="text-lg font-semibold text-fg">Test-Transkription</h2>
+        <h2 className="text-lg font-semibold text-fg">
+          {t("transcription_test.title")}
+        </h2>
         <p className="text-xs text-fg-faint mt-1">
-          Nimmt {TEST_DURATION} Sekunden Audio vom Default-Mikrofon auf,
-          transkribiert lokal mit dem konfigurierten Whisper-Modell, und meldet
-          den Real-Time-Factor (RTF). RTF &lt; 1 bedeutet schneller als
-          Echtzeit.
+          {t("transcription_test.intro", { seconds: TEST_DURATION })}
         </p>
         {backend ? (
           <div className="mt-2 text-xs text-fg-muted">
-            Aktives Backend:{" "}
+            {t("transcription_test.backend_label")}{" "}
             <span className="text-status-done font-mono">
               {backend.backend}
             </span>{" "}
-            (~{backend.expected_speedup.toFixed(1)}× ggü. CPU-Default).{" "}
+            {t("transcription_test.backend_speedup", {
+              factor: backend.expected_speedup.toFixed(1),
+            })}{" "}
             <span className="text-fg-faint">{backend.description}</span>
           </div>
         ) : null}
       </div>
       <div className="flex items-center gap-3">
         <Button onClick={() => void onRun()} disabled={running}>
-          {running
-            ? countdown !== null
-              ? `Aufnahme… ${countdown}`
-              : "Transkribiere…"
-            : "Test starten (5 s)"}
+          {btnLabel}
         </Button>
       </div>
       {error ? (
@@ -82,7 +87,9 @@ export default function TestTranscriptionSection(): JSX.Element {
         <div className="flex flex-col gap-2 text-sm">
           <div className="flex gap-4">
             <div>
-              <div className="text-xs text-fg-faint">RTF</div>
+              <div className="text-xs text-fg-faint">
+                {t("transcription_test.metric.rtf")}
+              </div>
               <div
                 className={
                   result.rtf < 1
@@ -94,22 +101,28 @@ export default function TestTranscriptionSection(): JSX.Element {
               </div>
             </div>
             <div>
-              <div className="text-xs text-fg-faint">Verarbeitungszeit</div>
+              <div className="text-xs text-fg-faint">
+                {t("transcription_test.metric.processing_time")}
+              </div>
               <div className="font-mono text-lg text-fg">
                 {(result.processing_ms / 1000).toFixed(1)} s
               </div>
             </div>
             <div>
-              <div className="text-xs text-fg-faint">Audio</div>
+              <div className="text-xs text-fg-faint">
+                {t("transcription_test.metric.audio")}
+              </div>
               <div className="font-mono text-lg text-fg">
                 {result.audio_seconds.toFixed(0)} s
               </div>
             </div>
           </div>
           <div>
-            <div className="text-xs text-fg-faint">Erkannter Text</div>
+            <div className="text-xs text-fg-faint">
+              {t("transcription_test.metric.recognized")}
+            </div>
             <div className="bg-elevated border border-outline rounded-md p-2 text-xs font-mono text-fg-muted mt-1">
-              {result.text || "(leer)"}
+              {result.text || t("transcription_test.empty_text")}
             </div>
           </div>
         </div>

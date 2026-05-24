@@ -1,34 +1,32 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { useUIStore } from "../store";
+import { useT } from "../i18n";
 import type { ThemeChoice } from "../lib/theme";
 
-const OPTIONS: { id: ThemeChoice; label: string; hint: string }[] = [
-  { id: "system", label: "System", hint: "Folgt dem Betriebssystem" },
-  { id: "light", label: "Hell", hint: "Helles Theme erzwingen" },
-  { id: "dark", label: "Dunkel", hint: "Dunkles Theme erzwingen" },
-];
+const THEME_IDS = ["system", "light", "dark"] as const satisfies readonly ThemeChoice[];
 
 export default function ThemeToggle(): JSX.Element {
+  const t = useT();
   const theme = useUIStore((s) => s.theme);
   const setTheme = useUIStore((s) => s.setTheme);
 
   return (
     <div className="inline-flex rounded-md border border-outline bg-surface overflow-hidden text-xs">
-      {OPTIONS.map((opt) => (
+      {THEME_IDS.map((id) => (
         <button
-          key={opt.id}
+          key={id}
           type="button"
-          onClick={() => setTheme(opt.id)}
-          title={opt.hint}
-          aria-pressed={theme === opt.id}
+          onClick={() => setTheme(id)}
+          title={t(`theme.${id}.hint`)}
+          aria-pressed={theme === id}
           className={
             "px-3 py-1.5 font-medium whitespace-nowrap leading-none transition-colors " +
-            (theme === opt.id
+            (theme === id
               ? "bg-brand text-brand-contrast"
               : "text-fg-muted hover:bg-elevated hover:text-fg")
           }
         >
-          {opt.label}
+          {t(`theme.${id}.label`)}
         </button>
       ))}
     </div>

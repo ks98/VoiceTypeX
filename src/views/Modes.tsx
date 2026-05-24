@@ -12,8 +12,10 @@ import ModeEditor from "../components/ModeEditor";
 import Button from "../components/Button";
 import Banner from "../components/Banner";
 import Loading from "../components/Loading";
+import { useT } from "../i18n";
 
 export default function Modes(): JSX.Element {
+  const t = useT();
   const modes = useModesStore((s) => s.modes);
   const loading = useModesStore((s) => s.loading);
   const error = useModesStore((s) => s.error);
@@ -48,7 +50,7 @@ export default function Modes(): JSX.Element {
   }, [load]);
 
   const onDelete = async (id: string, name: string) => {
-    if (!window.confirm(`Modus „${name}" wirklich loeschen?`)) {
+    if (!window.confirm(t("modes.confirm_delete", { name }))) {
       return;
     }
     try {
@@ -67,37 +69,38 @@ export default function Modes(): JSX.Element {
   };
 
   if (loading) {
-    return <Loading label="Lade Modi…" />;
+    return <Loading label={t("modes.loading")} />;
   }
   if (error) {
     return <Banner tone="error">{error}</Banner>;
   }
 
   const noHotkeys = session !== null && !session.global_hotkeys_supported;
+  const triggerLabel = t("modes.no_hotkeys.action_emphasis");
+  const noHotkeyServer = session?.display_server ?? "";
 
   return (
     <div className="flex flex-col gap-3">
       {noHotkeys ? (
         <Banner tone="warning">
-          <strong>Display-Server: {session?.display_server}.</strong> Globale
-          Hotkeys sind hier nicht verfügbar. Nutze die <em>Trigger</em>-Buttons
-          unten — sie starten/stoppen die Aufnahme. Der Text landet im
-          Clipboard
+          <strong>
+            {t("modes.no_hotkeys.server_label", { server: noHotkeyServer })}
+          </strong>{" "}
+          {t("modes.no_hotkeys.body_prefix")}{" "}
+          <em>{triggerLabel}</em>
           {session?.auto_paste_supported
-            ? "."
-            : " — danach drück Ctrl+V in der Ziel-App."}
+            ? t("modes.no_hotkeys.body_suffix_paste")
+            : t("modes.no_hotkeys.body_suffix_manual")}
         </Banner>
       ) : null}
       <div className="flex justify-between items-start gap-4">
         <p className="text-sm text-fg-muted max-w-3xl">
-          Modi werden in{" "}
+          {t("modes.intro_prefix")}{" "}
           <code className="text-brand font-mono">app_config_dir/modes/</code>{" "}
-          als TOML-Dateien gespeichert. UI-Änderungen schreiben dorthin; der
-          Hot-Reload-Watcher pickt sie auf. Du kannst die Dateien auch direkt
-          im Editor anfassen.
+          {t("modes.intro_suffix")}
         </p>
         <Button onClick={() => setShowNew(true)} className="shrink-0">
-          + Neuer Modus
+          {t("modes.new_button")}
         </Button>
       </div>
 
@@ -107,19 +110,19 @@ export default function Modes(): JSX.Element {
         <thead className="text-left text-fg-muted border-b border-outline">
           <tr>
             <th scope="col" className="py-2 font-medium">
-              Name
+              {t("modes.table.name")}
             </th>
             <th scope="col" className="py-2 font-medium">
-              STT
+              {t("modes.table.stt")}
             </th>
             <th scope="col" className="py-2 font-medium">
-              Nachbearbeitung
+              {t("modes.table.processing")}
             </th>
             <th scope="col" className="py-2 font-medium">
-              Inject
+              {t("modes.table.inject")}
             </th>
             <th scope="col" className="py-2 w-44">
-              <span className="sr-only">Aktionen</span>
+              <span className="sr-only">{t("modes.table.actions")}</span>
             </th>
           </tr>
         </thead>
@@ -133,7 +136,7 @@ export default function Modes(): JSX.Element {
                 <div className="font-medium text-fg">{m.name}</div>
                 {/* ID nur bei Hover sichtbar — der Power-User braucht sie zum Filename-Mapping, der normale User nicht. */}
                 <div className="text-xs text-fg-faint font-mono opacity-0 group-hover:opacity-100 transition-opacity">
-                  id: {m.id}
+                  {t("modes.row.id_label", { id: m.id })}
                 </div>
               </td>
               <td className="py-2 capitalize text-fg-muted">
@@ -157,9 +160,11 @@ export default function Modes(): JSX.Element {
                     size="sm"
                     onClick={() => void onTrigger(m.id)}
                     disabled={triggering !== null}
-                    title="Aufnahme starten/stoppen (Toggle)"
+                    title={t("modes.row.trigger_tooltip")}
                   >
-                    {triggering === m.id ? "…" : "Trigger"}
+                    {triggering === m.id
+                      ? t("modes.row.trigger_busy")
+                      : t("modes.row.trigger")}
                   </Button>
                   <span className="w-2" aria-hidden />
                   <Button
@@ -167,14 +172,14 @@ export default function Modes(): JSX.Element {
                     variant="secondary"
                     onClick={() => setEditing(m)}
                   >
-                    Edit
+                    {t("modes.row.edit")}
                   </Button>
                   <Button
                     size="sm"
                     variant="danger"
                     onClick={() => void onDelete(m.id, m.name)}
-                    aria-label={`Modus „${m.name}" löschen`}
-                    title={`Modus „${m.name}" löschen`}
+                    aria-label={t("modes.row.delete_aria", { name: m.name })}
+                    title={t("modes.row.delete_aria", { name: m.name })}
                   >
                     <TrashIcon />
                   </Button>
