@@ -221,7 +221,9 @@
 
   "api_keys.loading": "Lade Provider-Status …",
   "api_keys.title": "Cloud-API-Keys (BYOK)",
-  "api_keys.intro": "Keys werden im OS-Keychain gespeichert, nie im Klartext auf Disk oder in Logs. Die UI sieht nur, ob ein Key gesetzt ist.",
+  "api_keys.intro": "Keys werden in secrets.json (chmod 0600) abgelegt und at-rest verschlüsselt: DPAPI auf Windows, AES-256-GCM mit Keyring-KEK auf Linux. Die UI sieht nur, ob ein Key gesetzt ist; Logs enthalten nie Key-Material.",
+  "api_keys.encryption.encrypted": "Verschlüsselung at-rest aktiv ({method}).",
+  "api_keys.encryption.plain_warning": "ACHTUNG: kein OS-Keyring gefunden. Keys liegen unverschlüsselt mit Dateiberechtigungen 0600 auf der Festplatte. Installiere libsecret (gnome-keyring) oder kwallet und starte die App neu, um Verschlüsselung at-rest zu aktivieren.",
   "api_keys.provider.xai": "xAI (Grok + STT, ein Schlüssel)",
   "api_keys.provider.openai": "OpenAI (GPT + Whisper)",
   "api_keys.provider.anthropic": "Anthropic (Claude)",

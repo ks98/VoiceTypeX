@@ -51,6 +51,13 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # OS-Keychain (BYOK API-Keys, niemals im Klartext)
 keyring = "3"
 
+# Encryption-at-rest fuer die secrets.json. AES-256-GCM auf Linux mit
+# einem Random-KEK aus dem OS-Keyring (libsecret/kwallet). Windows nutzt
+# DPAPI direkt (siehe target-spezifische deps unten). macOS bleibt
+# vorerst out-of-scope (Stub mit klar gekennzeichneter Klartext-Warnung).
+aes-gcm = "0.10"
+base64 = "0.22"
+
 # Audio-Aufnahme (cpal) und WAV-IO (hound)
 cpal = "0.15"
 hound = "3.5"
@@ -101,6 +108,12 @@ notify = "6"
 
 # Cross-Plattform-Keystroke-Injection (Paste-Shortcut + Direct-Keystroke-Modus)
 enigo = "0.3"
+
+# DPAPI fuer das Secret-Storage auf Windows (CryptProtectData /
+# CryptUnprotectData). User-bound, machine-bound — Standardweg fuer
+# Cleartext-Krypto auf Desktop-Windows.
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.62", features = ["Win32_Security_Cryptography", "Win32_Foundation"] }
 
 # Wayland: xdg-desktop-portal (GlobalShortcuts + RemoteDesktop) via DBus.
 # Nur auf Linux gelinkt, weil sonst libdbus auf Windows/macOS Probleme macht.

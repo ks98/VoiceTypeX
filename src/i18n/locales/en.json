@@ -221,7 +221,9 @@
 
   "api_keys.loading": "Loading provider status…",
   "api_keys.title": "Cloud API keys (BYOK)",
-  "api_keys.intro": "Keys are stored in the OS keychain, never in plaintext on disk or in logs. The UI only sees whether a key is set.",
+  "api_keys.intro": "Keys are stored in secrets.json (chmod 0600) and encrypted at rest using DPAPI on Windows or AES-256-GCM with a keyring-resident KEK on Linux. The UI only sees whether a key is set; logs never contain key material.",
+  "api_keys.encryption.encrypted": "Encryption at rest is active ({method}).",
+  "api_keys.encryption.plain_warning": "WARNING: no OS keyring detected. Keys are stored as plaintext with file permissions 0600 only. Install libsecret (gnome-keyring) or kwallet and restart the app to enable encryption at rest.",
   "api_keys.provider.xai": "xAI (Grok + STT, one key)",
   "api_keys.provider.openai": "OpenAI (GPT + Whisper)",
   "api_keys.provider.anthropic": "Anthropic (Claude)",

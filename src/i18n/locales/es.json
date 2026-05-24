@@ -221,7 +221,9 @@
 
   "api_keys.loading": "Cargando estado de provider …",
   "api_keys.title": "Claves API cloud (BYOK)",
-  "api_keys.intro": "Las claves se guardan en el keychain del SO, nunca en texto plano en disco o en registros. La UI sólo ve si una clave está establecida.",
+  "api_keys.intro": "Las claves se guardan en secrets.json (chmod 0600) y se cifran en reposo: DPAPI en Windows, AES-256-GCM con una KEK del keyring en Linux. La UI solo ve si una clave está establecida; los registros nunca contienen material de claves.",
+  "api_keys.encryption.encrypted": "Cifrado en reposo activo ({method}).",
+  "api_keys.encryption.plain_warning": "ATENCIÓN: no se detectó ningún keyring del SO. Las claves se guardan en texto plano con permisos de archivo 0600 únicamente. Instala libsecret (gnome-keyring) o kwallet y reinicia la aplicación para activar el cifrado en reposo.",
   "api_keys.provider.xai": "xAI (Grok + STT, una clave)",
   "api_keys.provider.openai": "OpenAI (GPT + Whisper)",
   "api_keys.provider.anthropic": "Anthropic (Claude)",

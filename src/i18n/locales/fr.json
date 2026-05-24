@@ -221,7 +221,9 @@
 
   "api_keys.loading": "Chargement du statut des providers …",
   "api_keys.title": "Clés API cloud (BYOK)",
-  "api_keys.intro": "Les clés sont stockées dans le keychain du SE, jamais en clair sur le disque ou dans les journaux. L'interface ne voit que si une clé est définie.",
+  "api_keys.intro": "Les clés sont stockées dans secrets.json (chmod 0600) et chiffrées au repos : DPAPI sous Windows, AES-256-GCM avec une KEK du keyring sous Linux. L'interface ne voit que si une clé est définie ; les journaux ne contiennent jamais de matériel de clé.",
+  "api_keys.encryption.encrypted": "Chiffrement au repos actif ({method}).",
+  "api_keys.encryption.plain_warning": "ATTENTION : aucun keyring OS détecté. Les clés sont stockées en clair avec uniquement les permissions de fichier 0600. Installez libsecret (gnome-keyring) ou kwallet et redémarrez l'application pour activer le chiffrement au repos.",
   "api_keys.provider.xai": "xAI (Grok + STT, une seule clé)",
   "api_keys.provider.openai": "OpenAI (GPT + Whisper)",
   "api_keys.provider.anthropic": "Anthropic (Claude)",

@@ -7,6 +7,7 @@ import Loading from "./Loading";
 import {
   ipcDeleteProviderKey,
   ipcGetProviderStatus,
+  ipcIsSecretsEncryptedAtRest,
   ipcSetProviderKey,
   ipcTestProviderConnection,
   type ProviderStatus,
@@ -96,6 +97,13 @@ export default function ApiKeysSection(): JSX.Element {
   const [testStates, setTestStates] = useState<Record<string, TestState>>({});
   const [lastTested, setLastTested] = useState<Record<string, number>>({});
   const [now, setNow] = useState(() => Date.now());
+  const [encryptedAtRest, setEncryptedAtRest] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    ipcIsSecretsEncryptedAtRest()
+      .then(setEncryptedAtRest)
+      .catch(() => setEncryptedAtRest(null));
+  }, []);
 
   const refresh = async () => {
     setLoading(true);
@@ -182,6 +190,10 @@ export default function ApiKeysSection(): JSX.Element {
         <h2 className="text-lg font-semibold text-fg">{t("api_keys.title")}</h2>
         <p className="text-xs text-fg-faint mt-1">{t("api_keys.intro")}</p>
       </div>
+
+      {encryptedAtRest === false ? (
+        <Banner tone="error">{t("api_keys.encryption.plain_warning")}</Banner>
+      ) : null}
 
       {saveError ? <Banner tone="error">{saveError}</Banner> : null}
 

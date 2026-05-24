@@ -91,6 +91,7 @@ pub fn run() {
             ipc::secrets::set_provider_key,
             ipc::secrets::delete_provider_key,
             ipc::secrets::test_provider_connection,
+            ipc::secrets::is_secrets_encrypted_at_rest,
         ])
         .setup(move |app| {
             let app_handle = app.handle().clone();

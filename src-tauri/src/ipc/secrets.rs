@@ -27,6 +27,14 @@ pub struct ProviderStatus {
     pub error: Option<String>,
 }
 
+/// True when the secret store can encrypt at rest (Windows DPAPI or
+/// Linux AES-256-GCM with a keyring-resident KEK). False when running
+/// in the plain fallback, in which case the frontend renders a warning.
+#[tauri::command]
+pub async fn is_secrets_encrypted_at_rest() -> IpcResult<bool> {
+    Ok(crate::secrets::is_encrypted_at_rest().unwrap_or(false))
+}
+
 #[tauri::command]
 pub async fn get_provider_status() -> IpcResult<Vec<ProviderStatus>> {
     let mut out = Vec::with_capacity(PROVIDERS.len());

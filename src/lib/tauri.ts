@@ -226,6 +226,10 @@ export async function ipcGetProviderStatus(): Promise<ProviderStatus[]> {
   return invoke<ProviderStatus[]>("get_provider_status");
 }
 
+export async function ipcIsSecretsEncryptedAtRest(): Promise<boolean> {
+  return invoke<boolean>("is_secrets_encrypted_at_rest");
+}
+
 export async function ipcSetProviderKey(
   provider: string,
   key: string,
