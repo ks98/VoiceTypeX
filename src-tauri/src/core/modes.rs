@@ -213,10 +213,11 @@ impl Mode {
             }
         }
         if self.processing == ProcessingTarget::Local {
-            // Default-Engine ist "embedded" (siehe pipeline/mod.rs). Nur
-            // wenn der Modus explizit Ollama ausgewählt hat, ist ein
-            // Modell-Tag Pflicht — Embedded laeuft mit dem globalen
-            // `Settings.llm_default_slot` ohne weitere Pflicht-Konfig.
+            // The default engine is "embedded" (see pipeline/mod.rs).
+            // A model tag is only required when the mode explicitly
+            // selects Ollama — embedded runs with the global
+            // `Settings.llm_default_slot` and needs no further required
+            // config.
             let engine = self.local_engine.as_deref().unwrap_or("embedded");
             if engine == "ollama"
                 && self.ollama_model_tag.is_none()
@@ -266,24 +267,26 @@ impl Mode {
         Ok(())
     }
 
-    /// Migration: alte TOMLs (Phase 1/2, vor Embedded-Default-Switch).
+    /// Migration: old TOMLs (Phase 1/2, before the embedded-default
+    /// switch).
     ///
-    /// Zwei Faelle:
+    /// Two cases:
     ///
-    /// 1. **`local_llm_model` ohne `ollama_model_tag`**: kopiere den Wert
-    ///    nach `ollama_model_tag` (das ist die neue Pflicht-Schluessel-
-    ///    Position fuer den Ollama-Pfad).
+    /// 1. **`local_llm_model` without `ollama_model_tag`**: copy the
+    ///    value over to `ollama_model_tag` (the new required key
+    ///    position for the Ollama path).
     ///
-    /// 2. **`local_engine` nicht gesetzt + Indizien fuer Ollama-Konfig
-    ///    vorhanden** (`local_llm_model` oder `ollama_model_tag`): setze
-    ///    `local_engine = "ollama"` explizit. Sonst wuerde der neue Code-
-    ///    Default ("embedded", siehe `pipeline/mod.rs::run_local_processing`)
-    ///    den Modus auf Embedded umleiten — und ein Wert wie `"gemma3:4b"`
-    ///    ist ein Ollama-Tag, kein GGUF-Slot, was zu Lade-Fehlern fuehrt.
+    /// 2. **`local_engine` unset + indications of an Ollama config
+    ///    present** (`local_llm_model` or `ollama_model_tag`): set
+    ///    `local_engine = "ollama"` explicitly. Otherwise the new code
+    ///    default ("embedded", see
+    ///    `pipeline/mod.rs::run_local_processing`) would route the mode
+    ///    to embedded — and a value like `"gemma3:4b"` is an Ollama tag,
+    ///    not a GGUF slot, which would cause load errors.
     ///
-    /// Modi ohne jegliche Engine-Hinweise lassen wir unangetastet und der
-    /// Code-Default ("embedded") greift — das ist der gewuenschte Effekt
-    /// fuer neue/frische TOMLs ab dem Embedded-Default-Switch.
+    /// Modes without any engine hints are left untouched and the code
+    /// default ("embedded") wins — that is the desired effect for new
+    /// or fresh TOMLs from the embedded-default switch onwards.
     fn migrate_deprecated_fields(&mut self) {
         if self.ollama_model_tag.is_none() && self.local_llm_model.is_some() {
             let val = self.local_llm_model.clone();
@@ -381,7 +384,7 @@ impl ModesRegistry {
         })
     }
 
-    /// Aktuelle Modi-Liste (Snapshot).
+    /// Current modes list (snapshot).
     pub fn current(&self) -> Vec<Mode> {
         self.modes.read().clone()
     }

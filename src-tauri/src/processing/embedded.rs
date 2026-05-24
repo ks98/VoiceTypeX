@@ -74,7 +74,9 @@ impl LlamaEmbeddedProcessor {
         }
     }
 
-    /// Modell laden, wenn noch nicht geschehen. Idempotent.
+    /// Lazily loads the GGUF model into the llama-cpp-2 context.
+    /// Subsequent calls are no-ops thanks to the inner double-checked
+    /// lock — idempotent and safe to call before every `process()`.
     fn ensure_loaded(&self) -> Result<()> {
         if self.model.read().is_some() {
             return Ok(());

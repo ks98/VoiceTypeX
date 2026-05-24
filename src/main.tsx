@@ -15,8 +15,8 @@ import "./styles/globals.css";
 // OS-Theme-Wechsel, aber nur wenn die User-Wahl "system" ist.
 initTheme();
 subscribeSystemTheme(() => {
-  // Re-apply ist bereits im Listener selbst; hier nur als Hook für
-  // zukünftige Store-Synchronisation, falls nötig.
+  // Re-apply already happens in the listener itself; this is just a
+  // hook for future store synchronization, if needed.
 });
 
 const rootEl = document.getElementById("root");
@@ -36,20 +36,20 @@ const win = params.get("window");
 const view =
   win === "overlay" ? <Overlay /> : win === "menu" ? <Menu /> : <App />;
 
-// i18n-Bootstrap VOR React-Render: holt Settings.locale aus dem Backend
-// und setzt den Store. Backend hat beim ersten App-Start die OS-Locale
-// detected und persistiert (siehe lib.rs::run), darum bekommen wir hier
-// idR. einen konkreten Wert. IPC-Fehler werden geloggt; Render erfolgt
-// in jedem Fall (sonst haengt die App bei Backend-Crashes).
+// i18n bootstrap BEFORE React render: fetches Settings.locale from the
+// backend and sets the store. The backend detected and persisted the
+// OS locale on the first app start (see lib.rs::run), so we usually
+// get a concrete value here. IPC errors are logged; the render happens
+// in any case (otherwise the app would hang on backend crashes).
 //
-// Promise-Chain statt top-level-await: das Build-Target ist es2021
-// (vite.config.ts), und TLA ist erst ES2022. Tauri haelt die WebView-
-// Anforderungen bewusst konservativ.
-// Cross-window-Locale-Sync: jedes Webview-Fenster (main, overlay, menu)
-// abonniert "i18n://locale-changed". Wenn der User in Settings die
-// Sprache wechselt, wird das Event emittiert und alle drei Stores
-// werden lokal aktualisiert. Subscriber wird VOR dem Render registriert,
-// damit auch ein zeitlich knapp gleichzeitiges Event nicht verloren geht.
+// Promise chain instead of top-level await: the build target is es2021
+// (vite.config.ts), and TLA only landed in ES2022. Tauri keeps the
+// WebView requirements deliberately conservative.
+// Cross-window locale sync: every webview window (main, overlay, menu)
+// subscribes to "i18n://locale-changed". When the user switches the
+// language in settings, the event is emitted and all three stores are
+// updated locally. The subscriber is registered BEFORE the render so
+// that even a tightly-timed simultaneous event is not lost.
 void listen<{ locale: string }>("i18n://locale-changed", (event) => {
   const next = pickSupported(event.payload.locale);
   useI18nStore.setState({ locale: next });

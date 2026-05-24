@@ -84,9 +84,7 @@ impl Processor for OllamaProcessor {
         let status = response.status();
         if !status.is_success() {
             tracing::warn!(provider = "ollama", %status, "process call failed");
-            return Err(VoiceTypeError::Processing(format!(
-                "Ollama HTTP {status}"
-            )));
+            return Err(VoiceTypeError::Processing(format!("Ollama HTTP {status}")));
         }
 
         let parsed: OllamaChatResponse = response

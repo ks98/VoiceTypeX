@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Dünner Wrapper über Tauris invoke(), mit Fehler-Normalisierung
-// und IPC-Command-Namen als zentralem Punkt.
+// Thin wrapper around Tauri's invoke(), with error normalization and
+// IPC command names centralized in one place.
 
 import { invoke } from "@tauri-apps/api/core";
 import type { Mode, Settings } from "./types";
@@ -144,9 +144,10 @@ export async function ipcCleanPartialDownloads(): Promise<number> {
 }
 
 /**
- * Loescht alle Provider-API-Keys aus File-Storage **und** OS-Keychain.
- * Fehler einzelner Provider werden gesammelt — die Funktion rejected nur,
- * wenn mindestens einer fehlschlug, raeumt aber so viel wie moeglich.
+ * Deletes all provider API keys from file storage **and** the OS
+ * keychain. Errors from individual providers are collected — the
+ * function only rejects when at least one failed, but cleans up as much
+ * as possible.
  */
 export async function ipcResetApiKeys(): Promise<void> {
   return invoke("reset_api_keys");
@@ -161,10 +162,10 @@ export async function ipcResetWaylandToken(): Promise<void> {
 }
 
 /**
- * Vollständiger Werksreset: Provider-Keys, Wayland-Token, Modi (zurueck
- * auf die 6 Defaults) und Settings (JSON geloescht, In-Memory auf
- * Default). Heruntergeladene Modelle bleiben bewusst erhalten — siehe
- * `ipcDeleteAllModels` fuer den separaten Modell-Wipe.
+ * Full factory reset: provider keys, Wayland token, modes (back to the
+ * 6 defaults) and settings (JSON deleted, in-memory reset to default).
+ * Downloaded models are intentionally preserved — see
+ * `ipcDeleteAllModels` for the separate model wipe.
  */
 export async function ipcResetAppFactory(): Promise<void> {
   return invoke("reset_app_factory");

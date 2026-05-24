@@ -1,20 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Reset-IPC — kontrollierte Loeschoperationen fuer User-Daten.
+//! Reset IPC — controlled delete operations for user data.
 //!
-//! Drei Stufen, gestaffelt nach Tragweite:
+//! Three levels, ordered by impact:
 //!
-//! 1. `reset_api_keys` — alle Provider-Keys (File + Keychain).
-//! 2. `reset_wayland_token` — Wayland-Permission-Token; der naechste
-//!    Auto-Paste-Inject triggert wieder den `xdg-desktop-portal`-Dialog.
-//! 3. `reset_app_factory` — Settings, Modi (zurueck auf 6 Defaults),
-//!    Secrets, Wayland-Token. Modelle und der Models-Cache bleiben
-//!    bewusst erhalten (Re-Download waere fuer den User teuer).
+//! 1. `reset_api_keys` — all provider keys (file + keychain).
+//! 2. `reset_wayland_token` — Wayland permission token; the next
+//!    auto-paste inject re-triggers the `xdg-desktop-portal` dialog.
+//! 3. `reset_app_factory` — settings, modes (back to the 6 defaults),
+//!    secrets, Wayland token. Models and the models cache are
+//!    intentionally preserved (re-download would be expensive for the
+//!    user).
 //!
-//! Alle drei sind als Vorbereitung fuer eine Deinstallation gedacht;
-//! das eigentliche Loeschen der Files unter `~/.local/share/...` /
-//! `~/.config/...` macht weiterhin der OS-Paket-Manager oder das
-//! `scripts/uninstall-cleanup.sh`-Skript. Diese IPCs raeumen nur,
-//! was die laufende App selbst geschrieben hat.
+//! All three are meant as preparation for an uninstall; the actual
+//! deletion of files under `~/.local/share/...` / `~/.config/...` is
+//! still the job of the OS package manager or the
+//! `scripts/uninstall-cleanup.sh` script. These IPCs only clean up
+//! what the running app itself has written.
 
 use crate::core::config::Settings;
 use crate::core::default_modes::bootstrap_defaults_if_empty;
@@ -26,9 +27,9 @@ use std::sync::Arc;
 
 type IpcResult<T> = std::result::Result<T, String>;
 
-/// Loescht alle Provider-API-Keys aus File-Storage **und** OS-Keychain.
-/// Errors einzelner Provider sind nicht fatal — wir versuchen so viel zu
-/// loeschen wie geht und sammeln nur Fehler fuer das letzte Ergebnis.
+/// Deletes all provider API keys from file storage **and** the OS
+/// keychain. Errors from individual providers are not fatal — we delete
+/// as much as we can and only collect errors for the final result.
 #[tauri::command]
 pub async fn reset_api_keys() -> IpcResult<()> {
     let mut errors: Vec<String> = Vec::new();
@@ -47,9 +48,9 @@ pub async fn reset_api_keys() -> IpcResult<()> {
     }
 }
 
-/// Loescht die Wayland-Permission-Token-Datei. Effekt: der naechste
-/// Auto-Paste-Inject zeigt wieder den Portal-Permission-Dialog.
-/// Auf X11/Windows ist das ein No-Op (Datei existiert nie).
+/// Deletes the Wayland permission token file. Effect: the next
+/// auto-paste inject again shows the portal permission dialog. On
+/// X11/Windows this is a no-op (the file never exists).
 #[tauri::command]
 pub async fn reset_wayland_token(state: tauri::State<'_, Arc<AppContext>>) -> IpcResult<()> {
     let path = config_dir(&state)?.join("wayland_session.json");
@@ -62,17 +63,17 @@ pub async fn reset_wayland_token(state: tauri::State<'_, Arc<AppContext>>) -> Ip
     Ok(())
 }
 
-/// Vollständiger Werksreset:
-/// 1. Alle Provider-Keys raus.
-/// 2. Wayland-Token raus.
-/// 3. Alle `modes/*.toml`-Files raus, dann Defaults neu bootstrappen.
-/// 4. `settings.json` raus, in-memory-Settings auf Default.
+/// Full factory reset:
+/// 1. Remove all provider keys.
+/// 2. Remove the Wayland token.
+/// 3. Remove all `modes/*.toml` files, then re-bootstrap the defaults.
+/// 4. Remove `settings.json` and reset in-memory settings to default.
 ///
-/// Modelle (`~/.local/share/.../models/`) bleiben **unangetastet**.
-/// Re-Download waere fuer den User teuer (bis zu 10 GB GGUF).
+/// Models (`~/.local/share/.../models/`) stay **untouched**.
+/// Re-download would be expensive for the user (up to 10 GB GGUF).
 #[tauri::command]
 pub async fn reset_app_factory(state: tauri::State<'_, Arc<AppContext>>) -> IpcResult<()> {
-    // 1. Provider-Keys.
+    // 1. Provider keys.
     let mut accumulated_errors: Vec<String> = Vec::new();
     for &provider in PROVIDERS {
         if let Err(e) = SecretStore::delete(provider) {
@@ -82,7 +83,7 @@ pub async fn reset_app_factory(state: tauri::State<'_, Arc<AppContext>>) -> IpcR
 
     let cfg_dir = config_dir(&state)?;
 
-    // 2. Wayland-Token.
+    // 2. Wayland token.
     let token_path = cfg_dir.join("wayland_session.json");
     if token_path.exists() {
         if let Err(e) = std::fs::remove_file(&token_path) {
@@ -90,9 +91,9 @@ pub async fn reset_app_factory(state: tauri::State<'_, Arc<AppContext>>) -> IpcR
         }
     }
 
-    // 3. Modi: TOMLs raus, dann Defaults neu schreiben. Der notify-
-    // Watcher im AppContext.modes pickt die Aenderungen via Hot-Reload
-    // auf — kein expliziter In-Memory-Refresh hier noetig.
+    // 3. Modes: remove the TOMLs, then write the defaults back. The
+    // notify watcher in AppContext.modes picks up the changes via
+    // hot-reload — no explicit in-memory refresh needed here.
     if state.modes_dir.exists() {
         match std::fs::read_dir(&state.modes_dir) {
             Ok(entries) => {
@@ -123,9 +124,9 @@ pub async fn reset_app_factory(state: tauri::State<'_, Arc<AppContext>>) -> IpcR
         accumulated_errors.push(format!("bootstrap defaults: {e}"));
     }
 
-    // 4. Settings: File raus, In-Memory zurueck auf Default und sofort
-    // wieder rausschreiben, damit beim naechsten Start kein Lese-Fail
-    // entsteht (nicht-fatal, aber sauberer).
+    // 4. Settings: remove the file, reset in-memory back to default and
+    // immediately write it out again so the next start does not hit a
+    // read failure (non-fatal, but cleaner).
     let defaults = Settings::default();
     if state.settings_path.exists() {
         if let Err(e) = std::fs::remove_file(&state.settings_path) {
@@ -153,12 +154,13 @@ pub async fn reset_app_factory(state: tauri::State<'_, Arc<AppContext>>) -> IpcR
     }
 }
 
-/// Helper: aus `state.settings_path` den Config-Dir ableiten. Wir halten
-/// `config_dir` nicht extra im AppContext — `settings_path.parent()` ist
-/// per Konstruktion derselbe Pfad wie `app_config_dir()` in `lib.rs`.
+/// Helper: derive the config directory from `state.settings_path`. We
+/// don't keep `config_dir` separately in AppContext —
+/// `settings_path.parent()` is by construction the same path as
+/// `app_config_dir()` in `lib.rs`.
 fn config_dir(state: &Arc<AppContext>) -> IpcResult<&Path> {
     state
         .settings_path
         .parent()
-        .ok_or_else(|| format!("settings_path hat kein Parent: {:?}", state.settings_path))
+        .ok_or_else(|| format!("settings_path has no parent: {:?}", state.settings_path))
 }

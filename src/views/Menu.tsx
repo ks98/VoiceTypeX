@@ -101,7 +101,7 @@ export default function Menu(): JSX.Element {
         try {
           await ipcCancelMenu();
         } catch {
-          // ignorieren — Window wird im Zweifel beim nächsten Idle versteckt
+          // ignore — the window will be hidden on the next idle anyway
         }
       }
     },

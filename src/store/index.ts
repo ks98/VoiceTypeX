@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Zustand-Stores. Klein gehalten: ein Store pro Domäne, Side-Effects via
-// async Actions, keine Mittler-Schichten.
+// Zustand stores. Kept small: one store per domain, side effects via
+// async actions, no intermediate layers.
 
 import { create } from "zustand";
 import type { Mode, Settings } from "../lib/types";

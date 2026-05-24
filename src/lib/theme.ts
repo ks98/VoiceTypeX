@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Theme-Steuerung: System / Hell / Dunkel.
+// Theme control: system / light / dark.
 //
-// Die Wahl wird in localStorage persistiert. Anwendung erfolgt durch
-// Setzen/Entfernen der `dark`-Klasse auf <html> — Tailwind's
-// darkMode: "class" greift die Klasse auf. Foundation-Phase: Default
-// bleibt explizit "dark", damit nach dem Token-Refactor visuell nichts
-// kippt; Welle 2 ändert den Default auf "system" und exposed den
-// Toggle in den Settings.
+// The choice is persisted to localStorage. Applied by adding/removing
+// the `dark` class on <html> — Tailwind's darkMode: "class" picks up
+// the class. Foundation phase: the default stays explicitly "dark" so
+// nothing flips visually after the token refactor; wave 2 changes the
+// default to "system" and exposes the toggle in the settings.
 
 export type ThemeChoice = "system" | "light" | "dark";
 export type ResolvedTheme = "light" | "dark";
