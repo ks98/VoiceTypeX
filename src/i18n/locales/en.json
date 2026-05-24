@@ -430,5 +430,28 @@
   "mode_editor.llm_slot.gemma3_1b": "Gemma 3 1B-IT Q5_K_M (~851 MB, Light)",
   "mode_editor.llm_slot.gemma3_4b": "Gemma 3 4B-IT Q5_K_M (~2.8 GB, Legacy)",
   "mode_editor.llm_slot.llama32_1b": "Llama 3.2 1B-Instruct Q5_K_M (~912 MB, EN)",
-  "mode_editor.llm_slot.qwen25_15b": "Qwen 2.5 1.5B-Instruct Q5_K_M (~1.3 GB, code)"
+  "mode_editor.llm_slot.qwen25_15b": "Qwen 2.5 1.5B-Instruct Q5_K_M (~1.3 GB, code)",
+
+  "overlay.phase.recording": "Listening …",
+  "overlay.phase.transcribing": "Transcribing …",
+  "overlay.phase.postprocessing": "Processing …",
+  "overlay.phase.injecting": "Inserting …",
+  "overlay.phase.error_with_msg": "Error: {message}",
+  "overlay.phase.error_generic": "Error",
+  "overlay.error_tooltip_fallback": "Error — click for details",
+
+  "menu.title": "Choose mode",
+  "menu.kbd_hint": "↑ ↓ Enter · Esc",
+  "menu.focus_warning": "Click into the window if keys don't react.",
+  "menu.aria.offline": "fully offline",
+  "menu.aria.online": "needs network",
+  "menu.title_offline": "Fully offline",
+  "menu.title_online": "Cloud component — needs network",
+  "menu.aria.last_used": "last used",
+  "menu.title_last_used": "last used",
+  "menu.empty.intro": "No modes available — start with the 6 standard modes.",
+  "menu.empty.button_loading": "Loading …",
+  "menu.empty.button_load": "Load standard modes",
+  "menu.empty.hint_after_load": "No modes available — VoiceTypeX will create 6 standard modes on next restart.",
+  "menu.empty.hint_error": "Could not load modes: {message}"
 }

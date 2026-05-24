@@ -430,5 +430,28 @@
   "mode_editor.llm_slot.gemma3_1b": "Gemma 3 1B-IT Q5_K_M (~851 MB, Leggero)",
   "mode_editor.llm_slot.gemma3_4b": "Gemma 3 4B-IT Q5_K_M (~2,8 GB, Legacy)",
   "mode_editor.llm_slot.llama32_1b": "Llama 3.2 1B-Instruct Q5_K_M (~912 MB, EN)",
-  "mode_editor.llm_slot.qwen25_15b": "Qwen 2.5 1.5B-Instruct Q5_K_M (~1,3 GB, codice)"
+  "mode_editor.llm_slot.qwen25_15b": "Qwen 2.5 1.5B-Instruct Q5_K_M (~1,3 GB, codice)",
+
+  "overlay.phase.recording": "In ascolto …",
+  "overlay.phase.transcribing": "Trascrizione …",
+  "overlay.phase.postprocessing": "Elaborazione …",
+  "overlay.phase.injecting": "Inserimento …",
+  "overlay.phase.error_with_msg": "Errore: {message}",
+  "overlay.phase.error_generic": "Errore",
+  "overlay.error_tooltip_fallback": "Errore — clicca per dettagli",
+
+  "menu.title": "Scegli modalità",
+  "menu.kbd_hint": "↑ ↓ Invio · Esc",
+  "menu.focus_warning": "Clicca nella finestra se i tasti non rispondono.",
+  "menu.aria.offline": "completamente offline",
+  "menu.aria.online": "richiede rete",
+  "menu.title_offline": "Completamente offline",
+  "menu.title_online": "Componente cloud — richiede rete",
+  "menu.aria.last_used": "usato di recente",
+  "menu.title_last_used": "usato di recente",
+  "menu.empty.intro": "Nessuna modalità disponibile — inizia con le 6 modalità standard.",
+  "menu.empty.button_loading": "Caricamento …",
+  "menu.empty.button_load": "Carica modalità standard",
+  "menu.empty.hint_after_load": "Nessuna modalità disponibile — VoiceTypeX creerà 6 modalità standard al prossimo riavvio.",
+  "menu.empty.hint_error": "Impossibile caricare le modalità: {message}"
 }

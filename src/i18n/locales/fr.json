@@ -430,5 +430,28 @@
   "mode_editor.llm_slot.gemma3_1b": "Gemma 3 1B-IT Q5_K_M (~851 Mo, Léger)",
   "mode_editor.llm_slot.gemma3_4b": "Gemma 3 4B-IT Q5_K_M (~2,8 Go, Legacy)",
   "mode_editor.llm_slot.llama32_1b": "Llama 3.2 1B-Instruct Q5_K_M (~912 Mo, EN)",
-  "mode_editor.llm_slot.qwen25_15b": "Qwen 2.5 1.5B-Instruct Q5_K_M (~1,3 Go, code)"
+  "mode_editor.llm_slot.qwen25_15b": "Qwen 2.5 1.5B-Instruct Q5_K_M (~1,3 Go, code)",
+
+  "overlay.phase.recording": "Écoute …",
+  "overlay.phase.transcribing": "Transcription …",
+  "overlay.phase.postprocessing": "Traitement …",
+  "overlay.phase.injecting": "Insertion …",
+  "overlay.phase.error_with_msg": "Erreur : {message}",
+  "overlay.phase.error_generic": "Erreur",
+  "overlay.error_tooltip_fallback": "Erreur — cliquez pour plus de détails",
+
+  "menu.title": "Choisir un mode",
+  "menu.kbd_hint": "↑ ↓ Entrée · Échap",
+  "menu.focus_warning": "Cliquez dans la fenêtre si les touches ne répondent pas.",
+  "menu.aria.offline": "entièrement hors ligne",
+  "menu.aria.online": "réseau requis",
+  "menu.title_offline": "Entièrement hors ligne",
+  "menu.title_online": "Composante cloud — réseau requis",
+  "menu.aria.last_used": "dernièrement utilisé",
+  "menu.title_last_used": "dernièrement utilisé",
+  "menu.empty.intro": "Aucun mode disponible — commencez avec les 6 modes standards.",
+  "menu.empty.button_loading": "Chargement …",
+  "menu.empty.button_load": "Charger les modes standards",
+  "menu.empty.hint_after_load": "Aucun mode disponible — VoiceTypeX créera 6 modes standards au prochain redémarrage.",
+  "menu.empty.hint_error": "Impossible de charger les modes : {message}"
 }

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { listen, emit } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { useT, type TranslateFn } from "../i18n";
 
 type Phase =
   | "idle"
@@ -32,6 +33,7 @@ type PartialTranscriptPayload = { text: string };
  * Backend oder durch unseren lokalen Phase-Reset.
  */
 export default function Overlay(): JSX.Element {
+  const t = useT();
   const [phase, setPhase] = useState<Phase>("recording");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [partial, setPartial] = useState<string>("");
@@ -57,7 +59,7 @@ export default function Overlay(): JSX.Element {
     };
   }, []);
 
-  const meta = phaseMeta(phase, errorMsg);
+  const meta = phaseMeta(t, phase, errorMsg);
   const visiblePartial = truncateStart(partial, 65);
   const isError = phase === "error";
 
@@ -85,7 +87,7 @@ export default function Overlay(): JSX.Element {
             <button
               type="button"
               onClick={openLogsInMainWindow}
-              title={errorMsg ?? "Fehler — klicken fuer Details"}
+              title={errorMsg ?? t("overlay.error_tooltip_fallback")}
               className="flex-1 text-left text-fg text-sm leading-snug font-medium whitespace-normal break-words cursor-pointer hover:text-status-error focus:outline-none focus-visible:ring-2 focus-visible:ring-status-error/50 rounded"
             >
               {meta.label}
@@ -172,39 +174,45 @@ interface PhaseMeta {
   iconColor: string;
 }
 
-function phaseMeta(phase: Phase, errorMsg: string | null): PhaseMeta {
+function phaseMeta(
+  t: TranslateFn,
+  phase: Phase,
+  errorMsg: string | null,
+): PhaseMeta {
   switch (phase) {
     case "recording":
       return {
-        label: "Höre zu …",
+        label: t("overlay.phase.recording"),
         icon: <MicIcon />,
         iconBg: "bg-status-recording/15",
         iconColor: "text-status-recording",
       };
     case "transcribing":
       return {
-        label: "Transkribiere …",
+        label: t("overlay.phase.transcribing"),
         icon: <WaveIcon />,
         iconBg: "bg-brand/15",
         iconColor: "text-brand",
       };
     case "postprocessing":
       return {
-        label: "Verarbeite …",
+        label: t("overlay.phase.postprocessing"),
         icon: <SparkleIcon />,
         iconBg: "bg-status-processing/15",
         iconColor: "text-status-processing",
       };
     case "injecting":
       return {
-        label: "Füge ein …",
+        label: t("overlay.phase.injecting"),
         icon: <ArrowRightIcon />,
         iconBg: "bg-brand/15",
         iconColor: "text-brand",
       };
     case "error":
       return {
-        label: errorMsg ? `Fehler: ${errorMsg}` : "Fehler",
+        label: errorMsg
+          ? t("overlay.phase.error_with_msg", { message: errorMsg })
+          : t("overlay.phase.error_generic"),
         icon: <AlertIcon />,
         iconBg: "bg-status-error/15",
         iconColor: "text-status-error",
@@ -212,7 +220,7 @@ function phaseMeta(phase: Phase, errorMsg: string | null): PhaseMeta {
     case "idle":
     default:
       return {
-        label: "Höre zu …",
+        label: t("overlay.phase.recording"),
         icon: <MicIcon />,
         iconBg: "bg-status-recording/15",
         iconColor: "text-status-recording",

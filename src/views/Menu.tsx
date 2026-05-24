@@ -4,6 +4,7 @@ import { useModesStore, useSettingsStore } from "../store";
 import { ipcCancelMenu, ipcReloadModes, ipcStartRecording } from "../lib/tauri";
 import type { Mode } from "../lib/types";
 import Banner from "../components/Banner";
+import { useT, type TranslateFn } from "../i18n";
 
 /**
  * Modus-Auswahl-Menü.
@@ -20,6 +21,7 @@ import Banner from "../components/Banner";
  * die häufigste Aktion ein einzelner Enter-Druck ist.
  */
 export default function Menu(): JSX.Element {
+  const t = useT();
   const modes = useModesStore((s) => s.modes);
   const loadModes = useModesStore((s) => s.load);
   const settings = useSettingsStore((s) => s.settings);
@@ -118,18 +120,16 @@ export default function Menu(): JSX.Element {
       <div className="h-full w-full rounded-lg vtx-glass shadow-2xl flex flex-col overflow-hidden">
         <div className="px-4 py-2.5 border-b border-fg/10 flex items-center justify-between shrink-0">
           <span className="text-fg text-xs font-semibold tracking-wide uppercase">
-            Modus wählen
+            {t("menu.title")}
           </span>
           <span className="text-fg-faint text-xxs font-mono">
-            ↑ ↓ Enter · Esc
+            {t("menu.kbd_hint")}
           </span>
         </div>
         {focusWarning ? (
           <div className="px-3 py-2 shrink-0">
             <Banner tone="warning" dense>
-              <span className="text-xxs">
-                Klick ins Fenster, falls Tasten nicht reagieren.
-              </span>
+              <span className="text-xxs">{t("menu.focus_warning")}</span>
             </Banner>
           </div>
         ) : null}
@@ -140,6 +140,7 @@ export default function Menu(): JSX.Element {
             {modes.map((m, i) => (
               <ModeRow
                 key={m.id}
+                t={t}
                 mode={m}
                 active={i === cursor}
                 lastUsed={m.id === lastSelectedId}
@@ -161,6 +162,7 @@ export default function Menu(): JSX.Element {
 }
 
 function EmptyState(): JSX.Element {
+  const t = useT();
   const loadModes = useModesStore((s) => s.load);
   const [busy, setBusy] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
@@ -177,12 +179,10 @@ function EmptyState(): JSX.Element {
       const result = await ipcReloadModes();
       await loadModes();
       if (result.length === 0) {
-        setHint(
-          "Keine Modi vorhanden — VoiceTypeX legt beim nächsten Neustart 6 Standard-Modi an.",
-        );
+        setHint(t("menu.empty.hint_after_load"));
       }
     } catch (e) {
-      setHint(`Konnte Modi nicht laden: ${String(e)}`);
+      setHint(t("menu.empty.hint_error", { message: String(e) }));
     } finally {
       setBusy(false);
     }
@@ -190,16 +190,14 @@ function EmptyState(): JSX.Element {
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-3 px-6 py-4 text-center">
-      <p className="text-fg-muted text-sm">
-        Keine Modi vorhanden — leg los mit den 6 Standard-Modi.
-      </p>
+      <p className="text-fg-muted text-sm">{t("menu.empty.intro")}</p>
       <button
         type="button"
         onClick={() => void onReset()}
         disabled={busy}
         className="px-3 py-1.5 rounded-md bg-brand text-brand-contrast text-xs font-medium hover:bg-brand-hover disabled:opacity-50 transition-colors"
       >
-        {busy ? "Lade …" : "Standard-Modi laden"}
+        {busy ? t("menu.empty.button_loading") : t("menu.empty.button_load")}
       </button>
       {hint ? <p className="text-xxs text-fg-faint">{hint}</p> : null}
     </div>
@@ -207,11 +205,13 @@ function EmptyState(): JSX.Element {
 }
 
 function ModeRow({
+  t,
   mode,
   active,
   lastUsed,
   refCb,
 }: {
+  t: TranslateFn;
   mode: Mode;
   active: boolean;
   lastUsed: boolean;
@@ -237,8 +237,10 @@ function ModeRow({
         className={
           "shrink-0 inline-flex items-center justify-center h-7 w-7"
         }
-        aria-label={offline ? "vollständig offline" : "Netz nötig"}
-        title={offline ? "Vollständig offline" : "Cloud-Komponente — Netz nötig"}
+        aria-label={offline ? t("menu.aria.offline") : t("menu.aria.online")}
+        title={
+          offline ? t("menu.title_offline") : t("menu.title_online")
+        }
       >
         <span
           className={
@@ -261,8 +263,8 @@ function ModeRow({
           {lastUsed ? (
             <span
               className="shrink-0 inline-block h-[3px] w-[3px] rounded-full bg-brand"
-              aria-label="zuletzt verwendet"
-              title="zuletzt verwendet"
+              aria-label={t("menu.aria.last_used")}
+              title={t("menu.title_last_used")}
             />
           ) : null}
         </div>
