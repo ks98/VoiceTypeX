@@ -129,7 +129,7 @@ Details, Output-Pfade und Installations-Anleitung in
    herunterladen"*. Lädt das im `whisper_default_slot` konfigurierte
    Modell (Default ab Mai 2026: `ggml-large-v3-turbo-q8_0`, ~874 MB) plus
    Silero-VAD v6.2.0 (~885 kB) mit SHA-256-Verifikation aus Hugging Face
-   nach `app_data_dir/models/`. Existierende User mit Q5-Setup behalten
+   nach `app_config_dir/models/`. Existierende User mit Q5-Setup behalten
    Q5; nur frische Installs starten direkt mit Q8.
 4. **Optional — Cloud-STT/LLM einrichten:** Tab *Einstellungen* →
    *„Cloud-API-Keys (BYOK)"* → Key bei xAI / OpenAI / etc. einfügen.

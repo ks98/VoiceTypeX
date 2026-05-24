@@ -2,7 +2,7 @@
 //! Cache-Management — heruntergeladene Modelle und abgebrochene
 //! Downloads listen + loeschen.
 //!
-//! Scope bewusst eng: nur `app_data_dir/models/*`. Settings, Modes,
+//! Scope bewusst eng: nur `app_config_dir/models/*`. Settings, Modes,
 //! Secrets und der Wayland-Token sind keine "Cache"-Daten und werden
 //! ueber separate Reset-Flows gehandhabt (User-Daten, nicht
 //! regenerierbar).

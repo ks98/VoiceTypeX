@@ -303,10 +303,10 @@ export default function OnboardingWizard({
           <p className="text-sm text-fg-muted mt-1">
             {t("wizard.download.intro_prefix")}{" "}
             <code className="text-brand font-mono">
-              ggml-large-v3-turbo-q5_0.bin
+              ggml-large-v3-turbo-q8_0.bin
             </code>{" "}
             {t("wizard.download.intro_middle")}{" "}
-            <code className="text-brand font-mono">app_data_dir/models/</code>
+            <code className="text-brand font-mono">app_config_dir/models/</code>
             {t("wizard.download.intro_suffix")}
           </p>
           <p className="text-xs text-fg-faint mt-2">

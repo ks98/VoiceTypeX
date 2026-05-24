@@ -55,7 +55,7 @@ Gemeinsame Implementierung in `whisper_compatible.rs`:
 
 ### Deepgram
 
-- **Endpoint:** `POST https://api.deepgram.com/v1/listen?model=nova-2&language=…`
+- **Endpoint:** `POST https://api.deepgram.com/v1/listen?model=nova-3&language=…`
 - **Auth:** `Authorization: Token <api_key>` (**nicht** Bearer)
 - **Body:** Raw-Audio-Bytes (Content-Type passend zum WAV)
 - **Response:** `{ results: { channels: [ { alternatives: [ { transcript } ] } ] } }`

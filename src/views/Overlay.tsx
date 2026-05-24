@@ -115,15 +115,8 @@ export default function Overlay(): JSX.Element {
 
 /**
  * Klickt der User auf den Error-Text, holen wir das Main-Window in den
- * Vordergrund und signalisieren "Logs anzeigen" via Event. Das Event
- * muss in App.tsx abgehoert werden, um den activeTab auf "logs" zu
- * setzen — siehe TODO unten.
- *
- * TODO(app-logs-wiring): App.tsx hat keinen `app://focus-logs`-Listener.
- * Bis der nachgezogen ist, oeffnet der Klick nur das Hauptfenster — der
- * User muss dort manuell auf den Logs-Tab wechseln. Backend-IPC
- * `show_main_window_with_logs` existiert nicht (verifiziert in
- * src-tauri/src/lib.rs), darum nutzen wir die Frontend-Window-API.
+ * Vordergrund und signalisieren "Logs anzeigen" via Event. App.tsx hoert
+ * `app://focus-logs` ab und schaltet auf den Logs-Tab.
  */
 async function openLogsInMainWindow(): Promise<void> {
   try {

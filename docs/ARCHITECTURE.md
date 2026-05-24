@@ -73,8 +73,7 @@ Hotkey-Press
    ▼
 handle_menu_hotkey(app, ctx)
    │
-   ├─ State == Idle ─────────────► overlay.show() + overlay.set_focus()
-   │                                emit("app://menu/open")
+   ├─ State == Idle ─────────────► menu.show() + menu.set_focus()
    │                                Frontend zeigt Modus-Liste
    │                                User: ↑/↓, Enter, Esc
    │                                Enter → invoke("start_recording", {modeId})
@@ -215,7 +214,7 @@ Der WAV-Buffer geht direkt zu `Transcriber::transcribe_oneshot`.
   mit `temperature_inc=0.2` als Fallback bei `logprob_thold`-Reissern.
 
 **Silero-VAD v6.2.0:**
-- Pfad: `app_data_dir/models/ggml-silero-v6.2.0.bin` (~885 kB).
+- Pfad: `app_config_dir/models/ggml-silero-v6.2.0.bin` (~885 kB).
 - Wird beim ersten Whisper-Modell-Download als Best-effort
   mit-gezogen — fehlt das File, läuft Whisper transparent ohne VAD
   und loggt eine WARN-Zeile pro Aufruf.
@@ -332,7 +331,7 @@ löscht. Die State-Machine selbst ändert sich gegenüber Phase 1 nicht
   bei temperature == 0).
 - Modell-Pfad-Resolution: `Settings.llm_model_path` (Override) →
   `LlmModelSlot::from_setting(Settings.llm_default_slot).filename()`
-  unter `app_data_dir/models/`.
+  unter `app_config_dir/models/`.
 - AppContext: `local_llm_processor: Arc<LlamaEmbeddedProcessor>`,
   beim Start konstruiert, Modell wird LAZY geladen.
 - **Per-Mode-Slot-Override** via `Mode.embedded_llm_slot`: zeigt auf

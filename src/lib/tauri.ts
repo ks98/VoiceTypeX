@@ -106,7 +106,7 @@ export async function ipcGetHardwareReport(): Promise<HardwareReport> {
 
 /**
  * Lädt das in `Settings.llm_default_slot` gewählte GGUF-LLM-Modell nach
- * `app_data_dir/models/` herunter. Progress kommt als
+ * `app_config_dir/models/` herunter. Progress kommt als
  * `llm-model-download-progress`-Event (separat von Whisper-Progress).
  *
  * Returns: absoluter Pfad zum heruntergeladenen GGUF-File.
@@ -123,7 +123,7 @@ export interface CachedFile {
   size_bytes: number;
 }
 
-/** Listet alle Files im `app_data_dir/models/`-Cache. */
+/** Listet alle Files im `app_config_dir/models/`-Cache. */
 export async function ipcListCachedFiles(): Promise<CachedFile[]> {
   return invoke<CachedFile[]>("list_cached_files");
 }

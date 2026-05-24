@@ -149,7 +149,7 @@ erscheint im UI-Logs-View.
 Es gibt **genau einen** globalen Hotkey für die ganze App
 (Settings: `menu_hotkey`, Default `CommandOrControl+Alt+Space`):
 
-1. **`Idle` + Hotkey** → Overlay zeigt die Modus-Liste; `↑`/`↓` wählen,
+1. **`Idle` + Hotkey** → Menu-Window zeigt die Modus-Liste; `↑`/`↓` wählen,
    `Enter` startet die Aufnahme, `Esc` bricht ab. Der Cursor steht
    initial auf dem zuletzt gewählten Modus
    (`Settings.last_selected_mode_id`).
