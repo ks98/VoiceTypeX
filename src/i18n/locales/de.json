@@ -127,7 +127,7 @@
   "settings.hotkey.hint": "Genau ein Hotkey für die ganze App. Drückst du ihn, öffnet sich das Modus-Menü (Pfeile + Enter); während einer laufenden Aufnahme stoppt derselbe Hotkey das Recording. Änderungen wirken nach App-Neustart.",
 
   "settings.whisper.label": "Lokales Whisper-Modell",
-  "settings.whisper.hint": "Default-Slot wird beim ersten Start nach app_data_dir/models/ heruntergeladen. Eigener Pfad überschreibt das.",
+  "settings.whisper.hint": "Default-Slot wird beim ersten Start nach app_config_dir/models/ heruntergeladen. Eigener Pfad überschreibt das.",
   "settings.whisper.path_placeholder": "(Default-Modell aus Slot)",
   "settings.whisper.pick_file": "Datei wählen …",
   "settings.whisper.slot.q8": "large-v3-turbo-q8_0 (~874 MB, Default Mai 2026)",
@@ -165,8 +165,6 @@
   "settings.ollama.keep_alive.label": "Ollama Keep-Alive",
   "settings.ollama.keep_alive.hint": "Wie lange Ollama das Modell nach dem letzten Call im RAM/VRAM hält. Duration-String: „5m\" (Default), „0\" für sofortiges Unload, „-1\" für unbegrenzt warm.",
 
-  "settings.diagnostic_logging.label": "Diagnose-Logging",
-  "settings.diagnostic_logging.hint": "Erlaubt Audio-Metadata, Transkripte und LLM-Antworten in den Logs. Default OFF (Datenschutz).",
   "settings.autostart.label": "Beim Login automatisch starten",
   "settings.autostart.hint": "Default OFF. Tauri-Plugin-Autostart legt einen LaunchAgent bzw. Run-Eintrag an.",
 

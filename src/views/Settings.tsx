@@ -454,22 +454,6 @@ export default function Settings(): JSX.Element {
             title={t("settings.section.privacy_startup")}
           />
           <Field
-            label={t("settings.diagnostic_logging.label")}
-            hint={t("settings.diagnostic_logging.hint")}
-          >
-            <label className="flex items-center gap-2 text-sm text-fg">
-              <input
-                type="checkbox"
-                checked={settings.diagnostic_logging}
-                onChange={(e) =>
-                  void update({ diagnostic_logging: e.target.checked })
-                }
-              />
-              {t("common.enable")}
-            </label>
-          </Field>
-
-          <Field
             label={t("settings.autostart.label")}
             hint={t("settings.autostart.hint")}
           >

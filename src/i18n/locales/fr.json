@@ -127,7 +127,7 @@
   "settings.hotkey.hint": "Exactement un raccourci pour toute l'application. Une pression ouvre le menu des modes (flèches + Entrée) ; pendant un enregistrement en cours, le même raccourci l'arrête. Les modifications prennent effet après redémarrage.",
 
   "settings.whisper.label": "Modèle Whisper local",
-  "settings.whisper.hint": "Le slot par défaut est téléchargé dans app_data_dir/models/ au premier démarrage. Un chemin personnalisé le remplace.",
+  "settings.whisper.hint": "Le slot par défaut est téléchargé dans app_config_dir/models/ au premier démarrage. Un chemin personnalisé le remplace.",
   "settings.whisper.path_placeholder": "(modèle par défaut depuis le slot)",
   "settings.whisper.pick_file": "Choisir un fichier …",
   "settings.whisper.slot.q8": "large-v3-turbo-q8_0 (~874 Mo, défaut mai 2026)",
@@ -165,8 +165,6 @@
   "settings.ollama.keep_alive.label": "Keep-alive Ollama",
   "settings.ollama.keep_alive.hint": "Durée pendant laquelle Ollama garde le modèle en RAM/VRAM après le dernier appel. Chaîne de durée : « 5m » (défaut), « 0 » pour déchargement immédiat, « -1 » pour rester chaud indéfiniment.",
 
-  "settings.diagnostic_logging.label": "Journalisation diagnostique",
-  "settings.diagnostic_logging.hint": "Autorise les métadonnées audio, transcriptions et réponses LLM dans les journaux. Défaut OFF (confidentialité).",
   "settings.autostart.label": "Démarrer automatiquement à la connexion",
   "settings.autostart.hint": "Défaut OFF. Le plugin autostart de Tauri crée un LaunchAgent ou une entrée Run.",
 

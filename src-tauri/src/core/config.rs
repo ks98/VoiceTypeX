@@ -17,7 +17,7 @@ pub struct Settings {
     pub audio_input_device: Option<String>,
 
     /// Pfad zum lokalen Whisper-GGML-Modell. Leer = Default-Auswahl
-    /// (Datei laut `whisper_default_slot` aus app_data_dir/models/).
+    /// (Datei laut `whisper_default_slot` aus app_config_dir/models/).
     #[serde(default)]
     pub whisper_model_path: Option<String>,
 
@@ -32,11 +32,6 @@ pub struct Settings {
     /// - "large-v3-turbo" — F16, Power-User mit ueppigem VRAM.
     #[serde(default = "default_whisper_slot")]
     pub whisper_default_slot: String,
-
-    /// Diagnose-Logging — wenn true, Audio-Metadata, Transkripte und
-    /// LLM-Antworten in den Logs sichtbar machen. CLAUDE.md §8: Default OFF.
-    #[serde(default)]
-    pub diagnostic_logging: bool,
 
     /// Auto-Start beim System-Login. CLAUDE.md §8: Default OFF.
     #[serde(default)]
@@ -55,7 +50,7 @@ pub struct Settings {
     pub ollama_keep_alive: String,
 
     /// **Phase 3b — Embedded LLM**. Welcher GGUF-Slot wird beim ersten
-    /// Start nach `app_data_dir/models/` heruntergeladen, wenn ein Modus
+    /// Start nach `app_config_dir/models/` heruntergeladen, wenn ein Modus
     /// mit `local_engine = "embedded"` zum Einsatz kommt. Erlaubte Werte:
     /// - `"gemma3-1b-it-q5_k_m"` — **Default**, ~850 MB, passt auf 4-GB-RAM-
     ///   Geraete (Light-Tier).
@@ -156,7 +151,6 @@ impl Default for Settings {
             audio_input_device: None,
             whisper_model_path: None,
             whisper_default_slot: default_whisper_slot(),
-            diagnostic_logging: false,
             autostart: false,
             ollama_url: default_ollama_url(),
             ollama_keep_alive: default_ollama_keep_alive(),

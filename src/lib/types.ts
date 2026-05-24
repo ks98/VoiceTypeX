@@ -53,7 +53,6 @@ export interface Settings {
   audio_input_device: string | null;
   whisper_model_path: string | null;
   whisper_default_slot: string;
-  diagnostic_logging: boolean;
   autostart: boolean;
   ollama_url: string;
   /** Phase 1: Ollama-Duration-String ("5m", "0", "-1"). */
