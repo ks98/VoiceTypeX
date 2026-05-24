@@ -67,6 +67,9 @@ pub struct LlamaEmbeddedProcessor {
 }
 
 impl LlamaEmbeddedProcessor {
+    /// Constructs a processor pointing at `model_path`. The model is
+    /// not opened here — the first `process()` call triggers the lazy
+    /// load via `ensure_loaded`.
     pub fn new(model_path: PathBuf) -> Self {
         Self {
             model_path,

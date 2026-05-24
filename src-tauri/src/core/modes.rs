@@ -374,6 +374,8 @@ pub struct ModesRegistry {
 }
 
 impl ModesRegistry {
+    /// Loads every `*.toml` under `dir` and returns a registry holding
+    /// the snapshot. File watching is opt-in via `start_watching`.
     pub fn load(dir: PathBuf) -> Result<Self> {
         let modes = load_modes_from_dir(&dir)?;
         let (tx, _) = broadcast::channel(8);
@@ -389,10 +391,12 @@ impl ModesRegistry {
         self.modes.read().clone()
     }
 
+    /// Snapshot lookup by mode ID. Returns `None` if the ID is unknown.
     pub fn find_by_id(&self, id: &str) -> Option<Mode> {
         self.modes.read().iter().find(|m| m.id == id).cloned()
     }
 
+    /// Subscribes to hot-reload events emitted by `start_watching`.
     pub fn subscribe(&self) -> broadcast::Receiver<ModesEvent> {
         self.update_tx.subscribe()
     }
