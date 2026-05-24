@@ -103,7 +103,8 @@ pub async fn run_test_transcription(
         .transition(AppState::Recording)
         .map_err(|e| e.to_string())?;
 
-    let recorder = match RecorderHandle::start(RecorderConfig::default()) {
+    let device_name = state.settings.read().audio_input_device.clone();
+    let recorder = match RecorderHandle::start(RecorderConfig { device_name }) {
         Ok(r) => r,
         Err(e) => {
             let _ = state.state_bus.transition(AppState::Idle);

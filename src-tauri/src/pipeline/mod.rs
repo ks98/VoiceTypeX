@@ -140,7 +140,8 @@ async fn start_recording(app: &AppHandle, ctx: &Arc<AppContext>, mode: &Mode) ->
         tracing::warn!(error = %e, "Start cue failed (non-fatal)");
     }
 
-    let mut recorder = RecorderHandle::start(RecorderConfig::default()).inspect_err(|e| {
+    let device_name = ctx.settings.read().audio_input_device.clone();
+    let mut recorder = RecorderHandle::start(RecorderConfig { device_name }).inspect_err(|e| {
         // Bei Fehler State zurueck auf Idle, damit kein Deadlock entsteht.
         // active_mode auch raeumen, sonst sieht der Menue-Hotkey einen
         // veralteten Eintrag.
@@ -300,12 +301,7 @@ async fn streaming_worker(
                     if let Err(e) = emit_result {
                         tracing::warn!(error = %e, "Partial emit failed");
                     } else {
-                        tracing::info!(
-                            iteration,
-                            len = committed.len(),
-                            preview = %committed.chars().take(40).collect::<String>(),
-                            "Partial emittiert"
-                        );
+                        tracing::info!(iteration, len = committed.len(), "Partial emittiert");
                     }
                 }
                 prev_text = curr_text;
