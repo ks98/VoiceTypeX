@@ -24,7 +24,7 @@ pub async fn start_recording(
     let mode = state
         .modes
         .find_by_id(&mode_id)
-        .ok_or_else(|| format!("Modus '{mode_id}' nicht gefunden"))?;
+        .ok_or_else(|| format!("Mode '{mode_id}' not found"))?;
 
     // Auswahl als zuletzt-gewaehlt merken, damit der Cursor im Menue
     // beim naechsten Oeffnen direkt auf diesem Modus steht.
@@ -33,7 +33,7 @@ pub async fn start_recording(
         if settings.last_selected_mode_id.as_deref() != Some(&mode_id) {
             settings.last_selected_mode_id = Some(mode_id.clone());
             if let Err(e) = settings.save(&state.settings_path) {
-                tracing::warn!(error = %e, "Settings-Save (last_selected_mode_id) fehlgeschlagen");
+                tracing::warn!(error = %e, "Failed to persist last_selected_mode_id");
             }
         }
     }
@@ -64,7 +64,7 @@ pub async fn stop_recording(
     let mode = state
         .modes
         .find_by_id(&mode_id)
-        .ok_or_else(|| format!("Modus '{mode_id}' nicht gefunden"))?;
+        .ok_or_else(|| format!("Mode '{mode_id}' not found"))?;
     execute_mode(app, Arc::clone(&state), mode)
         .await
         .map_err(|e| e.to_string())
@@ -92,10 +92,10 @@ pub async fn run_test_transcription(
     seconds: u32,
 ) -> IpcResult<TestTranscriptionResult> {
     if seconds == 0 || seconds > 30 {
-        return Err("seconds muss zwischen 1 und 30 liegen".into());
+        return Err("seconds must be between 1 and 30".into());
     }
     if !matches!(state.state_bus.current(), AppState::Idle) {
-        return Err("Test ist nur im Idle-Zustand moeglich".into());
+        return Err("Test only possible in idle state".into());
     }
 
     state

@@ -88,7 +88,7 @@ pub async fn download_default_model(
     // auf "ohne VAD" zurueck und der User kriegt im Whisper-Log nur eine
     // WARN-Zeile. Wir wollen den Whisper-Download deswegen nicht killen.
     if let Err(e) = download_vad(VadModel::SileroV6_2_0, &dest_dir, |_| {}).await {
-        tracing::warn!(error = %e, "VAD-Modell-Download fehlgeschlagen, Whisper-Pfad ohne VAD");
+        tracing::warn!(error = %e, "VAD model download failed, Whisper path will run without VAD");
     }
 
     let app_for_progress = app.clone();

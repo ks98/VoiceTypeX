@@ -38,12 +38,12 @@ pub async fn reset_api_keys() -> IpcResult<()> {
         }
     }
     if errors.is_empty() {
-        tracing::info!("Alle Provider-API-Keys geloescht");
+        tracing::info!("All provider API keys deleted");
         Ok(())
     } else {
-        // Selbst bei Teil-Erfolgen melden wir Fehler — der User soll
-        // wissen, dass nicht alles geraeumt wurde.
-        Err(format!("Teil-Fehler beim Loeschen: {}", errors.join("; ")))
+        // Even on partial success we report errors — the user should
+        // know that not everything was cleaned up.
+        Err(format!("Partial delete error: {}", errors.join("; ")))
     }
 }
 
@@ -54,11 +54,11 @@ pub async fn reset_api_keys() -> IpcResult<()> {
 pub async fn reset_wayland_token(state: tauri::State<'_, Arc<AppContext>>) -> IpcResult<()> {
     let path = config_dir(&state)?.join("wayland_session.json");
     if !path.exists() {
-        tracing::info!(path = %path.display(), "Wayland-Token existiert nicht — No-Op");
+        tracing::info!(path = %path.display(), "Wayland token does not exist — no-op");
         return Ok(());
     }
     std::fs::remove_file(&path).map_err(|e| format!("remove {path:?}: {e}"))?;
-    tracing::info!(path = %path.display(), "Wayland-Token geloescht");
+    tracing::info!(path = %path.display(), "Wayland token deleted");
     Ok(())
 }
 
@@ -135,13 +135,13 @@ pub async fn reset_app_factory(state: tauri::State<'_, Arc<AppContext>>) -> IpcR
     }
 
     if accumulated_errors.is_empty() {
-        tracing::info!("Factory-Reset komplett — Settings, Modi, Secrets, Token zurueckgesetzt");
+        tracing::info!("Factory reset complete — settings, modes, secrets, token reset");
         Ok(())
     } else {
-        // Reset war Best-effort. Wir geben dem User den Status-Bericht
-        // zurueck, damit er entscheiden kann, ob er manuell nachhilft.
+        // Reset was best-effort. Return the status report so the user
+        // can decide whether to clean up manually.
         Err(format!(
-            "Reset mit Teil-Fehlern abgeschlossen: {}",
+            "Reset finished with partial errors: {}",
             accumulated_errors.join("; ")
         ))
     }

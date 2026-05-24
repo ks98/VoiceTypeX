@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Tray-Icon und -Menu.
+//! Tray icon and tray menu.
 //!
-//! Tray hat Kontextmenue mit "Einstellungen oeffnen" und "Beenden". Das Icon
-//! wird per StateBus-Subscriber live aktualisiert (siehe
-//! `pipeline::spawn_tray_state_listener`).
+//! The tray exposes a context menu with "Open settings" and "Quit". The
+//! icon is updated live by a StateBus subscriber (see
+//! `pipeline::spawn_tray_state_listener`). Menu labels are localized
+//! against the persisted `Settings.locale`; an in-flight locale change
+//! does NOT re-render the menu — the user has to restart the app for
+//! tray-menu labels to update. Trade-off: Tauri 2 has no public API to
+//! swap menu items at runtime without tearing down the whole tray.
 
 pub mod icon;
 
@@ -20,8 +24,8 @@ const ICON_PROCESSING: &[u8] = include_bytes!("../../icons/tray/processing.png")
 const ICON_DONE: &[u8] = include_bytes!("../../icons/tray/done.png");
 const ICON_ERROR: &[u8] = include_bytes!("../../icons/tray/error.png");
 
-/// Pulse-Variante des Recording-Icons (heller rot) — fuer Animation
-/// im Recording-State (CLAUDE.md DoD §6.1: "Tray-Icon pulsiert rot").
+/// Pulse variant of the recording icon (lighter red) for the recording
+/// animation (CLAUDE.md DoD §6.1: "tray icon pulses red").
 pub fn icon_bytes_recording_pulse() -> &'static [u8] {
     ICON_RECORDING_PULSE
 }
@@ -36,18 +40,59 @@ pub fn icon_bytes_for_state(state: &AppState) -> &'static [u8] {
     }
 }
 
-/// Baue Tray mit Icon und Kontextmenue. Wird in `lib.rs::run` waehrend
-/// `setup` aufgerufen.
-pub fn setup_tray(app: &AppHandle) -> Result<()> {
+struct TrayLabels {
+    open_settings: &'static str,
+    quit: &'static str,
+}
+
+/// Map BCP-47 locale prefix to tray labels. Backend-side i18n: tiny
+/// inline lookup to avoid pulling a full Rust-side i18n stack for two
+/// strings. Mirrors the supported set in `src/i18n/detect.ts`.
+fn labels_for_locale(raw_locale: Option<&str>) -> TrayLabels {
+    let prefix = raw_locale
+        .and_then(|s| s.split(['-', '_']).next())
+        .map(|s| s.to_ascii_lowercase())
+        .unwrap_or_default();
+    match prefix.as_str() {
+        "de" => TrayLabels {
+            open_settings: "Einstellungen öffnen",
+            quit: "Beenden",
+        },
+        "fr" => TrayLabels {
+            open_settings: "Ouvrir les paramètres",
+            quit: "Quitter",
+        },
+        "es" => TrayLabels {
+            open_settings: "Abrir ajustes",
+            quit: "Salir",
+        },
+        "it" => TrayLabels {
+            open_settings: "Apri impostazioni",
+            quit: "Esci",
+        },
+        // "en" and unknown locales fall back to English.
+        _ => TrayLabels {
+            open_settings: "Open settings",
+            quit: "Quit",
+        },
+    }
+}
+
+/// Build tray with icon and context menu. Called from `lib.rs::run`
+/// inside the `setup` hook. `locale` is the raw value from
+/// `Settings.locale` (may be `None` if first-run detection failed).
+pub fn setup_tray(app: &AppHandle, locale: Option<&str>) -> Result<()> {
+    let labels = labels_for_locale(locale);
+
     let item_open = MenuItem::with_id(
         app,
         "open_settings",
-        "Einstellungen oeffnen",
+        labels.open_settings,
         true,
         None::<&str>,
     )
     .map_err(|e| VoiceTypeError::Hotkey(format!("MenuItem 'open_settings': {e}")))?;
-    let item_quit = MenuItem::with_id(app, "quit", "Beenden", true, None::<&str>)
+    let item_quit = MenuItem::with_id(app, "quit", labels.quit, true, None::<&str>)
         .map_err(|e| VoiceTypeError::Hotkey(format!("MenuItem 'quit': {e}")))?;
 
     let menu = Menu::with_items(app, &[&item_open, &item_quit])
@@ -73,11 +118,10 @@ pub fn setup_tray(app: &AppHandle) -> Result<()> {
             }
             _ => {}
         })
-        // Linksklick auf das Tray-Icon zeigt das Hauptfenster — Standard-
-        // Erwartung in Tray-Apps. Hauptfenster ist initial versteckt
-        // (siehe tauri.conf.json `visible: false`), damit Plasma's
-        // globaler Hotkey-Trigger nicht das App-Fenster fokussiert und
-        // damit den User-Fokus auf der Ziel-App klaut.
+        // Left-click on the tray icon shows the main window — standard
+        // tray-app expectation. The main window starts hidden (see
+        // tauri.conf.json `visible: false`), so that Plasma's global-
+        // hotkey trigger doesn't steal focus from the target app.
         .on_tray_icon_event(|tray, event| {
             use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
             if let TrayIconEvent::Click {

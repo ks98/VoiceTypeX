@@ -27,7 +27,7 @@ pub async fn create_mode(state: tauri::State<'_, Arc<AppContext>>, mode: Mode) -
 
     let current = state.modes.current();
     if current.iter().any(|m| m.id == mode.id) {
-        return Err(format!("Modus mit id '{}' existiert bereits", mode.id));
+        return Err(format!("Mode with id '{}' already exists", mode.id));
     }
 
     let path = state
@@ -35,7 +35,7 @@ pub async fn create_mode(state: tauri::State<'_, Arc<AppContext>>, mode: Mode) -
         .join(format!("{}.toml", sanitize_id(&mode.id)));
     if path.exists() {
         return Err(format!(
-            "Datei {} existiert schon — entweder ID umbenennen oder via Update editieren",
+            "File {} already exists — rename the ID or edit via update",
             path.display()
         ));
     }
@@ -48,7 +48,7 @@ pub async fn update_mode(state: tauri::State<'_, Arc<AppContext>>, mode: Mode) -
 
     let current = state.modes.current();
     if !current.iter().any(|m| m.id == mode.id) {
-        return Err(format!("Modus '{}' existiert nicht", mode.id));
+        return Err(format!("Mode '{}' does not exist", mode.id));
     }
 
     let path = find_mode_file(&state.modes_dir, &mode.id).unwrap_or_else(|| {
@@ -61,8 +61,8 @@ pub async fn update_mode(state: tauri::State<'_, Arc<AppContext>>, mode: Mode) -
 
 #[tauri::command]
 pub async fn delete_mode(state: tauri::State<'_, Arc<AppContext>>, id: String) -> IpcResult<()> {
-    let path = find_mode_file(&state.modes_dir, &id)
-        .ok_or_else(|| format!("Modus '{id}' nicht gefunden"))?;
+    let path =
+        find_mode_file(&state.modes_dir, &id).ok_or_else(|| format!("Mode '{id}' not found"))?;
     std::fs::remove_file(&path).map_err(|e| format!("remove {path:?}: {e}"))
 }
 

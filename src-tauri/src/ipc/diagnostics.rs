@@ -65,10 +65,10 @@ pub async fn test_auto_paste(
     tracing::info!(
         delay_secs,
         text_len = text.len(),
-        "test_auto_paste: Countdown gestartet — bitte Ziel-Fenster fokussieren"
+        "test_auto_paste: countdown started — please focus the target window"
     );
     tokio::time::sleep(Duration::from_secs(delay_secs)).await;
-    tracing::info!("test_auto_paste: triggere Inject");
+    tracing::info!("test_auto_paste: triggering inject");
     state
         .injector
         .inject(

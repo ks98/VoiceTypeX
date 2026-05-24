@@ -181,22 +181,22 @@ impl Settings {
     /// loggt Warnings, App soll weiterlaufen.
     pub fn load_or_default(path: &Path) -> Self {
         if !path.exists() {
-            tracing::info!(path = %path.display(), "Settings-Datei nicht vorhanden — Defaults");
+            tracing::info!(path = %path.display(), "Settings file not present — using defaults");
             return Self::default();
         }
         match std::fs::read_to_string(path) {
             Ok(content) => match serde_json::from_str::<Settings>(&content) {
                 Ok(settings) => {
-                    tracing::info!(path = %path.display(), "Settings aus Disk geladen");
+                    tracing::info!(path = %path.display(), "Settings loaded from disk");
                     settings
                 }
                 Err(e) => {
-                    tracing::warn!(error = %e, "Settings-JSON-Parse fehlgeschlagen — nutze Defaults");
+                    tracing::warn!(error = %e, "Settings JSON parse failed — using defaults");
                     Self::default()
                 }
             },
             Err(e) => {
-                tracing::warn!(error = %e, "Settings-Read fehlgeschlagen — nutze Defaults");
+                tracing::warn!(error = %e, "Settings read failed — using defaults");
                 Self::default()
             }
         }
@@ -210,7 +210,7 @@ impl Settings {
         }
         let json = serde_json::to_string_pretty(self).map_err(|e| format!("json: {e}"))?;
         std::fs::write(path, json).map_err(|e| format!("write: {e}"))?;
-        tracing::debug!(path = %path.display(), "Settings auf Disk geschrieben");
+        tracing::debug!(path = %path.display(), "Settings written to disk");
         Ok(())
     }
 }

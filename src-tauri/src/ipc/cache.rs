@@ -83,18 +83,18 @@ pub async fn delete_cached_file(
     filename: String,
 ) -> IpcResult<u64> {
     if filename.contains('/') || filename.contains('\\') || filename.contains("..") {
-        return Err(format!("Ungueltiger Dateiname: {filename}"));
+        return Err(format!("Invalid filename: {filename}"));
     }
     let path = state.model_dir.join(&filename);
     if !path.exists() {
-        return Err(format!("Datei nicht vorhanden: {filename}"));
+        return Err(format!("File not present: {filename}"));
     }
     let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
     std::fs::remove_file(&path).map_err(|e| format!("remove_file({filename}): {e}"))?;
     tracing::info!(
         file = %filename,
         freed_bytes = size,
-        "Cache-File geloescht"
+        "Cache file deleted"
     );
     Ok(size)
 }
@@ -124,12 +124,12 @@ pub async fn delete_all_models(state: tauri::State<'_, Arc<AppContext>>) -> IpcR
         }
         let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
         if let Err(e) = std::fs::remove_file(&path) {
-            tracing::warn!(file = %filename, error = %e, "Loeschen fehlgeschlagen");
+            tracing::warn!(file = %filename, error = %e, "Delete failed");
             continue;
         }
         freed += size;
     }
-    tracing::info!(freed_bytes = freed, "Alle Modelle geloescht");
+    tracing::info!(freed_bytes = freed, "All models deleted");
     Ok(freed)
 }
 
@@ -156,12 +156,12 @@ pub async fn clean_partial_downloads(state: tauri::State<'_, Arc<AppContext>>) -
         }
         let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
         if let Err(e) = std::fs::remove_file(&path) {
-            tracing::warn!(file = %filename, error = %e, "Loeschen fehlgeschlagen");
+            tracing::warn!(file = %filename, error = %e, "Delete failed");
             continue;
         }
         freed += size;
     }
-    tracing::info!(freed_bytes = freed, "Partial-Downloads aufgeraeumt");
+    tracing::info!(freed_bytes = freed, "Partial downloads cleaned up");
     Ok(freed)
 }
 

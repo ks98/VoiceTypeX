@@ -34,7 +34,7 @@ pub async fn get_provider_status() -> IpcResult<Vec<ProviderStatus>> {
         let (configured, error) = match SecretStore::has(provider) {
             Ok(b) => (b, None),
             Err(e) => {
-                tracing::warn!(provider, error = %e, "Keychain-Backend-Fehler bei has()");
+                tracing::warn!(provider, error = %e, "Keychain backend error on has()");
                 (false, Some(e.to_string()))
             }
         };
@@ -50,10 +50,10 @@ pub async fn get_provider_status() -> IpcResult<Vec<ProviderStatus>> {
 #[tauri::command]
 pub async fn set_provider_key(provider: String, key: String) -> IpcResult<()> {
     if !PROVIDERS.contains(&provider.as_str()) {
-        return Err(format!("Unbekannter Provider: {provider}"));
+        return Err(format!("Unknown provider: {provider}"));
     }
     if key.trim().is_empty() {
-        return Err("API-Key darf nicht leer sein".into());
+        return Err("API key must not be empty".into());
     }
     SecretStore::set(&provider, key.trim()).map_err(|e| e.to_string())
 }
@@ -61,7 +61,7 @@ pub async fn set_provider_key(provider: String, key: String) -> IpcResult<()> {
 #[tauri::command]
 pub async fn delete_provider_key(provider: String) -> IpcResult<()> {
     if !PROVIDERS.contains(&provider.as_str()) {
-        return Err(format!("Unbekannter Provider: {provider}"));
+        return Err(format!("Unknown provider: {provider}"));
     }
     SecretStore::delete(&provider).map_err(|e| e.to_string())
 }
@@ -73,7 +73,7 @@ pub async fn delete_provider_key(provider: String) -> IpcResult<()> {
 pub async fn test_provider_connection(provider: String) -> IpcResult<()> {
     let key = SecretStore::get(&provider)
         .map_err(|e| e.to_string())?
-        .ok_or_else(|| format!("Kein API-Key fuer '{provider}' gesetzt"))?;
+        .ok_or_else(|| format!("No API key set for '{provider}'"))?;
 
     match provider.as_str() {
         "xai" => {
@@ -102,6 +102,6 @@ pub async fn test_provider_connection(provider: String) -> IpcResult<()> {
             .test_connection()
             .await
             .map_err(|e| e.to_string()),
-        other => Err(format!("Unbekannter Provider: {other}")),
+        other => Err(format!("Unknown provider: {other}")),
     }
 }

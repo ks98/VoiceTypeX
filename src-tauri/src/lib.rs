@@ -225,7 +225,9 @@ pub fn run() {
             app.manage(Arc::clone(&ctx));
 
             // Tray, Hotkeys, State-Listener
-            tray::setup_tray(&app_handle).map_err(|e| format!("setup_tray: {e}"))?;
+            let tray_locale = ctx.settings.read().locale.clone();
+            tray::setup_tray(&app_handle, tray_locale.as_deref())
+                .map_err(|e| format!("setup_tray: {e}"))?;
 
             // Hauptfenster X-Knopf soll verstecken statt beenden — sonst
             // hat der User nach Close nur noch das Tray-Icon. App laeuft
