@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Lokales STT via whisper.cpp (whisper-rs Bindings).
+//! Local STT via whisper.cpp (whisper-rs bindings).
 //!
-//! Architektur:
-//! - `WhisperContext` ist teuer zu erstellen (Modell-Datei laden, Quantisierung
-//!   in RAM dekomprimieren). Wir laden einmal pro Modellpfad und cachen ihn
-//!   hinter `Arc<RwLock<Option<WhisperContext>>>`.
-//! - whisper-rs ist nicht async; wir umhuellen den Aufruf mit
-//!   `tokio::task::spawn_blocking`, weil Transkription mehrere Sekunden CPU
-//!   braucht und wir die tokio-Runtime nicht blockieren wollen.
-//! - Eingabe ist 16 kHz Mono f32 (Whisper-Konvention). Wir nehmen WAV rein,
-//!   dekodieren mit hound, konvertieren zu f32 [-1, 1].
+//! Architecture:
+//! - `WhisperContext` is expensive to create (load model file,
+//!   decompress quantization into RAM). We load once per model path and
+//!   cache behind `Arc<RwLock<Option<WhisperContext>>>`.
+//! - whisper-rs is not async; we wrap the call in
+//!   `tokio::task::spawn_blocking`, because transcription needs several
+//!   seconds of CPU and we don't want to block the tokio runtime.
+//! - Input is 16 kHz mono f32 (Whisper convention). We take WAV in,
+//!   decode with hound, convert to f32 [-1, 1].
 
 use crate::core::error::{Result, VoiceTypeError};
 use crate::transcription::{TranscribeOpts, Transcriber};
@@ -21,32 +21,32 @@ use whisper_rs::{
     FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters, WhisperVadParams,
 };
 
-/// Welche Sampling- und Latenz-Charakteristik der aktuelle Pass haben soll.
-/// Steuert: Sampling-Strategie (Beam vs. Greedy), audio_ctx-Trick,
-/// Log-Verbosity.
+/// Which sampling and latency characteristic the current pass should
+/// have. Controls: sampling strategy (beam vs. greedy), `audio_ctx`
+/// trick, log verbosity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DecodeProfile {
-    /// Finaler Pass nach Stop-Hotkey — Quality first. BeamSearch (size=5),
-    /// kein audio_ctx-Trick. ~3x langsamer als Streaming, aber definitiver
-    /// Output.
+    /// Final pass after the stop hotkey — quality first. BeamSearch
+    /// (size=5), no `audio_ctx` trick. ~3x slower than streaming, but
+    /// the definitive output.
     Final,
-    /// Live-Pass waehrend der Aufnahme — Latenz first. Greedy-Sampling,
-    /// dynamischer audio_ctx (kuerzt den Mel-Encoder bei kurzem Audio).
-    /// Wird vom Streaming-Worker alle ~800 ms aufgerufen.
+    /// Live pass during recording — latency first. Greedy sampling,
+    /// dynamic `audio_ctx` (shortens the mel encoder on short audio).
+    /// Called by the streaming worker every ~800 ms.
     Streaming,
 }
 
-/// Whisper-Encoder verarbeitet immer eine 30-s-Mel-Spec mit 1500 Frames.
-/// Bei kuerzerem Audio koennen wir `audio_ctx` reduzieren — Whisper
-/// processiert dann effektiv nur die relevanten Frames.
+/// The Whisper encoder always processes a 30 s mel spec with 1500
+/// frames. For shorter audio we can reduce `audio_ctx` — Whisper then
+/// effectively processes only the relevant frames.
 ///
-/// Aggressive Defaults fuer CPU-only-Hardware: Untergrenze 256 Frames
-/// (5 s Kontext). Auf CPU+BLAS dominiert der Encoder die Latenz; ein
-/// kleinerer audio_ctx halbiert oder drittelt die Decode-Zeit. Ab 25 s
-/// Audio gibt's `None` zurueck, damit nichts abgeschnitten wird.
+/// Aggressive defaults for CPU-only hardware: lower bound 256 frames
+/// (5 s context). On CPU+BLAS the encoder dominates latency; a smaller
+/// `audio_ctx` halves or thirds the decode time. From 25 s audio we
+/// return `None` so nothing is truncated.
 ///
-/// 50 Frames/Sek. + 64 Frames Padding fuer Whisper's interne
-/// Token-Buffer-Reserve.
+/// 50 frames/sec + 64 frames padding for Whisper's internal token-buffer
+/// reserve.
 fn dynamic_audio_ctx_frames(samples_len_16k: usize) -> Option<i32> {
     let frames_estimate = ((samples_len_16k as f64 / 16_000.0) * 50.0).ceil() as i32 + 64;
     if frames_estimate >= 1250 {
@@ -58,10 +58,11 @@ fn dynamic_audio_ctx_frames(samples_len_16k: usize) -> Option<i32> {
 
 pub struct LocalTranscriber {
     model_path: PathBuf,
-    /// Optionaler Pfad auf das Silero-VAD-Modell. Wenn gesetzt UND die Datei
-    /// existiert, aktiviert `run_whisper_blocking` den whisper.cpp-Built-in-
-    /// VAD-Pfad. Fehlt die Datei (z.B. weil der Download noch nicht lief),
-    /// laeuft Whisper wie bisher ohne VAD und loggt einmalig eine Warnung.
+    /// Optional path to the Silero VAD model. If set AND the file
+    /// exists, `run_whisper_blocking` activates the whisper.cpp
+    /// built-in VAD path. If the file is missing (e.g. because the
+    /// download has not run yet), Whisper runs without VAD as before
+    /// and logs a one-time warning.
     vad_model_path: Option<PathBuf>,
     context: Arc<RwLock<Option<WhisperContext>>>,
 }
@@ -75,7 +76,7 @@ impl LocalTranscriber {
         }
     }
 
-    /// Lade das Modell, falls noch nicht geschehen. Idempotent.
+    /// Load the model if not already done. Idempotent.
     fn ensure_loaded(&self) -> Result<()> {
         if self.context.read().is_some() {
             return Ok(());
@@ -113,7 +114,7 @@ impl Transcriber for LocalTranscriber {
         let model_path = self.model_path.clone();
         let vad_model_path = self.vad_model_path.clone();
 
-        // ensure_loaded auf dem aktuellen Thread vor dem spawn_blocking.
+        // ensure_loaded on the current thread before spawn_blocking.
         self.ensure_loaded()?;
 
         let language = opts.language.clone();
@@ -138,15 +139,15 @@ impl Transcriber for LocalTranscriber {
 }
 
 impl LocalTranscriber {
-    /// Streaming-Pass: nimmt bereits konvertierte 16-kHz-Mono-f32-Samples,
-    /// laeuft mit Greedy + dynamischem audio_ctx, gibt den aktuellen Decode
-    /// als String zurueck. Idempotent — der WhisperContext bleibt zwischen
-    /// Aufrufen warm; nur der WhisperState (Decoder-Buffer) wird pro Pass
-    /// neu erstellt. VAD bleibt aktiv.
+    /// Streaming pass: takes already converted 16 kHz mono f32 samples,
+    /// runs with greedy + dynamic `audio_ctx`, returns the current
+    /// decode as a string. Idempotent — the `WhisperContext` stays warm
+    /// between calls; only the `WhisperState` (decoder buffer) is
+    /// recreated per pass. VAD stays active.
     ///
-    /// Wird vom Streaming-Worker (`pipeline/`) alle ~800 ms waehrend der
-    /// Aufnahme aufgerufen. Das Ergebnis geht durch LocalAgreement-2,
-    /// nur der stabile Prefix wird ins Overlay emittiert.
+    /// Called by the streaming worker (`pipeline/`) every ~800 ms
+    /// during recording. The result goes through LocalAgreement-2;
+    /// only the stable prefix is emitted to the overlay.
     pub async fn transcribe_streaming_pass(
         &self,
         samples: Vec<f32>,
@@ -179,10 +180,10 @@ impl LocalTranscriber {
     }
 }
 
-// 8 Argumente sind hier vertretbar, weil sie verschiedene Concerns
-// kapseln (Context, Audio, Sprache, Threads, Profile). Eine Konfig-
-// Struct waere nur "8 Argumente in einer anderen Verpackung" — der
-// Helper wird nur von zwei Stellen gerufen und ist privat.
+// 8 arguments are acceptable here because they encapsulate different
+// concerns (context, audio, language, threads, profile). A config
+// struct would just be "8 arguments in different packaging" — the
+// helper is called from only two places and is private.
 #[allow(clippy::too_many_arguments)]
 fn run_whisper_blocking(
     ctx: &Arc<RwLock<Option<WhisperContext>>>,
@@ -206,12 +207,14 @@ fn run_whisper_blocking(
         .create_state()
         .map_err(|e| VoiceTypeError::Transcription(format!("create_state: {e}")))?;
 
-    // Sampling-Wahl haengt am Profil:
-    // - Final: BeamSearch (size=5, patience=1.0) — ~2-3 % WER-Verbesserung
-    //   gegenueber Greedy, ~3x langsamer pro Decode-Step. OK fuer Oneshot.
-    // - Streaming: Greedy mit best_of=1 — schnellste Variante, weil
-    //   Partials sowieso ueberschrieben werden, sobald der naechste Pass
-    //   stabilen Prefix liefert. Quality wird im Final-Pass eingeholt.
+    // Sampling choice depends on the profile:
+    // - Final: BeamSearch (size=5, patience=1.0) — ~2-3 % WER
+    //   improvement over greedy, ~3x slower per decode step. OK for
+    //   oneshot.
+    // - Streaming: greedy with best_of=1 — fastest variant, because
+    //   partials are overwritten anyway as soon as the next pass
+    //   delivers a stable prefix. Quality is caught up in the final
+    //   pass.
     let sampling = match profile {
         DecodeProfile::Final => SamplingStrategy::BeamSearch {
             beam_size: 5,
@@ -225,9 +228,9 @@ fn run_whisper_blocking(
     params.set_print_realtime(false);
     params.set_print_timestamps(false);
 
-    // audio_ctx-Trick nur im Streaming-Profil: bei kurzem Audio (<30 s)
-    // kuerzt das den Mel-Encoder, ~2x Speedup. Bei langem Audio kein-op
-    // (None), damit nichts abgeschnitten wird.
+    // `audio_ctx` trick only in the streaming profile: on short audio
+    // (<30 s) this shortens the mel encoder, ~2x speedup. On long
+    // audio it's a no-op (None) so nothing is truncated.
     if profile == DecodeProfile::Streaming {
         if let Some(ctx_frames) = dynamic_audio_ctx_frames(samples.len()) {
             params.set_audio_ctx(ctx_frames);
@@ -235,19 +238,19 @@ fn run_whisper_blocking(
         }
     }
 
-    // Quality-Hardening:
-    // - suppress_blank: keine "leeren" Tokens am Segment-Anfang. Wichtig
-    //   vor allem fuer Streaming, schadet im Oneshot nicht.
-    // - no_speech_thold 0.6 **nur Final**: Segmente mit no_speech-Prob
-    //   > 0.6 fallen weg (verhindert Stille-Halluzinationen, additiv zu
-    //   VAD). Im Streaming wuerden zu viele unsichere Partials geskipped,
-    //   "single timestamp ending - skip entire chunk"-Falle — wir wollen
-    //   im Streaming AUCH unsichere Outputs sehen, weil sie spaeter eh
-    //   ueberschrieben werden.
-    // - temperature 0.0 fix + temperature_inc 0.2 als Fallback: wenn
-    //   logprob_thold (Default -1.0) reisst, dreht Whisper temperature
-    //   in 0.2er Schritten hoch und versucht erneut. Im Streaming ohne
-    //   temperature_inc, weil Fallback-Retries den Pass verdoppeln.
+    // Quality hardening:
+    // - suppress_blank: no "empty" tokens at the start of a segment.
+    //   Important especially for streaming, harmless in oneshot.
+    // - no_speech_thold 0.6 **final only**: segments with no_speech
+    //   prob > 0.6 are dropped (prevents silence hallucinations,
+    //   additive to VAD). In streaming this would skip too many
+    //   uncertain partials, the "single timestamp ending - skip
+    //   entire chunk" trap — in streaming we want to see uncertain
+    //   outputs TOO, because they get overwritten later anyway.
+    // - temperature 0.0 fixed + temperature_inc 0.2 as fallback: if
+    //   logprob_thold (default -1.0) trips, Whisper ramps temperature
+    //   in 0.2 steps and retries. In streaming without
+    //   temperature_inc, because fallback retries double the pass.
     params.set_suppress_blank(true);
     params.set_temperature(0.0);
     match profile {
@@ -256,14 +259,14 @@ fn run_whisper_blocking(
             params.set_temperature_inc(0.2);
         }
         DecodeProfile::Streaming => {
-            // no_speech_thold default (1.0 = nie skipped), kein temp_inc
+            // no_speech_thold default (1.0 = never skipped), no temp_inc
             params.set_temperature_inc(0.0);
         }
     }
 
-    // n_threads: User-Override aus Settings hat Vorrang. Sonst Auto-Detect
-    // via available_parallelism (logical cores), gedeckelt bei 8 wegen
-    // Memory-Bandwidth diminishing returns.
+    // n_threads: user override from settings takes precedence.
+    // Otherwise auto-detect via `available_parallelism` (logical cores),
+    // capped at 8 due to memory-bandwidth diminishing returns.
     let n_threads = n_threads_override.map(|n| n as usize).unwrap_or_else(|| {
         std::thread::available_parallelism()
             .map(|n| n.get())
@@ -284,15 +287,16 @@ fn run_whisper_blocking(
         params.set_initial_prompt(prompt);
     }
 
-    // VAD-Aktivierung (whisper.cpp Silero-Pfad). Defaults bewusst
-    // konservativer als upstream:
-    // - min_silence_duration 500 ms (vs. 100 ms): keine Mid-Sentence-Cuts
-    //   bei Diktaten mit kurzen Atempausen.
-    // - speech_pad 200 ms (vs. 30 ms): Puffer reicht fuer harte
-    //   Konsonanten-Onsets ("k", "t", "p"), die sonst geklippt wuerden.
-    // Wenn das VAD-Modell-File fehlt (z.B. weil der User noch keinen
-    // Download getriggert hat), faellt der Pfad lautlos auf "ohne VAD"
-    // zurueck — nur ein WARN-Log, kein Fehler.
+    // VAD activation (whisper.cpp Silero path). Defaults deliberately
+    // more conservative than upstream:
+    // - min_silence_duration 500 ms (vs. 100 ms): no mid-sentence cuts
+    //   on dictation with short breath pauses.
+    // - speech_pad 200 ms (vs. 30 ms): buffer is enough for hard
+    //   consonant onsets ("k", "t", "p") that would otherwise be
+    //   clipped.
+    // If the VAD model file is missing (e.g. because the user has not
+    // triggered the download yet), the path silently falls back to
+    // "no VAD" — only a WARN log, not an error.
     let vad_path_str: Option<&str> = vad_model_path.and_then(|p| {
         if p.exists() {
             p.to_str()
@@ -318,11 +322,12 @@ fn run_whisper_blocking(
         .full(params, samples)
         .map_err(|e| VoiceTypeError::Transcription(format!("whisper full: {e}")))?;
 
-    // whisper-rs 0.16: full_n_segments gibt direkt i32 zurueck (kein Result);
-    // get_segment(i) gibt Option<WhisperSegment> mit eigenen Text-Accessoren.
-    // to_str_lossy ersetzt ungueltige UTF-8-Bytes durch U+FFFD statt zu
-    // crashen — relevant, weil Whisper-Output gelegentlich Multi-Byte-
-    // Sequenzen an Segment-Grenzen zerschneidet.
+    // whisper-rs 0.16: `full_n_segments` returns i32 directly (no
+    // Result); `get_segment(i)` returns `Option<WhisperSegment>` with
+    // its own text accessors. `to_str_lossy` replaces invalid UTF-8
+    // bytes with U+FFFD instead of crashing — relevant because Whisper
+    // output occasionally cuts multi-byte sequences at segment
+    // boundaries.
     let n_segments = state.full_n_segments();
     let mut text = String::new();
     for i in 0..n_segments {
@@ -337,10 +342,9 @@ fn run_whisper_blocking(
     Ok(text.trim().to_string())
 }
 
-/// Lese WAV-Bytes → 16 kHz Mono f32-Samples. Akzeptiert auch andere
-/// Sample-Formate (i16, i32, f32) und konvertiert; lehnt aber falsche
-/// Sample-Rate oder Channel-Anzahl ab (das soll der Recorder bereits
-/// vorgegeben haben).
+/// Read WAV bytes → 16 kHz mono f32 samples. Also accepts other sample
+/// formats (i16, i32, f32) and converts; but rejects wrong sample rate
+/// or channel count (the recorder should already have set those).
 fn decode_wav_to_f32_mono_16k(wav_bytes: &[u8]) -> Result<Vec<f32>> {
     let cursor = std::io::Cursor::new(wav_bytes);
     let reader = hound::WavReader::new(cursor)

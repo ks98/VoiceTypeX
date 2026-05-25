@@ -5,14 +5,14 @@ interface FieldProps {
   label: string;
   hint?: string;
   /**
-   * Optionale ID. Wenn gesetzt:
-   * - `<label htmlFor={id}>` bindet das Label an das (erste) Input-Element
-   *   mit diesem `id`-Attribut.
-   * - Der Hint bekommt `id={`${id}-hint`}`; Inputs koennen `aria-describedby`
-   *   darauf setzen.
+   * Optional ID. When set:
+   * - `<label htmlFor={id}>` ties the label to the (first) input
+   *   element with this `id` attribute.
+   * - The hint gets `id={`${id}-hint`}`; inputs can set
+   *   `aria-describedby` to that.
    *
-   * Wenn nicht gesetzt, faellt das Label auf ein `<label>`-Element ohne
-   * Bindung zurueck — weiter funktionsfähig, aber schwächere A11y.
+   * If not set, the label falls back to a `<label>` element without
+   * binding — still functional, but weaker a11y.
    */
   htmlFor?: string;
   children: ReactNode;

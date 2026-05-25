@@ -115,9 +115,9 @@ export default function Overlay(): JSX.Element {
 }
 
 /**
- * Klickt der User auf den Error-Text, holen wir das Main-Window in den
- * Vordergrund und signalisieren "Logs anzeigen" via Event. App.tsx hoert
- * `app://focus-logs` ab und schaltet auf den Logs-Tab.
+ * When the user clicks the error text, we bring the main window to
+ * the front and signal "show logs" via an event. App.tsx listens to
+ * `app://focus-logs` and switches to the Logs tab.
  */
 async function openLogsInMainWindow(): Promise<void> {
   try {
@@ -128,16 +128,16 @@ async function openLogsInMainWindow(): Promise<void> {
     }
     await emit("app://focus-logs");
   } catch {
-    // Window-API kann auf restriktiven Capabilities scheitern — der User
-    // sieht in dem Fall weiter den vollen Fehlertext im Overlay (umbruch
-    // + title-Tooltip), das ist tolerabel.
+    // The window API can fail on restrictive capabilities — in that
+    // case the user still sees the full error text in the overlay
+    // (wrap + title tooltip), which is tolerable.
   }
 }
 
 /**
- * Wenn der Text laenger als `max` ist, zeig nur das Ende mit
- * Ellipsis am Anfang — fuehlt sich live an ("…was gerade gesagt wird"),
- * passt zur fest-breiten Overlay-Box ohne Umbruch.
+ * If the text is longer than `max`, show only the end with an
+ * ellipsis at the beginning — feels live ("…what is being said
+ * right now"), fits the fixed-width overlay box without wrapping.
  */
 function truncateStart(text: string, max: number): string {
   if (!text) return "";
@@ -146,11 +146,11 @@ function truncateStart(text: string, max: number): string {
 }
 
 /**
- * Ehrliche Recording-Status-LED. Pulsiert in 1.2s scale/opacity-Cycle —
- * eindeutig als LED-Indikator erkennbar, suggeriert (anders als der
- * frueher hier verwendete 3-Bar-Equalizer) keine Reaktion auf den
- * Audio-Pegel. Der echte Pegel ist im Renderer nicht verfuegbar; eine
- * IPC-Schiene dafuer waere ein eigenes Feature.
+ * Honest recording-status LED. Pulses on a 1.2s scale/opacity cycle
+ * — clearly identifiable as an LED indicator and (unlike the
+ * previously used 3-bar equalizer) does not suggest a response to
+ * the audio level. The actual level is not available in the
+ * renderer; an IPC channel for it would be its own feature.
  */
 function RecordingDot(): JSX.Element {
   return (

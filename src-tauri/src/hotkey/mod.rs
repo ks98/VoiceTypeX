@@ -22,10 +22,10 @@ pub mod linux_wayland;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HotkeyEventKind {
-    /// Hotkey wurde gedrueckt (KeyDown).
+    /// Hotkey was pressed (KeyDown).
     Pressed,
-    /// Hotkey wurde losgelassen (KeyUp). Auf Wayland nicht von allen
-    /// Compositors zuverlaessig geliefert.
+    /// Hotkey was released (KeyUp). On Wayland not reliably delivered
+    /// by all compositors.
     Released,
 }
 

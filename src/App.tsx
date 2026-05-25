@@ -22,8 +22,9 @@ export default function App(): JSX.Element {
     void loadSettings();
   }, [loadSettings]);
 
-  // Overlay sendet `app://focus-logs`, wenn der User auf einen Fehler im
-  // Recording-Overlay klickt. Wir wechseln dann automatisch in den Logs-Tab.
+  // The overlay emits `app://focus-logs` when the user clicks an
+  // error in the recording overlay. We then switch automatically to
+  // the Logs tab.
   useEffect(() => {
     let unlisten: UnlistenFn | null = null;
     void listen("app://focus-logs", () => setActiveTab("logs")).then((u) => {

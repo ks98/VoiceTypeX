@@ -1,37 +1,37 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! libei-Worker fuer Tastendruck-Simulation auf Wayland.
+//! libei worker for keypress simulation on Wayland.
 //!
-//! Wird vom `WaylandLibeiInjector` als dedizierter `std::thread` gespawnt,
-//! sobald die `RemoteDesktop`-Portal-Session aufgebaut und ein
-//! EIS-File-Descriptor verfuegbar ist (siehe `linux_wayland.rs`).
+//! Spawned by the `WaylandLibeiInjector` as a dedicated `std::thread`
+//! once the `RemoteDesktop` portal session is set up and an EIS file
+//! descriptor is available (see `linux_wayland.rs`).
 //!
-//! Architektur (siehe CLAUDE.md §11):
+//! Architecture (see CLAUDE.md §11):
 //!
 //! ```text
-//!   tokio (Hauptthread)              std::thread (Worker)
+//!   tokio (main thread)              std::thread (worker)
 //!   ─────────────────                 ──────────────────────
-//!   inject() / Strg+V Anfrage  ──>   poll-loop {
+//!   inject() / Ctrl+V request  ──>   poll-loop {
 //!                                       1) ei::Context::read() (non-block)
 //!                                          → server events
 //!                                       2) cmd_rx.try_recv()
 //!                                          → KeyCommand::CtrlV
-//!                                       3) wenn keymap+keyboard ready:
+//!                                       3) if keymap+keyboard ready:
 //!                                          send_ctrl_v(&context)
 //!                                       4) context.flush()
 //!                                       5) sleep 20 ms
 //!                                    }
 //! ```
 //!
-//! Warum manuell poll statt calloop:
-//! - calloop's Architektur trennt Sources hart, der Cmd-Handler haette
-//!   keinen Zugriff auf den `ei::Context` ohne Rc/RefCell-Tricks.
-//! - Eine simple Poll-Loop mit non-blocking FD ist robuster und einfacher
-//!   zu reasoning.
-//! - 20 ms Polling-Latenz ist gegenueber dem Compositor-Roundtrip
-//!   vernachlaessigbar.
+//! Why manual poll instead of calloop:
+//! - calloop's architecture separates sources strictly; the cmd handler
+//!   would have no access to the `ei::Context` without Rc/RefCell tricks.
+//! - A simple poll loop with a non-blocking FD is more robust and easier
+//!   to reason about.
+//! - 20 ms polling latency is negligible against the compositor
+//!   round-trip.
 //!
-//! Vorbild fuer den EI-Handshake-Ablauf: `examples/type-text.rs` aus
-//! github.com/ids1024/reis (gleiche Sequence: Handshake → Connection →
+//! Reference for the EI handshake flow: `examples/type-text.rs` from
+//! github.com/ids1024/reis (same sequence: Handshake → Connection →
 //! Seat → Device → Keyboard → start_emulating → key events → frame).
 
 use reis::{ei, PendingRequestResult};
@@ -43,18 +43,18 @@ use std::time::Duration;
 use tokio::sync::oneshot;
 use xkbcommon::xkb;
 
-/// Befehle, die der tokio-Hauptthread an den libei-Worker schickt.
+/// Commands the tokio main thread sends to the libei worker.
 #[derive(Debug)]
 pub enum KeyCommand {
-    /// Sende Ctrl+V (Press Ctrl, Press V, Release V, Release Ctrl).
+    /// Send Ctrl+V (press Ctrl, press V, release V, release Ctrl).
     CtrlV,
-    /// Worker sauber herunterfahren.
+    /// Shut down the worker cleanly.
     Shutdown,
 }
 
-/// Liste der Interfaces, die wir vom EI-Server anfordern. Versionen
-/// muessen mit dem Server matchen — `1` ist der aktuelle gemeinsame
-/// Nenner, mit dem libei 1.x interoperiert.
+/// List of interfaces we request from the EI server. Versions must
+/// match the server — `1` is the current common denominator that libei
+/// 1.x interoperates with.
 fn interfaces() -> HashMap<&'static str, u32> {
     let mut m = HashMap::new();
     m.insert("ei_callback", 1);
@@ -88,19 +88,18 @@ struct WorkerState {
     sequence: u32,
     last_serial: u32,
     keymap: Option<xkb::Keymap>,
-    /// Sobald wir ein keyboard-Device haben, das `Done` gemeldet hat,
-    /// landet es hier. Bis dahin koennen wir nicht tippen.
+    /// As soon as we have a keyboard device that reported `Done`, it
+    /// ends up here. Until then we cannot type.
     active_keyboard: Option<(ei::Device, ei::Keyboard)>,
-    /// Erst nach `Resumed`-Event darf der Server tatsaechlich Tipps
-    /// akzeptieren (Spec libei protocol.xml: "client bug to request
-    /// emulation on a device that is not resumed. The EIS implementation
-    /// may silently discard such events").
+    /// Only after a `Resumed` event may the server actually accept
+    /// typing (libei protocol.xml spec: "client bug to request emulation
+    /// on a device that is not resumed. The EIS implementation may
+    /// silently discard such events").
     keyboard_resumed: bool,
-    /// `start_emulating` wurde aufgerufen und kein `stop_emulating` /
-    /// kein `Paused` ist seitdem dazwischen gekommen. Nach lan-mouse-
-    /// Pattern: einmalig im `Resumed`-Handler aufrufen, dann persistent
-    /// halten — pro Strg+V nur noch keys + frame, kein neues
-    /// start_emulating.
+    /// `start_emulating` was called and no `stop_emulating` / `Paused`
+    /// has come in since then. Following the lan-mouse pattern: call
+    /// once in the `Resumed` handler, then keep persistent — per
+    /// Ctrl+V only keys + frame, no new `start_emulating`.
     emulation_active: bool,
     ready_tx: Option<oneshot::Sender<bool>>,
     pending_ctrl_v: bool,
@@ -123,10 +122,10 @@ impl WorkerState {
         }
     }
 
-    /// Antwort auf den initialen Handshake- und Discovery-Eventstrom des
-    /// Servers. Siehe `type-text.rs` fuer die Referenzimplementierung.
-    /// Diagnose-Logging an jedem Schritt, weil das Setup mehrstufig ist
-    /// und ohne Logs nicht nachvollziehbar.
+    /// Response to the server's initial handshake and discovery event
+    /// stream. See `type-text.rs` for the reference implementation.
+    /// Diagnostic logging at every step, because the setup is multi-
+    /// stage and not traceable without logs.
     fn handle_request(&mut self, request: ei::Event) {
         match request {
             ei::Event::Handshake(handshake, request) => match request {
@@ -216,12 +215,12 @@ impl WorkerState {
                         tracing::info!(serial, "libei: Device resumed — sender darf tippen");
                         self.last_serial = serial;
                         self.keyboard_resumed = true;
-                        // start_emulating einmalig nach lan-mouse-Pattern:
-                        // pro Resumed genau einmal, dann persistent. Wenn
-                        // ein Paused-Event kommt, setzen wir das zurueck
-                        // und der naechste Resumed startet eine neue
-                        // Emulations-Sequenz mit incrementiertem
-                        // sequence-Counter (Spec: monoton).
+                        // `start_emulating` once per the lan-mouse
+                        // pattern: exactly once per Resumed, then
+                        // persistent. If a Paused event arrives, we
+                        // reset and the next Resumed starts a new
+                        // emulation sequence with an incremented
+                        // sequence counter (spec: monotonic).
                         if !self.emulation_active {
                             if let Some((dev, _)) = &self.active_keyboard {
                                 let seq = self.sequence;
@@ -254,9 +253,9 @@ impl WorkerState {
                 },
             ) => {
                 let xkb_ctx = xkb::Context::new(0);
-                // SAFETY: `keymap` ist ein OwnedFd vom Server, `size` ist die
-                // korrekte Map-Groesse. Beides liefert reis aus dem Protokoll
-                // garantiert in passender Form.
+                // SAFETY: `keymap` is an `OwnedFd` from the server,
+                // `size` is the correct map size. reis delivers both
+                // from the protocol in a suitable form by guarantee.
                 let parsed = unsafe {
                     xkb::Keymap::new_from_fd(
                         &xkb_ctx,
@@ -280,22 +279,22 @@ impl WorkerState {
         }
     }
 
-    /// Sendet die Ctrl+V-Sequenz. Nur aufrufen, wenn `is_ready()` true
-    /// ist (Keyboard + Keymap + Resumed + Emulation aktiv via Resumed-
-    /// Handler). KEIN start_emulating/stop_emulating hier — die
-    /// Emulations-Session ist persistent ab erstem Resumed.
+    /// Send the Ctrl+V sequence. Only call when `is_ready()` is true
+    /// (keyboard + keymap + resumed + emulation active via the
+    /// `Resumed` handler). NO `start_emulating`/`stop_emulating` here —
+    /// the emulation session is persistent from the first Resumed.
     ///
-    /// **Wichtig:** wir geben `context` mit, um nach JEDEM Frame zu
-    /// flushen. Ohne flush sammelt reis alle vier `device.frame`-
-    /// Records im TX-Buffer und schickt sie als Buendel beim naechsten
-    /// Loop-Tick — KWin sieht sie dann zeitlich nahezu simultan im
-    /// Wire-Stream, egal wie schoen die `time_us`-Stempel auseinander
-    /// liegen. Mit per-Frame-flush + 1 ms Sleep simulieren wir den
-    /// Tastatur-Scan-Rhythmus (ca. 1 kHz).
+    /// **Important:** we pass `context` so we can flush after EVERY
+    /// frame. Without flush reis collects all four `device.frame`
+    /// records in the TX buffer and ships them as a bundle on the next
+    /// loop tick — KWin then sees them nearly simultaneously on the
+    /// wire stream, no matter how nicely the `time_us` stamps are
+    /// spaced. With per-frame flush + 1 ms sleep we simulate the
+    /// keyboard scan rhythm (around 1 kHz).
     ///
-    /// Vier Frames, einer pro Key-Transition. Jeder `device.frame` ist
-    /// ein "logical hardware event" (libei-Spec); das Pattern entspricht
-    /// dem, was lan-mouse produktiv nutzt.
+    /// Four frames, one per key transition. Each `device.frame` is one
+    /// "logical hardware event" (libei spec); the pattern matches what
+    /// lan-mouse uses in production.
     fn send_ctrl_v(&mut self, context: &ei::Context) {
         let Some((device, keyboard)) = &self.active_keyboard else {
             tracing::warn!("libei: send_ctrl_v ohne aktives Keyboard");
@@ -320,14 +319,14 @@ impl WorkerState {
         };
 
         let serial = self.last_serial;
-        // EI-Konvention: keycode minus 8 (XKB-Keycodes sind +8 zu Linux-
-        // Keycodes). Spec verlangt evdev-Keycodes (KEY_LEFTCTRL=29,
-        // KEY_V=47).
+        // EI convention: keycode minus 8 (XKB keycodes are +8 relative
+        // to Linux keycodes). Spec requires evdev keycodes
+        // (KEY_LEFTCTRL=29, KEY_V=47).
         let ctrl_evdev = ctrl_keycode - 8;
         let v_evdev = v_keycode - 8;
 
-        // Helfer: Frame schreiben + sofort flushen + kurz schlafen
-        // (Tastatur-Scan-Rhythmus simulieren).
+        // Helper: write the frame + flush immediately + briefly sleep
+        // (simulate the keyboard scan rhythm).
         let mut last_t = 0u64;
         let send_frame = |key: u32, state: ei::keyboard::KeyState, prev_t: u64| -> u64 {
             let t = monotonic_time_us().max(prev_t + 1);
@@ -355,9 +354,9 @@ impl WorkerState {
     }
 }
 
-/// Sucht im Keymap den Keycode, der ein gegebenes Keysym **ohne Modifier**
-/// erzeugt (Shift-Level 0). Fuer Ctrl- und v-Keys ist das die richtige
-/// Wahl.
+/// Searches the keymap for the keycode that produces a given keysym
+/// **without modifiers** (shift level 0). For the Ctrl and v keys this
+/// is the right choice.
 fn find_keycode(keymap: &xkb::Keymap, target: xkb::Keysym) -> Option<u32> {
     let min = keymap.min_keycode().raw();
     let max = keymap.max_keycode().raw();
@@ -370,34 +369,34 @@ fn find_keycode(keymap: &xkb::Keymap, target: xkb::Keysym) -> Option<u32> {
     None
 }
 
-/// Anker fuer CLOCK_MONOTONIC-Mikrosekunden. Wird beim Worker-Start
-/// initialisiert (siehe `run_libei_worker`), damit der erste `elapsed()`
-/// in `monotonic_time_us` nie 0 ist (Handshake + Discovery laufen davor,
-/// das sind viele Millisekunden).
+/// Anchor for CLOCK_MONOTONIC microseconds. Initialized at worker
+/// start (see `run_libei_worker`) so the first `elapsed()` in
+/// `monotonic_time_us` is never 0 (handshake + discovery run before
+/// that, which is many milliseconds).
 static MONOTONIC_ANCHOR: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
 
-/// CLOCK_MONOTONIC-Mikrosekunden fuer `frame(serial, time)`. EI-Spec
-/// verlangt monotonic — Rust's `Instant` ist auf Linux per Plattform-
-/// Garantie `CLOCK_MONOTONIC`. Compositoren (insbesondere KWin)
-/// vergleichen `time` gegen ihre eigene MONOTONIC-Uhr; wenn der Wert
-/// stark in der Vergangenheit oder Zukunft liegt (z.B. UNIX_EPOCH),
-/// kann das zu silent dropped Frames fuehren. Vorbild: lan-mouse.
+/// CLOCK_MONOTONIC microseconds for `frame(serial, time)`. The EI spec
+/// requires monotonic — Rust's `Instant` is `CLOCK_MONOTONIC` on Linux
+/// by platform guarantee. Compositors (especially KWin) compare `time`
+/// against their own MONOTONIC clock; if the value is strongly in the
+/// past or future (e.g. UNIX_EPOCH), this can cause silently dropped
+/// frames. Reference: lan-mouse.
 fn monotonic_time_us() -> u64 {
     let anchor = MONOTONIC_ANCHOR.get_or_init(std::time::Instant::now);
     anchor.elapsed().as_micros() as u64
 }
 
-/// Worker-Hauptschleife. Laeuft, bis `KeyCommand::Shutdown` empfangen wird
-/// oder der Sender geschlossen wird (z.B. App-Shutdown).
+/// Worker main loop. Runs until `KeyCommand::Shutdown` is received or
+/// the sender is closed (e.g. app shutdown).
 pub fn run_libei_worker(
     fd: OwnedFd,
     cmd_rx: mpsc::Receiver<KeyCommand>,
     ready_tx: oneshot::Sender<bool>,
 ) {
-    // CLOCK_MONOTONIC-Anker fruehzeitig initialisieren, damit beim ersten
-    // `frame()`-Aufruf `elapsed()` schon einige hundert Millisekunden
-    // (Handshake + Discovery) zurueckliefert — nicht 0, was manche
-    // Compositoren als ungueltig verwerfen wuerden.
+    // Initialize the CLOCK_MONOTONIC anchor early so on the first
+    // `frame()` call `elapsed()` already reports a few hundred
+    // milliseconds (handshake + discovery) — not 0, which some
+    // compositors would reject as invalid.
     let _ = monotonic_time_us();
 
     let stream = UnixStream::from(fd);
@@ -440,7 +439,7 @@ pub fn run_libei_worker(
     let setup_deadline = std::time::Instant::now() + Duration::from_secs(5);
 
     while state.running {
-        // 1. Server-Events lesen (non-blocking dank set_nonblocking)
+        // 1. Read server events (non-blocking thanks to set_nonblocking)
         match context.read() {
             Ok(_) => {}
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
@@ -461,7 +460,7 @@ pub fn run_libei_worker(
             }
         }
 
-        // 2. Cmds aus tokio-Seite pollen
+        // 2. Poll commands from the tokio side
         loop {
             match cmd_rx.try_recv() {
                 Ok(KeyCommand::CtrlV) => state.pending_ctrl_v = true,
@@ -474,7 +473,7 @@ pub fn run_libei_worker(
             }
         }
 
-        // 3. Pending Ctrl+V ausfuehren, wenn alles bereit ist
+        // 3. Execute pending Ctrl+V if everything is ready
         if state.pending_ctrl_v {
             if state.is_ready() {
                 state.send_ctrl_v(&context);
@@ -489,8 +488,8 @@ pub fn run_libei_worker(
             }
         }
 
-        // 4. Setup-Timeout: wenn nach 5 s noch kein Keyboard ready ist,
-        //    Failure signalisieren und beenden.
+        // 4. Setup timeout: if no keyboard is ready after 5 s, signal
+        //    failure and exit.
         if state.ready_tx.is_some() && std::time::Instant::now() > setup_deadline {
             tracing::warn!("libei: Setup-Timeout — kein Keyboard-Device innerhalb 5s ready");
             if let Some(tx) = state.ready_tx.take() {
@@ -504,8 +503,8 @@ pub fn run_libei_worker(
         std::thread::sleep(poll_interval);
     }
 
-    // Abschluss: ungesendetes Ready-Signal mit `false` quittieren, damit
-    // die tokio-Seite nicht haengt.
+    // Cleanup: acknowledge an unsent ready signal with `false` so the
+    // tokio side does not hang.
     if let Some(tx) = state.ready_tx.take() {
         let _ = tx.send(false);
     }

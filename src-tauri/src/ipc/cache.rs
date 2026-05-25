@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Cache-Management — heruntergeladene Modelle und abgebrochene
-//! Downloads listen + loeschen.
+//! Cache management — list and delete downloaded models and aborted
+//! downloads.
 //!
-//! Scope bewusst eng: nur `app_config_dir/models/*`. Settings, Modes,
-//! Secrets und der Wayland-Token sind keine "Cache"-Daten und werden
-//! ueber separate Reset-Flows gehandhabt (User-Daten, nicht
-//! regenerierbar).
+//! Scope is deliberately tight: only `app_config_dir/models/*`.
+//! Settings, modes, secrets and the Wayland token are not "cache"
+//! data and are handled via separate reset flows (user data, not
+//! regenerable).
 //!
-//! Klassifikation der Files erfolgt am Filename-Pattern:
-//! - `ggml-*.bin` → Whisper-Modell
-//! - `ggml-silero-*.bin` → VAD-Modell
-//! - `*.gguf` → LLM-Modell
-//! - `*.partial` → abgebrochener Download
-//! - sonst → "other" (z.B. manuell abgelegte Files)
+//! Files are classified by filename pattern:
+//! - `ggml-*.bin` → Whisper model
+//! - `ggml-silero-*.bin` → VAD model
+//! - `*.gguf` → LLM model
+//! - `*.partial` → aborted download
+//! - otherwise → "other" (e.g. files manually placed by the user)
 
 use crate::core::AppContext;
 use serde::Serialize;
@@ -69,14 +69,14 @@ pub async fn list_cached_files(
             size_bytes,
         });
     }
-    // Stabile Sortierung: Typ-Gruppe, dann Filename. Macht die UI
-    // vorhersagbar (alle Whispers zusammen, dann LLMs, etc.).
+    // Stable sort: type group, then filename. Makes the UI
+    // predictable (all Whispers grouped, then LLMs, etc.).
     out.sort_by(|a, b| a.kind.cmp(b.kind).then(a.filename.cmp(&b.filename)));
     Ok(out)
 }
 
-/// Loescht ein einzelnes File im model_dir. Pfad-Traversal-Schutz:
-/// `filename` darf keine Slashes oder `..` enthalten.
+/// Deletes a single file in `model_dir`. Path-traversal guard:
+/// `filename` must not contain slashes or `..`.
 #[tauri::command]
 pub async fn delete_cached_file(
     state: tauri::State<'_, Arc<AppContext>>,
@@ -99,8 +99,8 @@ pub async fn delete_cached_file(
     Ok(size)
 }
 
-/// Loescht alle Modell-Files (Whisper, VAD, LLM) plus Partials. Behaelt
-/// "other"-Files wie z.B. manuell vom User dort abgelegte Sachen.
+/// Deletes all model files (Whisper, VAD, LLM) plus partials. Keeps
+/// "other" files, e.g. things the user placed there manually.
 #[tauri::command]
 pub async fn delete_all_models(state: tauri::State<'_, Arc<AppContext>>) -> IpcResult<u64> {
     let model_dir = state.model_dir.clone();
@@ -133,7 +133,7 @@ pub async fn delete_all_models(state: tauri::State<'_, Arc<AppContext>>) -> IpcR
     Ok(freed)
 }
 
-/// Loescht ausschliesslich `*.partial`-Files (abgebrochene Downloads).
+/// Deletes only `*.partial` files (aborted downloads).
 #[tauri::command]
 pub async fn clean_partial_downloads(state: tauri::State<'_, Arc<AppContext>>) -> IpcResult<u64> {
     let model_dir = state.model_dir.clone();
@@ -173,7 +173,7 @@ mod tests {
     fn classify_recognizes_common_patterns() {
         assert_eq!(classify("ggml-large-v3-turbo-q8_0.bin"), "whisper");
         assert_eq!(classify("ggml-small-q5_1.bin"), "whisper");
-        assert_eq!(classify("ggml-model-q5_0.bin"), "whisper"); // primeline-DE
+        assert_eq!(classify("ggml-model-q5_0.bin"), "whisper"); // primeline DE
         assert_eq!(classify("ggml-silero-v6.2.0.bin"), "vad");
         assert_eq!(classify("gemma-4-E4B-it-Q5_K_M.gguf"), "llm");
         assert_eq!(classify("Llama-3.2-1B-Instruct-Q5_K_M.gguf"), "llm");

@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Geteilter HTTP-Client fuer alle OpenAI-Chat-Completions-kompatiblen
-//! Provider (xAI, OpenAI, perspektivisch andere wie Together, Mistral, …).
+//! Shared HTTP client for all OpenAI-Chat-Completions-compatible
+//! providers (xAI, OpenAI, prospectively others like Together,
+//! Mistral, …).
 //!
-//! Anforderungen ans API:
+//! API requirements:
 //!   POST {base_url}/chat/completions
 //!   Authorization: Bearer {api_key}
 //!   Body: { model, messages: [system, user], temperature?, max_tokens? }
@@ -31,7 +32,7 @@ impl OpenAICompatibleClient {
             base_url: base_url.into(),
             default_model: default_model.into(),
             api_key,
-            // 60 s Timeout deckt fast alle Chat-Completion-Anfragen ab.
+            // A 60 s timeout covers almost all chat-completion calls.
             client: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(60))
                 .build()
@@ -39,9 +40,9 @@ impl OpenAICompatibleClient {
         }
     }
 
-    /// Sende eine Chat-Completion mit System+User-Message und gib den
-    /// finalen `assistant`-Content zurueck. Retryt bei transienten Fehlern
-    /// (5xx, 429, Network) mit exponentiellem Backoff.
+    /// Send a chat completion with system + user message and return
+    /// the final `assistant` content. Retries on transient errors
+    /// (5xx, 429, network) with exponential backoff.
     pub async fn complete(
         &self,
         transcript: &str,
@@ -98,8 +99,8 @@ impl OpenAICompatibleClient {
         .await
     }
 
-    /// Pruefe Verbindung und Auth via `GET /models` — preiswertester
-    /// Endpoint, den OpenAI-kompatible Provider unterstuetzen.
+    /// Check connectivity and auth via `GET /models` — the cheapest
+    /// endpoint that OpenAI-compatible providers support.
     pub async fn test_connection(&self) -> Result<()> {
         let url = format!("{}/models", self.base_url.trim_end_matches('/'));
         let response = self

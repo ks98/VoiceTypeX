@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! LLM-Nachbearbeitung: nimmt das rohe Transkript und den modusspezifischen
-//! System-Prompt, gibt den finalen Text zurueck.
+//! LLM post-processing: takes the raw transcript and the
+//! mode-specific system prompt, returns the final text.
 
 use crate::core::error::Result;
 use async_trait::async_trait;
@@ -13,8 +13,8 @@ use crate::core::error::VoiceTypeError;
 use crate::secrets::SecretStore;
 use std::sync::Arc;
 
-/// Factory: liefert den passenden Cloud-Processor fuer einen Provider.
-/// xAI nutzt denselben Keychain-Eintrag fuer STT und LLM (CLAUDE.md §4.4).
+/// Factory: returns the matching cloud processor for a provider. xAI
+/// uses the same keychain entry for STT and LLM (CLAUDE.md §4.4).
 pub fn make_cloud_processor(provider: &str) -> Result<Arc<dyn Processor>> {
     let key = SecretStore::get(provider)?.ok_or_else(|| {
         VoiceTypeError::Processing(format!(
@@ -31,11 +31,11 @@ pub fn make_cloud_processor(provider: &str) -> Result<Arc<dyn Processor>> {
     }
 }
 
-/// Factory: liefert den lokalen Ollama-Processor.
-/// `keep_alive` ist der Ollama-Duration-String (z.B. `"5m"`, `"0"`, `"-1"`)
-/// und wird pro Request mitgeschickt — damit kann der Caller Memory-Pressure
-/// pro Aufruf steuern (z.B. `"0"` auf 8-GB-Geraeten fuer sofortiges Unload
-/// nach dem Cleanup-Pass).
+/// Factory: returns the local Ollama processor. `keep_alive` is the
+/// Ollama duration string (e.g. `"5m"`, `"0"`, `"-1"`) and is sent
+/// with every request — so the caller can drive memory pressure per
+/// call (e.g. `"0"` on 8 GB devices for immediate unload after the
+/// cleanup pass).
 pub fn make_local_processor(
     ollama_url: String,
     default_model: String,
@@ -52,10 +52,10 @@ pub fn make_local_processor(
 pub struct ProcessOpts {
     pub model: Option<String>,
     pub temperature: Option<f32>,
-    /// Nucleus-Sampling-Cutoff. `None` = Provider-Default.
+    /// Nucleus-sampling cutoff. `None` = provider default.
     pub top_p: Option<f32>,
-    /// Wiederholungs-Penalty (>= 1.0). Werte 1.0-1.1 sind sicher;
-    /// hoeher fuehrt zu unnatuerlichen Umformulierungen.
+    /// Repetition penalty (>= 1.0). Values 1.0-1.1 are safe; higher
+    /// leads to unnatural rephrasings.
     pub repeat_penalty: Option<f32>,
     pub max_tokens: Option<u32>,
     pub language: Option<String>,

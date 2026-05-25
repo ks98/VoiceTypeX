@@ -7,10 +7,10 @@ import { useT } from "../i18n";
 
 type LevelFilter = "all" | "warn" | "error";
 
-// Log-Zeilen kommen aus dem Rust-Ringbuffer im Format
-// `[LEVEL] target - message`, wobei LEVEL auf 5 Zeichen
-// padded ist (z.B. `INFO `). Wir extrahieren das Level
-// fuer den Filter direkt am Zeilenanfang.
+// Log lines come from the Rust ring buffer in the format
+// `[LEVEL] target - message`, where LEVEL is padded to 5 chars
+// (e.g. `INFO `). We extract the level for the filter directly at
+// the start of the line.
 function extractLevel(line: string): string | null {
   if (line.length < 7 || line[0] !== "[") return null;
   const close = line.indexOf("]");
@@ -36,10 +36,10 @@ export default function Logs(): JSX.Element {
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
 
   const preRef = useRef<HTMLPreElement | null>(null);
-  // Auto-Scroll-Heuristik: Vor jedem Append pruefen, ob User
-  // noch am Ende klebt. Wir merken uns das *vor* dem Render-
-  // Commit, damit der Scroll-Effect entscheiden kann, ob er
-  // ans Ende springt oder die User-Position respektiert.
+  // Auto-scroll heuristic: before every append, check whether the
+  // user is still glued to the end. We record this *before* the
+  // render commit, so the scroll effect can decide whether to jump
+  // to the end or respect the user's position.
   const stickToBottomRef = useRef(true);
 
   useEffect(() => {
@@ -69,17 +69,17 @@ export default function Logs(): JSX.Element {
     };
   }, []);
 
-  // Was tatsaechlich angezeigt wird: bei Pause der eingefrorene
-  // Snapshot, sonst der Live-Stream. Filter wird danach angewandt.
+  // What's actually shown: the frozen snapshot when paused,
+  // otherwise the live stream. Filter is applied after that.
   const displayLines = useMemo(() => {
     const source = paused ? pauseSnapshot : lines;
     if (filter === "all") return source;
     return source.filter((line) => matchesFilter(line, filter));
   }, [paused, pauseSnapshot, lines, filter]);
 
-  // Nach Render: ans Ende springen, wenn User vor dem Update
-  // schon dort war. Greift auch beim Toggle Live → bewusster
-  // Sprung ans Ende ist im UX-Briefing gefordert.
+  // After render: jump to the end if the user was already there
+  // before the update. This also fires on toggle → Live — a
+  // deliberate jump to the end is required by the UX brief.
   useEffect(() => {
     if (paused) return;
     if (!stickToBottomRef.current) return;
@@ -96,8 +96,8 @@ export default function Logs(): JSX.Element {
   const togglePause = (): void => {
     if (paused) {
       setPaused(false);
-      // Beim Resume erzwingen wir „am Ende kleben", damit der
-      // User die neuesten Eintraege sieht.
+      // On resume we force "stick to the bottom" so the user sees
+      // the newest entries.
       stickToBottomRef.current = true;
     } else {
       setPauseSnapshot(lines);

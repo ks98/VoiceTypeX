@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Speech-to-Text Abstraktion.
+//! Speech-to-text abstraction.
 //!
-//! Der `Transcriber`-Trait definiert eine One-Shot-Schnittstelle: komplettes
-//! Audio rein, kompletter Text raus. Das ist die genaueste Variante (keine
-//! interim Token-Commits, globaler Audio-Kontext bei der Inferenz) und wird
-//! sowohl vom lokalen `whisper-rs`-Backend als auch von allen Cloud-Providern
-//! gleich genutzt.
+//! The `Transcriber` trait defines a one-shot interface: complete
+//! audio in, complete text out. That's the most accurate variant (no
+//! interim token commits, global audio context during inference) and
+//! is used identically by the local `whisper-rs` backend and by all
+//! cloud providers.
 
 use crate::core::error::Result;
 use async_trait::async_trait;
@@ -20,9 +20,9 @@ use crate::core::error::VoiceTypeError;
 use crate::secrets::SecretStore;
 use std::sync::Arc;
 
-/// Factory: liefert den passenden `Transcriber` fuer einen Cloud-Provider.
-/// Liest den API-Key aus dem OS-Keychain. Schlaegt mit klarer Meldung fehl,
-/// wenn der Key nicht gesetzt ist.
+/// Factory: returns the matching `Transcriber` for a cloud provider.
+/// Reads the API key from the OS keychain. Fails with a clear message
+/// if the key is not set.
 pub fn make_cloud_transcriber(provider: &str) -> Result<Arc<dyn Transcriber>> {
     let key = SecretStore::get(provider)?.ok_or_else(|| {
         VoiceTypeError::Transcription(format!(
@@ -44,8 +44,9 @@ pub fn make_cloud_transcriber(provider: &str) -> Result<Arc<dyn Transcriber>> {
 pub struct TranscribeOpts {
     pub language: Option<String>,
     pub initial_prompt: Option<String>,
-    /// Override fuer Whisper-Thread-Anzahl. `None` = Auto-Detect.
-    /// Nur fuer LocalTranscriber relevant; Cloud-Transcriber ignorieren es.
+    /// Override for the Whisper thread count. `None` = auto-detect.
+    /// Relevant only for `LocalTranscriber`; cloud transcribers
+    /// ignore it.
     pub n_threads: Option<u32>,
 }
 
@@ -53,8 +54,8 @@ pub struct TranscribeOpts {
 pub trait Transcriber: Send + Sync {
     fn name(&self) -> &str;
 
-    /// Komplettes WAV/PCM-Buffer rein, kompletter Text raus. Audio-Format
-    /// per Konvention 16 kHz Mono PCM s16le als WAV-Container; jeder Provider
-    /// dokumentiert Abweichungen.
+    /// Complete WAV/PCM buffer in, complete text out. Audio format by
+    /// convention 16 kHz mono PCM s16le in a WAV container; every
+    /// provider documents deviations.
     async fn transcribe_oneshot(&self, audio: &[u8], opts: TranscribeOpts) -> Result<String>;
 }

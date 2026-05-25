@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Recording-IPC. Wird normalerweise vom Hotkey-Pfad ausgeloest, kann aber
-//! auch manuell aus dem Frontend angestossen werden (z.B. fuer einen
-//! "Test-Transkriptions-Button").
+//! Recording IPC. Normally triggered by the hotkey path, but can also
+//! be invoked manually from the frontend (e.g. for a "test
+//! transcription button").
 
 use crate::audio::recorder::{RecorderConfig, RecorderHandle};
 use crate::core::state::AppState;
@@ -26,8 +26,8 @@ pub async fn start_recording(
         .find_by_id(&mode_id)
         .ok_or_else(|| format!("Mode '{mode_id}' not found"))?;
 
-    // Auswahl als zuletzt-gewaehlt merken, damit der Cursor im Menue
-    // beim naechsten Oeffnen direkt auf diesem Modus steht.
+    // Remember the selection as "last selected" so the cursor lands
+    // on this mode on the next menu open.
     {
         let mut settings = state.settings.write();
         if settings.last_selected_mode_id.as_deref() != Some(&mode_id) {
@@ -43,8 +43,8 @@ pub async fn start_recording(
         .map_err(|e| e.to_string())
 }
 
-/// Schliesst das Menue-Window ohne Recording zu starten. Wird von Esc im
-/// Frontend-Menue aufgerufen.
+/// Closes the menu window without starting recording. Called from
+/// Esc in the frontend menu.
 #[tauri::command]
 pub async fn cancel_menu(app: AppHandle) -> IpcResult<()> {
     use tauri::Manager;
@@ -60,7 +60,7 @@ pub async fn stop_recording(
     state: tauri::State<'_, Arc<AppContext>>,
     mode_id: String,
 ) -> IpcResult<()> {
-    // Toggle-Logik in execute_mode entscheidet anhand State
+    // The toggle logic in `execute_mode` decides based on state.
     let mode = state
         .modes
         .find_by_id(&mode_id)
@@ -72,20 +72,20 @@ pub async fn stop_recording(
 
 #[derive(Serialize)]
 pub struct TestTranscriptionResult {
-    /// Real-Time-Factor: < 1.0 = schneller als Echtzeit.
+    /// Real-time factor: < 1.0 = faster than real time.
     pub rtf: f32,
-    /// Vom Whisper transkribierter Text.
+    /// Text transcribed by Whisper.
     pub text: String,
-    /// Aufnahmedauer in Sekunden (Eingabewert).
+    /// Recording duration in seconds (input value).
     pub audio_seconds: f32,
-    /// Reine Transkriptions-Zeit in Millisekunden.
+    /// Pure transcription time in milliseconds.
     pub processing_ms: u64,
 }
 
-/// Diagnostischer End-to-End-Test des lokalen STT-Pfades. Nimmt
-/// `seconds` Sekunden Audio vom Default-Mikrofon auf, transkribiert es
-/// mit dem konfigurierten lokalen Whisper-Modell und meldet den
-/// realen RTF auf dem aktuellen System.
+/// Diagnostic end-to-end test of the local STT path. Records
+/// `seconds` seconds of audio from the default microphone,
+/// transcribes it with the configured local Whisper model, and
+/// reports the real RTF on the current system.
 #[tauri::command]
 pub async fn run_test_transcription(
     state: tauri::State<'_, Arc<AppContext>>,
@@ -129,10 +129,10 @@ pub async fn run_test_transcription(
 
     let start = Instant::now();
     let n_threads = state.settings.read().whisper_n_threads;
-    // Test-Endpoint laesst die Sprache offen — Whisper auto-detect.
-    // Vorher hardcoded "de", was englische Tester zerschossen hat.
-    // Wer eine konkrete Sprache testen will, nutzt einen Modus mit
-    // gesetztem language-Feld.
+    // The test endpoint leaves the language open — Whisper
+    // auto-detect. Previously hardcoded "de", which broke English
+    // testers. Anyone who wants to test a specific language uses a
+    // mode with the `language` field set.
     let result = state
         .transcriber
         .transcribe_oneshot(

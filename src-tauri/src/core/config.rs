@@ -1,134 +1,136 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! User-Settings (separat von Modi).
+//! User settings (separate from modes).
 //!
-//! Persistenz: JSON-File in `~/.config/.../settings.json` (chmod 0644 —
-//! kein Secret). Beim App-Start `load_or_default(path)`, nach jedem
-//! Mutations-IPC-Aufruf `save(path)`. Bei korruptem JSON faellt der
-//! Loader auf `Settings::default()` zurueck (mit Log-Warning) — User
-//! verliert einmalig die Settings, App startet aber sauber.
+//! Persistence: a JSON file in `~/.config/.../settings.json` (chmod
+//! 0644 — no secret). On app start `load_or_default(path)`, after
+//! every mutating IPC call `save(path)`. On corrupt JSON the loader
+//! falls back to `Settings::default()` (with a log warning) — the user
+//! loses settings once, but the app starts cleanly.
 
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
-    /// Audio-Eingabegeraet, leer = OS-Default.
+    /// Audio input device; empty = OS default.
     #[serde(default)]
     pub audio_input_device: Option<String>,
 
-    /// Pfad zum lokalen Whisper-GGML-Modell. Leer = Default-Auswahl
-    /// (Datei laut `whisper_default_slot` aus app_config_dir/models/).
+    /// Path to the local Whisper GGML model. Empty = default selection
+    /// (the file per `whisper_default_slot` from
+    /// `app_config_dir/models/`).
     #[serde(default)]
     pub whisper_model_path: Option<String>,
 
-    /// Welches Default-Modell heruntergeladen werden soll, falls keins
-    /// vorhanden ist. Erlaubte Werte:
-    /// - "large-v3-turbo-q8_0" — **Default ab Phase 1** (Q8 statt Q5 fuer
-    ///   bessere DE-Qualitaet bei gleicher Latenz auf modernen Backends).
-    /// - "large-v3-turbo-german-q5_0" — **DE Pro**, primeline-Fine-tune
-    ///   (Apache 2.0), ~28 % rel. WER-Reduktion auf Deutsch.
-    /// - "large-v3-turbo-q5_0" — Light-Hardware (~halber Disk-Bedarf).
-    /// - "small-q5_1" — 4-GB-Geraete ohne GPU.
-    /// - "large-v3-turbo" — F16, Power-User mit ueppigem VRAM.
+    /// Which default model should be downloaded if none is present.
+    /// Allowed values:
+    /// - "large-v3-turbo-q8_0" — **default since phase 1** (Q8 instead
+    ///   of Q5 for better DE quality at the same latency on modern
+    ///   backends).
+    /// - "large-v3-turbo-german-q5_0" — **DE Pro**, primeline fine-tune
+    ///   (Apache 2.0), ~28 % rel. WER reduction on German.
+    /// - "large-v3-turbo-q5_0" — light hardware (~half the disk
+    ///   footprint).
+    /// - "small-q5_1" — 4 GB devices without GPU.
+    /// - "large-v3-turbo" — F16, power users with abundant VRAM.
     #[serde(default = "default_whisper_slot")]
     pub whisper_default_slot: String,
 
-    /// Auto-Start beim System-Login. CLAUDE.md §8: Default OFF.
+    /// Auto-start on system login. CLAUDE.md §8: default OFF.
     #[serde(default)]
     pub autostart: bool,
 
-    /// Ollama-HTTP-Endpunkt (lokales LLM).
+    /// Ollama HTTP endpoint (local LLM).
     #[serde(default = "default_ollama_url")]
     pub ollama_url: String,
 
-    /// Wie lange Ollama das Modell nach einem Aufruf im RAM/VRAM haelt.
-    /// Format laut Ollama-FAQ: Duration-String (`"5m"`, `"30s"`, `"1h"`),
-    /// `"0"` = sofortiges Unload nach Antwort (Memory-Pressure-Profile auf
-    /// 8-GB-Geraeten), Default `"5m"`. Negativwert (`"-1"`) haelt das Modell
-    /// unbegrenzt warm.
+    /// How long Ollama keeps the model in RAM/VRAM after a call.
+    /// Format per Ollama FAQ: duration string (`"5m"`, `"30s"`,
+    /// `"1h"`), `"0"` = immediate unload after the response (memory-
+    /// pressure profile on 8 GB devices), default `"5m"`. A negative
+    /// value (`"-1"`) keeps the model warm indefinitely.
     #[serde(default = "default_ollama_keep_alive")]
     pub ollama_keep_alive: String,
 
-    /// **Phase 3b — Embedded LLM**. Welcher GGUF-Slot wird beim ersten
-    /// Start nach `app_config_dir/models/` heruntergeladen, wenn ein Modus
-    /// mit `local_engine = "embedded"` zum Einsatz kommt. Erlaubte Werte:
-    /// - `"gemma3-1b-it-q5_k_m"` — **Default**, ~850 MB, passt auf 4-GB-RAM-
-    ///   Geraete (Light-Tier).
-    /// - `"gemma3-4b-it-q5_k_m"` — ~2.8 GB, Standard fuer ≥16-GB-Setups
-    ///   (Empfehlung aus Phase 1, deutsche Qualitaet stark).
-    /// - `"llama3.2-1b-instruct-q5_k_m"` — Alternative Light-Tier,
-    ///   staerker auf Englisch.
-    /// - `"qwen2.5-1.5b-instruct-q5_k_m"` — Mittlere Groesse,
-    ///   strukturierter Output (Code/Markdown).
+    /// **Phase 3b — embedded LLM**. Which GGUF slot is downloaded to
+    /// `app_config_dir/models/` on first start when a mode with
+    /// `local_engine = "embedded"` is used. Allowed values:
+    /// - `"gemma3-1b-it-q5_k_m"` — **default**, ~850 MB, fits 4 GB RAM
+    ///   devices (light tier).
+    /// - `"gemma3-4b-it-q5_k_m"` — ~2.8 GB, standard for ≥16 GB setups
+    ///   (phase-1 recommendation, strong German quality).
+    /// - `"llama3.2-1b-instruct-q5_k_m"` — alternative light tier,
+    ///   stronger on English.
+    /// - `"qwen2.5-1.5b-instruct-q5_k_m"` — mid-size, structured
+    ///   output (code/markdown).
     #[serde(default = "default_llm_slot")]
     pub llm_default_slot: String,
 
-    /// Optionaler expliziter Pfad zu einem GGUF-LLM-Modell. Wenn gesetzt,
-    /// ueberschreibt es `llm_default_slot`-basierte Pfad-Konstruktion.
-    /// Format: absoluter Pfad zu einer `.gguf`-Datei. Empfohlen nur fuer
-    /// Power-User mit eigenen Modellen.
+    /// Optional explicit path to a GGUF LLM model. When set, overrides
+    /// the `llm_default_slot`-based path construction. Format: an
+    /// absolute path to a `.gguf` file. Recommended only for power
+    /// users with their own models.
     #[serde(default)]
     pub llm_model_path: Option<String>,
 
-    /// Wird beim ersten erfolgreichen Onboarding-Wizard-Durchlauf auf
-    /// `true` gesetzt. Steuert, ob der Wizard beim Start automatisch
-    /// erscheint.
+    /// Set to `true` on the first successful onboarding-wizard run.
+    /// Controls whether the wizard appears automatically on start.
     #[serde(default)]
     pub onboarding_done: bool,
 
-    /// Anzahl Threads fuer Whisper-Inferenz. `None` = Auto-Detect via
-    /// `available_parallelism()` (deckelt bei 8 — diminishing returns
-    /// wegen Memory-Bandwidth). User kann ueberschreiben in Settings-UI,
-    /// z.B. "nur 4 Threads damit Browser fluessig bleibt".
+    /// Number of threads for Whisper inference. `None` = auto-detect
+    /// via `available_parallelism()` (capped at 8 — diminishing
+    /// returns due to memory bandwidth). The user can override in the
+    /// settings UI, e.g. "only 4 threads so the browser stays
+    /// responsive".
     #[serde(default)]
     pub whisper_n_threads: Option<u32>,
 
-    /// Globaler Hotkey, der das Modus-Auswahl-Menue oeffnet. Genau ein
-    /// Hotkey fuer die ganze App — die einzelnen Modi haben keine
-    /// eigenen Hotkeys mehr.
+    /// Global hotkey that opens the mode-selection menu. Exactly one
+    /// hotkey for the whole app — the individual modes no longer have
+    /// their own hotkeys.
     #[serde(default = "default_menu_hotkey")]
     pub menu_hotkey: String,
 
-    /// Modus-ID, die beim oeffnen des Menues vorausgewaehlt ist
-    /// (Cursor-Position). Wird nach jeder erfolgreichen Auswahl
-    /// gespeichert, sodass der "letzte" Modus immer mit einem einzigen
-    /// Enter erreichbar ist.
+    /// Mode ID that is pre-selected when the menu opens (cursor
+    /// position). Stored after every successful selection so the
+    /// "last" mode is always reachable with a single Enter.
     #[serde(default)]
     pub last_selected_mode_id: Option<String>,
 
-    /// UI-Locale (BCP-47 wie "de", "en-US", "fr"). `None` = noch nie
-    /// gesetzt; in dem Fall fuellt `lib.rs::run` beim ersten App-Start
-    /// die Detection aus `tauri_plugin_os::locale()` ein.
+    /// UI locale (BCP-47, e.g. "de", "en-US", "fr"). `None` = never
+    /// set; in that case `lib.rs::run` fills in the detection from
+    /// `tauri_plugin_os::locale()` on first app start.
     ///
-    /// Persistiert wird der rohe OS-Locale-String — das Frontend mappt
-    /// via `pickSupported()` auf eine der unterstuetzten Anzeige-
-    /// Sprachen [en, de, fr, es, it]. Damit bleibt das Backend frei von
-    /// "supported set"-Wissen und ein spaeterer Sprachen-Ausbau braucht
-    /// nur Frontend-Aenderungen.
+    /// The raw OS-locale string is persisted — the frontend maps it
+    /// via `pickSupported()` onto one of the supported display
+    /// languages [en, de, fr, es, it]. This keeps the backend free of
+    /// "supported set" knowledge, and a later language expansion only
+    /// needs frontend changes.
     ///
-    /// **Achtung — Re-Detection-Semantik:** explizit auf `None` setzen
-    /// triggert beim naechsten App-Start erneute OS-Detection. Der
-    /// UI-Switcher "Auto/System" sollte daher den aktuellen OS-Locale-
-    /// Wert *speichern*, nicht `None` schreiben — sonst hat man Log-
-    /// Noise und Datei-Save bei jedem Start.
+    /// **Note — re-detection semantics:** explicitly setting to `None`
+    /// triggers a fresh OS detection on the next app start. The UI
+    /// switcher "Auto/System" should therefore *store* the current
+    /// OS-locale value, not write `None` — otherwise you get log noise
+    /// and a file save on every start.
     ///
-    /// **Validierung beim Deserialisieren:** Inhalte aus der Settings-
-    /// Datei werden auf BCP-47-aehnliche Form gepruegft (ASCII-
-    /// alphanumerisch + `-`/`_`, max. 35 Zeichen). Unguelt iges (z.B.
-    /// per Hand-Edit oder corrupt-write) wird zu `None` neutralisiert
-    /// — die Anwendung re-detected dann beim naechsten Start statt zu
-    /// crashen oder den Wert ungeprueft weiterzureichen.
+    /// **Deserialize-time validation:** values coming from the
+    /// settings file are checked for BCP-47-ish shape (ASCII
+    /// alphanumeric + `-`/`_`, max. 35 chars). Invalid values (e.g.
+    /// from hand-editing or a corrupt write) are neutralized to
+    /// `None` — the app then re-detects on the next start instead of
+    /// crashing or passing the value through unchecked.
     #[serde(default, deserialize_with = "deserialize_locale")]
     pub locale: Option<String>,
 }
 
-/// Validiert deserialisierte Locale-Strings als BCP-47-aehnlich.
-/// Defense-in-depth: das eigentliche Mapping auf die unterstuetzte
-/// Sprache passiert im Frontend (`pickSupported`), aber wenn jemand
-/// die Settings-Datei manipuliert hat, soll der Wert hier schon
-/// gefiltert werden — sonst landet er ungeprueft z.B. in einer
-/// zukuenftigen `Intl.PluralRules`-Konstruktion (`RangeError`) oder
-/// als Substring in einem Dateipfad (Path-Traversal).
+/// Validates deserialized locale strings as BCP-47-ish.
+/// Defense-in-depth: the actual mapping to the supported language
+/// happens in the frontend (`pickSupported`), but if someone tampered
+/// with the settings file, the value should already be filtered here
+/// — otherwise it lands unchecked e.g. in a future
+/// `Intl.PluralRules` constructor (`RangeError`) or as a substring in
+/// a file path (path traversal).
 fn deserialize_locale<'de, D>(d: D) -> std::result::Result<Option<String>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -142,9 +144,9 @@ where
     }))
 }
 
-/// Manueller `Default`-Impl statt `#[derive(Default)]`: das Derive
-/// ignoriert die `#[serde(default = "...")]`-Annotationen und benutzt
-/// die Typ-Defaults. Hier setzen wir die echten Anwendungs-Defaults.
+/// Manual `Default` impl instead of `#[derive(Default)]`: the derive
+/// ignores the `#[serde(default = "...")]` annotations and uses the
+/// type defaults. Here we set the real application defaults.
 impl Default for Settings {
     fn default() -> Self {
         Self {
@@ -170,9 +172,9 @@ fn default_menu_hotkey() -> String {
 }
 
 impl Settings {
-    /// Liest die Settings aus `path` oder gibt `Settings::default()`
-    /// zurueck, wenn die Datei fehlt oder korrupt ist. Nicht-fatal —
-    /// loggt Warnings, App soll weiterlaufen.
+    /// Reads the settings from `path`, or returns
+    /// `Settings::default()` if the file is missing or corrupt.
+    /// Non-fatal — logs warnings; the app should keep running.
     pub fn load_or_default(path: &Path) -> Self {
         if !path.exists() {
             tracing::info!(path = %path.display(), "Settings file not present — using defaults");
@@ -196,8 +198,8 @@ impl Settings {
         }
     }
 
-    /// Schreibt die Settings als JSON nach `path`. Erstellt das
-    /// Parent-Verzeichnis bei Bedarf.
+    /// Writes the settings as JSON to `path`. Creates the parent
+    /// directory if needed.
     pub fn save(&self, path: &Path) -> Result<(), String> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| format!("create_dir: {e}"))?;
@@ -214,16 +216,16 @@ fn default_ollama_keep_alive() -> String {
 }
 
 fn default_llm_slot() -> String {
-    // Light-Tier-Default: passt auf 4-GB-Geraete und liefert auf 16-GB-
-    // Setups Sub-Sekunden-Latenz. Power-User koennen in Settings auf
-    // "gemma3-4b-it-q5_k_m" wechseln, sobald sie 16+ GB RAM haben.
+    // Light-tier default: fits 4 GB devices and delivers sub-second
+    // latency on 16 GB setups. Power users can switch to
+    // "gemma3-4b-it-q5_k_m" in settings once they have 16+ GB RAM.
     "gemma3-1b-it-q5_k_m".to_string()
 }
 
 fn default_whisper_slot() -> String {
-    // Phase 1: Default von Q5_0 (547 MB) auf Q8_0 (874 MB) verschoben.
-    // Q8 ist auf modernen Backends gleich schnell und qualitativ deutlich
-    // naeher an F16 — Q5 bleibt als Light-Hardware-Option waehlbar.
+    // Phase 1: the default moved from Q5_0 (547 MB) to Q8_0 (874 MB).
+    // Q8 is equally fast on modern backends and qualitatively much
+    // closer to F16 — Q5 remains selectable as a light-hardware option.
     "large-v3-turbo-q8_0".to_string()
 }
 

@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Wrapper um `Intl.NumberFormat` und `Intl.DateTimeFormat`. Werden ab
-// Phase 1 fuer Groessen-Anzeigen (`5,1 GB` vs. `5.1 GB`) und Timestamps
-// gebraucht. Bewusst nur Plain-Funktionen ohne React-Hook-Wrapper —
-// `Intl.*`-Allokation kostet µs, ein useMemo daher nutzlos (und
-// invalidiert bei jedem inline-Optionen-Literal eh sofort).
+// Wrappers around `Intl.NumberFormat` and `Intl.DateTimeFormat`. Used
+// from phase 1 onward for size displays (`5,1 GB` vs. `5.1 GB`) and
+// timestamps. Deliberately plain functions without a React-hook
+// wrapper — `Intl.*` allocation costs microseconds, so `useMemo` is
+// useless (and would invalidate on every inline options literal
+// anyway).
 //
-// Aufruf-Konvention in React-Komponenten:
+// Calling convention in React components:
 //   const locale = useLocale();
 //   const gb = formatNumber(value, locale, { maximumFractionDigits: 1 });
 

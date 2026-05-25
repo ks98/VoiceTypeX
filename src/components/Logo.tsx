@@ -5,14 +5,14 @@ interface LogoProps {
 }
 
 /*
- * VoiceTypeX-Markenzeichen "Wave-to-Caret":
- * Audio-Wellenform (4 Bars) fließt in einen Text-Insertion-Cursor.
- * fill="currentColor" macht es theme-aware — im Sidebar-Header
- * z.B. text-brand, im Onboarding-Hero text-fg.
+ * VoiceTypeX mark "Wave-to-Caret":
+ * An audio waveform (4 bars) flows into a text-insertion cursor.
+ * `fill="currentColor"` makes it theme-aware — e.g. text-brand in
+ * the sidebar header, text-fg in the onboarding hero.
  *
- * Source-of-Truth identisch zu src-tauri/icons/source/logo.svg
- * (bei Anpassung beide Stellen synchronisieren — die SVG-Datei
- * wird via rsvg-convert in die PNG-Bundle-Icons gerendert).
+ * Source-of-truth identical to src-tauri/icons/source/logo.svg
+ * (on edits, keep both in sync — the SVG file is rendered into the
+ * PNG bundle icons via rsvg-convert).
  */
 export default function Logo({ className = "" }: LogoProps): JSX.Element {
   return (

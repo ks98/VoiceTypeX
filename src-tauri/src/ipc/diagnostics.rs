@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Diagnostics-IPC: Logs-Stream, App-Version, System-Info.
+//! Diagnostics IPC: log stream, app version, system info.
 
 use crate::core::AppContext;
 use crate::injection::{InjectOptions, InjectionStrategy};
@@ -26,11 +26,11 @@ pub async fn get_recent_logs(
 pub struct SessionInfo {
     /// `wayland`, `x11`, `windows`, `macos`, `unknown`
     pub display_server: String,
-    /// True wenn globale Hotkeys auf dieser Session voraussichtlich
-    /// funktionieren (Wayland: nein, bis Phase 5-full).
+    /// True if global hotkeys are expected to work on this session
+    /// (Wayland: no, until phase 5-full).
     pub global_hotkeys_supported: bool,
-    /// True wenn Auto-Paste-Shortcut nach Clipboard-Set funktioniert
-    /// (Wayland: nein ohne libei).
+    /// True if the auto-paste shortcut after clipboard-set works
+    /// (Wayland: no without libei).
     pub auto_paste_supported: bool,
 }
 
@@ -49,13 +49,12 @@ pub async fn get_hardware_report() -> IpcResult<crate::core::hardware::HardwareR
     Ok(crate::core::hardware::detect())
 }
 
-/// Diagnose-Test fuer Auto-Paste. Schlaeft `delay_secs` Sekunden, sodass
-/// der User Zeit hat, das Ziel-Fenster zu fokussieren, dann triggert
-/// einen kompletten Inject (Clipboard + libei-Strg+V) mit `text`.
-/// Damit ist der Fokus-Race der normalen Pipeline ausgeschlossen — wenn
-/// das funktioniert aber der echte Diktat-Pfad nicht, ist nicht libei
-/// das Problem, sondern was zwischen Hotkey-Press und Inject den Fokus
-/// verschiebt.
+/// Diagnostic test for auto-paste. Sleeps `delay_secs` seconds so
+/// the user has time to focus the target window, then triggers a
+/// complete inject (clipboard + libei-Ctrl+V) with `text`. This
+/// rules out the focus race of the normal pipeline — if this works
+/// but the real dictation path doesn't, libei is not the problem;
+/// whatever is moving focus between hotkey press and inject is.
 #[tauri::command]
 pub async fn test_auto_paste(
     state: tauri::State<'_, Arc<AppContext>>,

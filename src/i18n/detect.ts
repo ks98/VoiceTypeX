@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Supported-Locale-Set und OS-Locale-Mapping.
+// Supported-locale set and OS-locale mapping.
 //
-// Die eigentliche OS-Locale-Detection laeuft im Backend (siehe
-// src-tauri/src/lib.rs) und wird in `Settings.locale` persistiert —
-// dadurch kein Race zwischen den drei Webview-Fenstern (main, overlay,
-// menu), die alle ueber dieselbe Settings-Datei laufen. Diese Datei
-// haelt nur den Frontend-seitigen Mapper bereit, damit z.B. ein
-// spaeterer User-Switcher "Auto/System" das gleiche Mapping nutzen
-// kann.
+// The actual OS-locale detection runs in the backend (see
+// src-tauri/src/lib.rs) and is persisted in `Settings.locale` —
+// avoiding a race between the three webview windows (main, overlay,
+// menu) that all share the same settings file. This file only holds
+// the frontend-side mapper, so e.g. a later user "Auto/System"
+// switcher can use the same mapping.
 
 export const SUPPORTED_LOCALES = ["en", "de", "fr", "es", "it"] as const;
 
@@ -17,10 +16,9 @@ export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 export const DEFAULT_LOCALE: SupportedLocale = "en";
 
 /**
- * Mappt einen rohen Locale-String (BCP-47 wie "de-DE", "en_US",
- * "pt-BR" oder schlicht "de") auf eine der unterstuetzten Locales.
- * Region-Suffixe werden ignoriert. Unbekannte Sprachen fallen auf
- * DEFAULT_LOCALE.
+ * Maps a raw locale string (BCP-47 like "de-DE", "en_US", "pt-BR" or
+ * just "de") to one of the supported locales. Region suffixes are
+ * ignored. Unknown languages fall back to `DEFAULT_LOCALE`.
  */
 export function pickSupported(
   raw: string | null | undefined,
@@ -34,10 +32,10 @@ export function pickSupported(
 }
 
 /**
- * Native-Sprachname pro Locale fuer den User-Switcher in Settings.
- * Bewusst nicht ueber `t()` geloest, weil der Switcher Sprachen
- * anzeigt, die der User _noch nicht_ aktiv hat — stattdessen jede
- * Sprache in ihrer eigenen Form (klassische Locale-Picker-UX).
+ * Native language name per locale for the user switcher in settings.
+ * Deliberately not resolved via `t()`, because the switcher shows
+ * languages the user has _not yet_ activated — instead every language
+ * appears in its own form (classic locale-picker UX).
  */
 export const LOCALE_NATIVE_NAMES: Record<SupportedLocale, string> = {
   en: "English",

@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Reine Translation-Logik — keine React-Deps, keine Side-Effects.
-// Wird vom `useT()`-Hook (siehe `./index.ts`) konsumiert und ist isoliert
-// testbar.
+// Pure translation logic — no React deps, no side effects.
+// Consumed by the `useT()` hook (see `./index.ts`) and tested in
+// isolation.
 //
-// Konventionen:
-// - Keys sind flache Strings mit Punkten als Separator (`"app.title"`).
-//   Flach (nicht nested) wegen einfacher Diff-Reviews und trivialer
-//   Key-Listung im `scripts/i18n-check.mjs`.
-// - Interpolation: `{name}` im Template, `params: { name: "X" }`.
-// - Plural: wenn `params.count` eine Zahl ist, wird das Key-Suffix
-//   `.one`/`.other`/... ueber `Intl.PluralRules` ausgewaehlt.
-// - Fallback-Kette: current-locale → fallback (en) → key selbst.
-//   Letzteres ist Dev-Visibility, damit fehlende Keys nicht still
-//   leere Strings zurueckgeben.
+// Conventions:
+// - Keys are flat strings with dots as separators (`"app.title"`).
+//   Flat (not nested) for easy diff reviews and trivial key listing
+//   in `scripts/i18n-check.mjs`.
+// - Interpolation: `{name}` in the template, `params: { name: "X" }`.
+// - Plural: if `params.count` is a number, the key suffix
+//   `.one`/`.other`/... is selected via `Intl.PluralRules`.
+// - Fallback chain: current locale → fallback (en) → the key itself.
+//   The latter is dev visibility so missing keys don't silently
+//   return empty strings.
 
 export type Dictionary = Readonly<Record<string, string>>;
 
@@ -22,11 +22,12 @@ export interface TranslateParams {
 }
 
 export interface TranslateContext {
-  /** BCP-47-Locale-Code, z.B. "de" oder "fr". Steuert die Plural-Form. */
+  /** BCP-47 locale code, e.g. "de" or "fr". Controls the plural
+   * form. */
   readonly locale: string;
-  /** Dictionary der aktuellen Locale. */
+  /** Dictionary of the current locale. */
   readonly current: Dictionary;
-  /** Fallback-Dictionary (Source-of-Truth, normalerweise `en`). */
+  /** Fallback dictionary (source-of-truth, usually `en`). */
   readonly fallback: Dictionary;
 }
 
@@ -48,13 +49,14 @@ function selectPluralSuffix(count: number, locale: string): Intl.LDMLPluralRule 
 }
 
 /**
- * Lookup eines Translation-Keys gegen current + fallback Dictionary.
+ * Look up a translation key against the current + fallback dictionary.
  *
- * - Interpoliert `{name}`-Platzhalter aus `params`.
- * - Bei numerischem `params.count`: zuerst pluralisierter Key
- *   (`<key>.<form>`), dann `<key>.other`, dann `<key>` ohne Suffix.
- * - Fallback bei Key-Miss: erst `fallback`-Dict, dann der Key selbst
- *   (sichtbar im UI, signalisiert Dev-Bug).
+ * - Interpolates `{name}` placeholders from `params`.
+ * - For numeric `params.count`: first the pluralized key
+ *   (`<key>.<form>`), then `<key>.other`, then `<key>` without
+ *   suffix.
+ * - Fallback on key miss: first the `fallback` dict, then the key
+ *   itself (visible in the UI, signals a dev bug).
  */
 export function translate(
   key: string,

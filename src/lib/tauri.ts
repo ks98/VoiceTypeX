@@ -86,9 +86,9 @@ export interface HardwareReport {
   has_nvidia_gpu: boolean;
   has_amd_gpu: boolean;
   is_apple_silicon: boolean;
-  /** Gesamt-RAM in GB. 0 = Detection nicht implementiert auf diesem OS. */
+  /** Total RAM in GB. 0 = detection not implemented on this OS. */
   total_ram_gb: number;
-  /** Aktuell verfügbares RAM in GB. 0 = nicht implementiert. */
+  /** Currently available RAM in GB. 0 = not implemented. */
   available_ram_gb: number;
   recommended_variant:
     | "cpu"
@@ -105,11 +105,12 @@ export async function ipcGetHardwareReport(): Promise<HardwareReport> {
 }
 
 /**
- * Lädt das in `Settings.llm_default_slot` gewählte GGUF-LLM-Modell nach
- * `app_config_dir/models/` herunter. Progress kommt als
- * `llm-model-download-progress`-Event (separat von Whisper-Progress).
+ * Downloads the GGUF LLM model selected in `Settings.llm_default_slot`
+ * to `app_config_dir/models/`. Progress arrives as
+ * `llm-model-download-progress` events (separate from Whisper
+ * progress).
  *
- * Returns: absoluter Pfad zum heruntergeladenen GGUF-File.
+ * Returns: absolute path to the downloaded GGUF file.
  */
 export async function ipcDownloadLlmDefaultModel(): Promise<string> {
   return invoke<string>("download_llm_default_model");
@@ -123,22 +124,22 @@ export interface CachedFile {
   size_bytes: number;
 }
 
-/** Listet alle Files im `app_config_dir/models/`-Cache. */
+/** Lists all files in the `app_config_dir/models/` cache. */
 export async function ipcListCachedFiles(): Promise<CachedFile[]> {
   return invoke<CachedFile[]>("list_cached_files");
 }
 
-/** Löscht ein einzelnes File. Returns freigegebene Bytes. */
+/** Deletes a single file. Returns the freed bytes. */
 export async function ipcDeleteCachedFile(filename: string): Promise<number> {
   return invoke<number>("delete_cached_file", { filename });
 }
 
-/** Löscht alle Modell-Files (Whisper + VAD + LLM + Partials). Returns freigegebene Bytes. */
+/** Deletes all model files (Whisper + VAD + LLM + partials). Returns the freed bytes. */
 export async function ipcDeleteAllModels(): Promise<number> {
   return invoke<number>("delete_all_models");
 }
 
-/** Löscht nur abgebrochene Downloads (`.partial`). Returns freigegebene Bytes. */
+/** Deletes only aborted downloads (`.partial`). Returns the freed bytes. */
 export async function ipcCleanPartialDownloads(): Promise<number> {
   return invoke<number>("clean_partial_downloads");
 }
@@ -154,8 +155,9 @@ export async function ipcResetApiKeys(): Promise<void> {
 }
 
 /**
- * Loescht die Wayland-Permission-Token-Datei. Naechster Auto-Paste-Inject
- * triggert wieder den xdg-desktop-portal-Dialog. Auf X11/Windows No-Op.
+ * Deletes the Wayland permission token file. The next auto-paste
+ * inject triggers the xdg-desktop-portal dialog again. No-op on
+ * X11/Windows.
  */
 export async function ipcResetWaylandToken(): Promise<void> {
   return invoke("reset_wayland_token");
@@ -172,10 +174,10 @@ export async function ipcResetAppFactory(): Promise<void> {
 }
 
 /**
- * Diagnose: testet den Auto-Paste-Pfad direkt, ohne die normale Pipeline
- * (kein Audio, kein STT, kein LLM). Wartet `delaySecs` Sekunden — User
- * fokussiert in der Zwischenzeit das Ziel-Fenster — und sendet dann
- * `text` per Clipboard + libei-Strg+V.
+ * Diagnostic: tests the auto-paste path directly, without the normal
+ * pipeline (no audio, no STT, no LLM). Waits `delaySecs` seconds —
+ * the user focuses the target window in the meantime — and then
+ * sends `text` via clipboard + libei-Ctrl+V.
  */
 export async function ipcTestAutoPaste(
   text: string,
@@ -193,12 +195,13 @@ export async function ipcCancelMenu(): Promise<void> {
 }
 
 /**
- * Effektiver Menue-Hotkey, wie er aktuell tatsaechlich gebunden ist.
+ * Effective menu hotkey, as it is actually bound right now.
  *
- * - X11/Windows: `null` — Frontend zeigt `Settings.menu_hotkey` direkt.
- * - Wayland: vom Compositor zurueckgegebener Trigger (z.B. "Meta+Space").
- *   Auf KDE darf der User in System-Settings → Globale Verknuepfungen
- *   einen anderen Hotkey zuweisen — der landet dann hier.
+ * - X11/Windows: `null` — the frontend shows `Settings.menu_hotkey`
+ *   directly.
+ * - Wayland: the trigger returned by the compositor (e.g.
+ *   "Meta+Space"). On KDE the user may assign a different hotkey via
+ *   System Settings → Global Shortcuts — which then lands here.
  */
 export async function ipcGetEffectiveMenuHotkey(): Promise<string | null> {
   return invoke<string | null>("get_effective_menu_hotkey");

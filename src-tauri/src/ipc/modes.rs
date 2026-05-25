@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Modi-IPC.
+//! Modes IPC.
 //!
-//! CRUD-Operationen schreiben direkt in `modes_dir/{id}.toml`. Der
-//! `notify`-Watcher in der ModesRegistry pickt die Aenderung auf und laedt
-//! die Liste neu — kein expliziter Refresh noetig.
+//! CRUD operations write directly to `modes_dir/{id}.toml`. The
+//! `notify` watcher in the `ModesRegistry` picks up the change and
+//! reloads the list — no explicit refresh needed.
 
 use crate::core::{AppContext, Mode};
 use std::path::{Path, PathBuf};

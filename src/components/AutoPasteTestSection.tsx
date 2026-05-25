@@ -8,9 +8,9 @@ const DEFAULT_TEXT = "VoiceTypeX Auto-Paste-Test";
 const DELAY_SECS = 3;
 
 /**
- * Diagnose-Test fuer den Auto-Paste-Pfad. Klick startet einen
- * 3-Sekunden-Countdown — der User hat Zeit, das Ziel-Fenster zu
- * fokussieren. Trennt das libei-Tippen vom Pipeline-Fokus-Race.
+ * Diagnostic test for the auto-paste path. A click starts a
+ * 3-second countdown — the user has time to focus the target
+ * window. Separates the libei typing from the pipeline focus race.
  */
 export default function AutoPasteTestSection() {
   const t = useT();

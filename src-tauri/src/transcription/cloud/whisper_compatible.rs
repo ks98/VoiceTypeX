@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Geteilter STT-Client fuer alle OpenAI-Whisper-API-kompatiblen Provider
-//! (OpenAI selbst, Groq).
+//! Shared STT client for all OpenAI-Whisper-API-compatible providers
+//! (OpenAI itself, Groq).
 //!
-//! API-Vertrag:
+//! API contract:
 //!   POST {base_url}/audio/transcriptions
 //!   Authorization: Bearer {api_key}
 //!   Content-Type: multipart/form-data
-//!     - file: WAV-Bytes
-//!     - model: provider-spezifisch
-//!     - language: optional ISO-Code
-//!     - response_format: "json" (Default)
+//!     - file: WAV bytes
+//!     - model: provider-specific
+//!     - language: optional ISO code
+//!     - response_format: "json" (default)
 //!   Response: { "text": "..." }
 
 use crate::core::error::{Result, VoiceTypeError};
@@ -49,7 +49,7 @@ impl WhisperCompatibleClient {
         );
 
         with_retry(|| async {
-            // multipart::Form ist nicht Clone — pro Versuch neu bauen.
+            // `multipart::Form` is not Clone — rebuild per attempt.
             let part = reqwest::multipart::Part::bytes(audio.to_vec())
                 .file_name("audio.wav")
                 .mime_str("audio/wav")

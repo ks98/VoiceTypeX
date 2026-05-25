@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Secrets-IPC.
+//! Secrets IPC.
 //!
-//! Frontend bekommt **nie** den Klartext-Key zurueck — nur Status-Booleans.
-//! Schreiboperationen senden den Key aus dem UI direkt in den OS-Keychain.
+//! The frontend **never** receives the cleartext key — only status
+//! booleans. Write operations send the key from the UI directly into
+//! the OS keychain.
 
 use crate::processing::cloud::anthropic::AnthropicProcessor;
 use crate::processing::cloud::openai_compatible::OpenAICompatibleClient;
@@ -12,18 +13,18 @@ use serde::Serialize;
 
 type IpcResult<T> = std::result::Result<T, String>;
 
-/// Provider, fuer die VoiceTypeX einen Keychain-Eintrag verwaltet.
-/// xAI nutzt denselben Eintrag fuer STT und LLM (CLAUDE.md §4.4).
+/// Providers for which VoiceTypeX manages a keychain entry. xAI uses
+/// the same entry for STT and LLM (CLAUDE.md §4.4).
 pub(crate) const PROVIDERS: &[&str] = &["xai", "openai", "anthropic", "groq", "deepgram"];
 
 #[derive(Serialize)]
 pub struct ProviderStatus {
     pub provider: String,
     pub configured: bool,
-    /// Wenn das Keychain-Backend einen Fehler liefert (z.B. kein
-    /// secret-service-Daemon auf Linux), wird der Fehler hier exposed —
-    /// das Frontend kann dem User dann eine konkrete Diagnose zeigen,
-    /// statt stillschweigend "nicht gesetzt" anzuzeigen.
+    /// If the keychain backend reports an error (e.g. no
+    /// secret-service daemon on Linux), it is exposed here — the
+    /// frontend can then show the user a concrete diagnosis instead
+    /// of silently displaying "not set".
     pub error: Option<String>,
 }
 
@@ -74,9 +75,10 @@ pub async fn delete_provider_key(provider: String) -> IpcResult<()> {
     SecretStore::delete(&provider).map_err(|e| e.to_string())
 }
 
-/// Pruefe Provider-Verbindung mit dem aktuell gespeicherten API-Key.
-/// Provider-spezifische Endpoints; xAI/OpenAI/Groq teilen den OpenAI-
-/// kompatiblen `GET /models`-Test. Anthropic/Deepgram folgen in Phase 2.5+.
+/// Check provider connectivity with the currently stored API key.
+/// Provider-specific endpoints; xAI/OpenAI/Groq share the
+/// OpenAI-compatible `GET /models` test. Anthropic/Deepgram follow
+/// in phase 2.5+.
 #[tauri::command]
 pub async fn test_provider_connection(provider: String) -> IpcResult<()> {
     let key = SecretStore::get(&provider)

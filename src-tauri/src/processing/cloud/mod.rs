@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Cloud-LLM Provider.
+//! Cloud LLM providers.
 //!
-//! `OpenAICompatibleClient` ist die geteilte Komposition fuer xAI/OpenAI;
-//! Anthropic ist eigenstaendig (CLAUDE.md §4.6).
+//! `OpenAICompatibleClient` is the shared composition for xAI/OpenAI;
+//! Anthropic is standalone (CLAUDE.md §4.6).
 
 pub mod anthropic;
 pub mod openai;

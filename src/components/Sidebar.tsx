@@ -4,8 +4,8 @@ import { useT } from "../i18n";
 import Logo from "./Logo";
 import ThemeToggle from "./ThemeToggle";
 
-// Reihenfolge nach Nutzungs-Frequenz: Power-User oeffnet das Hauptfenster
-// meistens um Modi zu triggern oder zu editieren, nicht zum Konfigurieren.
+// Order by usage frequency: a power user mostly opens the main
+// window to trigger or edit modes, not to configure.
 const TAB_IDS = ["modes", "settings", "logs"] as const;
 
 export default function Sidebar(): JSX.Element {
@@ -42,8 +42,8 @@ export default function Sidebar(): JSX.Element {
           {t(`app.tabs.${id}`)}
         </button>
       ))}
-      {/* Theme-Toggle in den Sidebar-Footer — gehoert nicht zur App-
-          Konfiguration, sondern ist persoenliche Praeferenz. */}
+      {/* Theme toggle in the sidebar footer — not part of app
+          configuration, but personal preference. */}
       <div className="mt-auto pt-3 border-t border-outline">
         <ThemeToggle />
       </div>

@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Whisper- und VAD-Modell-Downloader.
+//! Whisper and VAD model downloader.
 //!
-//! Whisper-Modelle kommen aus `ggerganov/whisper.cpp` (Hugging Face),
-//! Silero-VAD aus `ggml-org/whisper-vad`. Beide Pfade nutzen die HF-Konvention
-//! `resolve/main/<file>` (NICHT `blob/main`, das liefert HTML).
+//! Whisper models come from `ggerganov/whisper.cpp` (Hugging Face),
+//! Silero VAD from `ggml-org/whisper-vad`. Both paths use the HF
+//! convention `resolve/main/<file>` (NOT `blob/main`, which returns
+//! HTML).
 //!
-//! SHA-256-Hashes sind pro Slot pinnbar — wo `Some(...)` hinterlegt ist,
-//! laeuft eine echte Integritaetspruefung (in-flight beim Download und
-//! beim Re-Use eines bereits vorhandenen Files); wo `None` steht, wird der
-//! tatsaechliche Hash nur geloggt, damit man ihn nachpinnen kann.
+//! SHA-256 hashes can be pinned per slot — where `Some(...)` is set, a
+//! real integrity check runs (in-flight during download and when
+//! re-using an already existing file); where `None` is set, the actual
+//! hash is only logged so it can be pinned later.
 
 use crate::core::error::{Result, VoiceTypeError};
 use futures_util::StreamExt;
@@ -18,30 +19,30 @@ use tokio::io::AsyncWriteExt;
 
 const WHISPER_BASE: &str = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main";
 const VAD_BASE: &str = "https://huggingface.co/ggml-org/whisper-vad/resolve/main";
-// Apache-2.0, primeline-Fine-tune fuer Deutsch. cstr ist Re-Packager mit
-// GGML-Konvertierung; siehe THIRD_PARTY_NOTICES.md fuer Lizenz-Kette.
+// Apache-2.0, primeline fine-tune for German. cstr is the re-packager
+// with GGML conversion; see THIRD_PARTY_NOTICES.md for the license chain.
 const WHISPER_GERMAN_BASE: &str =
     "https://huggingface.co/cstr/whisper-large-v3-turbo-german-ggml/resolve/main";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModelSlot {
-    /// Light-Hardware-Variante (8 GB RAM, kein GPU) — kleinere Quantisierung,
-    /// halber Disk-Bedarf, leicht hoeherer WER auf Deutsch.
+    /// Light-hardware variant (8 GB RAM, no GPU) — smaller quantization,
+    /// half the disk footprint, slightly higher WER on German.
     LargeV3TurboQ5,
-    /// **Default ab Phase 1** — Q8_0 ist auf modernen Backends ~gleich schnell
-    /// wie Q5_0, aber qualitativ deutlich naeher an F16. Sweet-Spot fuer
-    /// 8-16 GB RAM mit iGPU/Vulkan oder dGPU.
+    /// **Default since phase 1** — Q8_0 is roughly as fast as Q5_0 on
+    /// modern backends, but qualitatively much closer to F16. Sweet-spot
+    /// for 8-16 GB RAM with iGPU/Vulkan or dGPU.
     LargeV3TurboQ8,
     /// **DE Pro** — primeline/whisper-large-v3-turbo-german (Apache-2.0)
-    /// als Q5_0-GGUF. ~28 % rel. WER-Reduktion auf deutschem
-    /// CommonVoice/Tuda gegenueber Generic-Turbo. Mai 2026: nur Q5_0
-    /// im cstr-Repo verfuegbar (Q8 nicht gepackt). Gleicher Disk-Bedarf
-    /// wie LargeV3TurboQ5.
+    /// as Q5_0 GGUF. ~28 % rel. WER reduction on German
+    /// CommonVoice/Tuda over the generic turbo. May 2026: only Q5_0
+    /// available in the cstr repo (Q8 not packed). Same disk footprint
+    /// as `LargeV3TurboQ5`.
     LargeV3TurboGermanQ5,
-    /// Spar-Fallback — kleiner, fuer 4-GB-Geraete ohne GPU.
+    /// Frugal fallback — smaller, for 4 GB devices without GPU.
     SmallQ51,
-    /// Maximale Qualitaet (F16), groesster Disk-Bedarf. Fuer User mit
-    /// ueppigem VRAM, die jedes WER-Promille wollen.
+    /// Maximum quality (F16), largest disk footprint. For users with
+    /// abundant VRAM who want every WER permille.
     LargeV3Turbo,
 }
 
@@ -50,9 +51,9 @@ impl ModelSlot {
         match self {
             Self::LargeV3TurboQ5 => "ggml-large-v3-turbo-q5_0.bin",
             Self::LargeV3TurboQ8 => "ggml-large-v3-turbo-q8_0.bin",
-            // cstr-Repo benennt das File als "ggml-model-q5_0.bin" (ohne
-            // model-spezifisches Praefix). Wir behalten den Namen bei,
-            // weil wir das File 1:1 von der Quelle ziehen.
+            // The cstr repo names the file "ggml-model-q5_0.bin" (without
+            // a model-specific prefix). We keep the name because we pull
+            // the file 1:1 from the source.
             Self::LargeV3TurboGermanQ5 => "ggml-model-q5_0.bin",
             Self::SmallQ51 => "ggml-small-q5_1.bin",
             Self::LargeV3Turbo => "ggml-large-v3-turbo.bin",
@@ -69,11 +70,12 @@ impl ModelSlot {
         }
     }
 
-    /// Erwarteter SHA-256, gezogen aus dem Git-LFS-Pointer im jeweiligen
-    /// Hugging-Face-Repo (`curl https://huggingface.co/<repo>/raw/main/<file>
-    /// | head -3` zeigt die `oid sha256:...`-Zeile). Wird sowohl in-flight
-    /// beim Download als auch beim Re-Use einer bestehenden Datei geprueft.
-    /// Bei Hash-Mismatch wird das File neu geladen, nicht akzeptiert.
+    /// Expected SHA-256, pulled from the Git-LFS pointer in the
+    /// respective Hugging Face repo (`curl
+    /// https://huggingface.co/<repo>/raw/main/<file> | head -3` shows
+    /// the `oid sha256:...` line). Checked both in-flight during
+    /// download and on re-use of an existing file. On hash mismatch the
+    /// file is re-downloaded, not accepted.
     pub fn expected_sha256(self) -> Option<&'static str> {
         match self {
             Self::LargeV3TurboQ5 => {
@@ -94,10 +96,10 @@ impl ModelSlot {
         }
     }
 
-    /// Mappt den persistierten Settings-String auf einen Slot. Single Source
-    /// of Truth — lib.rs (Bootstrap-Pfad-Konstruktion) und ipc/settings.rs
-    /// (Download-Trigger) nutzen beide diese Funktion, damit der "welcher
-    /// Slot ist gerade aktiv"-Vergleich nicht zweimal divergieren kann.
+    /// Maps the persisted settings string to a slot. Single source of
+    /// truth — lib.rs (bootstrap path construction) and ipc/settings.rs
+    /// (download trigger) both use this function so the "which slot is
+    /// currently active" comparison cannot diverge in two places.
     pub fn from_setting(s: &str) -> Self {
         match s {
             "small-q5_1" => Self::SmallQ51,
@@ -108,8 +110,8 @@ impl ModelSlot {
         }
     }
 
-    /// HF-Repo unterscheidet sich pro Slot — Generic kommt von
-    /// ggerganov/whisper.cpp, DE-Pro vom primeline/cstr-Re-Packager.
+    /// The HF repo differs per slot — generic comes from
+    /// ggerganov/whisper.cpp, DE-Pro from the primeline/cstr re-packager.
     fn url(self) -> String {
         let base = match self {
             Self::LargeV3TurboGermanQ5 => WHISPER_GERMAN_BASE,
@@ -119,10 +121,10 @@ impl ModelSlot {
     }
 }
 
-// GGUF-Quellen fuer Embedded-LLM-Pfad (Phase 3b + Refresh Mai 2026).
-// Bevorzugt `unsloth/*` weil deren GGUF-Re-Packs oeffentlich zugaenglich
-// sind (im Gegensatz zu `bartowski/gemma-*` und originalen `google/*`,
-// die ein Lizenz-Gate haben).
+// GGUF sources for the embedded LLM path (phase 3b + refresh May 2026).
+// Prefer `unsloth/*` because its GGUF re-packs are publicly accessible
+// (unlike `bartowski/gemma-*` and the original `google/*`, which have a
+// license gate).
 const LLM_UNSLOTH_GEMMA4_E4B: &str =
     "https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main";
 const LLM_UNSLOTH_GEMMA4_E2B: &str =
@@ -135,43 +137,43 @@ const LLM_UNSLOTH_LLAMA32_1B: &str =
     "https://huggingface.co/unsloth/Llama-3.2-1B-Instruct-GGUF/resolve/main";
 const LLM_QWEN25_15B: &str = "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main";
 
-/// GGUF-LLM-Modelle, die der `LlamaEmbeddedProcessor` laden kann.
-/// Auswahl-Tiers (Mai 2026):
-/// - **Light** (4-8 GB RAM): Gemma3-1B oder Llama3.2-1B (<1 GB Disk,
-///   ~1,5 GB RAM bei 4-bit). Gemma 4 passt hier nicht — die Matformer-
-///   Architektur hat mehr Raw-Params und braucht selbst im kleinsten
-///   E2B-Format ~3 GB Disk.
-/// - **Mittel** (8-12 GB): Qwen2.5-1.5B oder **Gemma 4 E2B** (neu, ~3 GB
-///   Disk, ~5 GB RAM 4-bit) — Sweet-Spot fuer 8-GB-Notebooks.
-/// - **Pro** (12+ GB): **Gemma 4 E4B** (neu, ~5 GB Disk, ~5-7 GB RAM
-///   4-bit) — beste DE-Qualitaet, multimodal-faehig (wir nutzen nur
-///   Text). Loest Gemma 3 4B als Pro-Default ab.
-/// - Gemma 3 4B bleibt als Backward-Compat-Option fuer User, die auf
-///   die kleinere Disk-Groesse nicht verzichten wollen.
+/// GGUF LLM models that the `LlamaEmbeddedProcessor` can load.
+/// Selection tiers (May 2026):
+/// - **Light** (4-8 GB RAM): Gemma3-1B or Llama3.2-1B (<1 GB disk,
+///   ~1.5 GB RAM at 4-bit). Gemma 4 does not fit here — the matformer
+///   architecture has more raw params and needs ~3 GB disk even in the
+///   smallest E2B format.
+/// - **Mid** (8-12 GB): Qwen2.5-1.5B or **Gemma 4 E2B** (new, ~3 GB
+///   disk, ~5 GB RAM 4-bit) — sweet-spot for 8 GB notebooks.
+/// - **Pro** (12+ GB): **Gemma 4 E4B** (new, ~5 GB disk, ~5-7 GB RAM
+///   4-bit) — best DE quality, multimodal-capable (we only use text).
+///   Replaces Gemma 3 4B as the pro default.
+/// - Gemma 3 4B remains as a backward-compat option for users who don't
+///   want to give up the smaller disk size.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LlmModelSlot {
-    /// **Pro-Tier-Default ab Mai 2026** — Gemma 4 E4B-IT Q5_K_M.
-    /// Apache 2.0, 4,5 B effective params, 140+ Sprachen, 256k Context,
-    /// llama.cpp-Support seit April 2026. ~5,1 GB Disk, ~6 GB RAM bei
-    /// 4-bit Inference.
+    /// **Pro-tier default since May 2026** — Gemma 4 E4B-IT Q5_K_M.
+    /// Apache 2.0, 4.5 B effective params, 140+ languages, 256k context,
+    /// llama.cpp support since April 2026. ~5.1 GB disk, ~6 GB RAM at
+    /// 4-bit inference.
     Gemma4E4bItQ5km,
-    /// **Mittel-Tier-Default ab Mai 2026** — Gemma 4 E2B-IT Q5_K_M.
-    /// Apache 2.0, 2,3 B effective params. ~3,1 GB Disk, ~5 GB RAM
-    /// 4-bit. Sweet-Spot fuer 8-12-GB-Setups.
+    /// **Mid-tier default since May 2026** — Gemma 4 E2B-IT Q5_K_M.
+    /// Apache 2.0, 2.3 B effective params. ~3.1 GB disk, ~5 GB RAM
+    /// 4-bit. Sweet-spot for 8-12 GB setups.
     Gemma4E2bItQ5km,
-    /// Gemma 3 4B-IT Q5_K_M — Phase-1-Empfehlung, jetzt Backward-
-    /// Compat-Variante. 140+ Sprachen, sehr stark auf Deutsch. ~2,8 GB.
+    /// Gemma 3 4B-IT Q5_K_M — phase-1 recommendation, now a
+    /// backward-compat variant. 140+ languages, very strong on German.
+    /// ~2.8 GB.
     Gemma3_4bItQ5km,
-    /// Gemma 3 1B-IT Q5_K_M — **Light-Tier-Default** (851 MB), passt
-    /// auf 4-GB-VMs. Gemma 4 ist hier zu gross.
+    /// Gemma 3 1B-IT Q5_K_M — **light-tier default** (851 MB), fits on
+    /// 4 GB VMs. Gemma 4 is too big here.
     Gemma3_1bItQ5km,
-    /// Llama 3.2 1B-Instruct Q5_K_M — Alternative im Light-Tier,
-    /// staerker auf Englisch, aber Deutsch sehr ordentlich.
+    /// Llama 3.2 1B-Instruct Q5_K_M — alternative in the light tier,
+    /// stronger on English, but quite decent on German.
     Llama32_1bInstructQ5km,
-    /// Qwen 2.5 1.5B-Instruct Q5_K_M — Mittlere Groesse (~1.3 GB),
-    /// stark auf strukturierten Output / Code (Modus
-    /// "claude_code_anweisung" haette davon profitiert wenn er lokal
-    /// liefe).
+    /// Qwen 2.5 1.5B-Instruct Q5_K_M — mid-size (~1.3 GB), strong on
+    /// structured output / code (the "claude_code_anweisung" mode would
+    /// have benefited from this if it ran locally).
     Qwen25_15bInstructQ5km,
 }
 
@@ -198,7 +200,7 @@ impl LlmModelSlot {
         }
     }
 
-    /// SHA-256 aus dem HF-Git-LFS-Pointer
+    /// SHA-256 from the HF Git-LFS pointer
     /// (`curl https://huggingface.co/<repo>/raw/main/<file> | head -3`).
     pub fn expected_sha256(self) -> Option<&'static str> {
         match self {
@@ -223,9 +225,9 @@ impl LlmModelSlot {
         }
     }
 
-    /// Mappt den persistierten Settings-String auf einen Slot. Bei
-    /// unbekannten Werten faellt's auf das kleinste Modell zurueck —
-    /// safer Default fuer Memory-knappe Geraete.
+    /// Maps the persisted settings string to a slot. On unknown values
+    /// it falls back to the smallest model — a safer default for
+    /// memory-constrained devices.
     pub fn from_setting(s: &str) -> Self {
         match s {
             "gemma4-e4b-it-q5_k_m" => Self::Gemma4E4bItQ5km,
@@ -250,9 +252,9 @@ impl LlmModelSlot {
     }
 }
 
-/// Lade ein GGUF-LLM-Modell herunter. Wiederverwendet den generischen
-/// `download_to_file`-Helper. Idempotent — wenn die Datei schon mit
-/// passendem Hash existiert, kein Re-Download.
+/// Download a GGUF LLM model. Reuses the generic `download_to_file`
+/// helper. Idempotent — no re-download if the file already exists with
+/// the matching hash.
 pub async fn download_llm<F>(slot: LlmModelSlot, dest_dir: &Path, on_progress: F) -> Result<PathBuf>
 where
     F: FnMut(DownloadProgress) + Send + 'static,
@@ -261,12 +263,12 @@ where
     download_to_file(&slot.url(), &dest_path, slot.expected_sha256(), on_progress).await
 }
 
-/// Silero-VAD-Modell, das whisper.cpp's built-in VAD-Pfad braucht.
+/// Silero-VAD model that whisper.cpp's built-in VAD path requires.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VadModel {
-    /// v6.2.0 — aktuellste Variante (Stand Mai 2026), ~885 kB.
-    /// Wird beim ersten Whisper-Modell-Download mit-gezogen, weil VAD im
-    /// neuen Default-Pfad aktiviert ist (siehe local.rs).
+    /// v6.2.0 — latest variant (as of May 2026), ~885 kB. Pulled
+    /// alongside the first Whisper model download, because VAD is
+    /// enabled in the new default path (see local.rs).
     SileroV6_2_0,
 }
 
@@ -302,7 +304,7 @@ pub struct DownloadProgress {
     pub bytes_total: Option<u64>,
 }
 
-/// Lade ein Whisper-Modell herunter. `dest_dir` muss existieren.
+/// Download a Whisper model. `dest_dir` must exist.
 pub async fn download_model<F>(slot: ModelSlot, dest_dir: &Path, on_progress: F) -> Result<PathBuf>
 where
     F: FnMut(DownloadProgress) + Send + 'static,
@@ -311,8 +313,8 @@ where
     download_to_file(&slot.url(), &dest_path, slot.expected_sha256(), on_progress).await
 }
 
-/// Lade das Silero-VAD-Modell herunter. Idempotent — wenn das File bereits
-/// existiert (und Hash passt, falls gepinnt), passiert nichts.
+/// Download the Silero VAD model. Idempotent — nothing happens if the
+/// file already exists (and the hash matches, when pinned).
 pub async fn download_vad<F>(model: VadModel, dest_dir: &Path, on_progress: F) -> Result<PathBuf>
 where
     F: FnMut(DownloadProgress) + Send + 'static,
@@ -327,10 +329,10 @@ where
     .await
 }
 
-/// Generischer File-Downloader mit in-flight SHA-256-Pruefung.
-/// Nutzt eine `.partial`-Datei und renamed atomar erst nach erfolgreichem
-/// Hash-Vergleich — so bleibt eine abgebrochene Aufnahme nie als
-/// "ueberredet sich, das passt schon"-File liegen.
+/// Generic file downloader with in-flight SHA-256 verification. Uses a
+/// `.partial` file and renames atomically only after a successful hash
+/// comparison — so an aborted download never leaves behind a
+/// "convinced itself it's fine" file.
 async fn download_to_file<F>(
     url: &str,
     dest_path: &Path,
@@ -447,10 +449,11 @@ async fn compute_sha256(path: &Path) -> Result<String> {
 mod tests {
     use super::*;
 
-    /// Regression-Guard: jeder neue Slot muss einen gepinten Hash haben,
-    /// sonst wird die Integritaetsverifikation beim Download stillschweigend
-    /// uebersprungen. Wenn dieser Test rot ist, gehoert in `expected_sha256`
-    /// der echte Hash von `huggingface.co/<repo>/raw/main/<file>`.
+    /// Regression guard: every new slot must have a pinned hash,
+    /// otherwise the integrity verification during download is silently
+    /// skipped. If this test is red, the real hash from
+    /// `huggingface.co/<repo>/raw/main/<file>` belongs in
+    /// `expected_sha256`.
     #[test]
     fn all_whisper_slots_have_pinned_hashes() {
         for slot in [
@@ -514,12 +517,12 @@ mod tests {
             LlmModelSlot::from_setting("gemma4-e2b-it-q5_k_m"),
             LlmModelSlot::Gemma4E2bItQ5km
         );
-        // Backward-Compat: Gemma 3 Slugs bleiben erkennbar
+        // Backward-compat: Gemma 3 slugs remain recognizable
         assert_eq!(
             LlmModelSlot::from_setting("gemma3-4b-it-q5_k_m"),
             LlmModelSlot::Gemma3_4bItQ5km
         );
-        // Default-Fallback bei unbekannten Werten
+        // Default fallback on unknown values
         assert_eq!(
             LlmModelSlot::from_setting("nonexistent"),
             LlmModelSlot::Gemma3_1bItQ5km
@@ -547,18 +550,17 @@ mod tests {
         );
     }
 
-    /// Integrations-Test gegen Hugging Face: zieht das echte Silero-VAD-File
-    /// (~885 kB, kleinstes gepinntes File) und verifiziert dessen SHA-256
-    /// gegen den im Code gepinnten Hash. Schlaegt fehl, wenn das HF-Repo
-    /// das File austauscht — dann faellt der echte Download-Pfad live
-    /// auseinander, ohne dass die Struktur-Tests etwas mitbekommen.
+    /// Integration test against Hugging Face: pulls the real Silero-VAD
+    /// file (~885 kB, smallest pinned file) and verifies its SHA-256
+    /// against the hash pinned in the code. Fails if the HF repo
+    /// swaps out the file — in which case the real download path falls
+    /// apart live, without the structure tests noticing.
     ///
-    /// `#[ignore]` weil CI-Container und Sandbox-Worktrees haeufig keinen
-    /// Netzwerkzugriff haben. Lokal ausfuehren mit:
+    /// `#[ignore]` because CI containers and sandbox worktrees often
+    /// have no network access. Run locally with:
     ///     cargo test --lib silero_vad -- --ignored
-    /// Im Release-Job sollte ein dedizierter Step diesen Test mit dem
-    /// `--ignored`-Flag laufen lassen, damit ein Repo-Drift vor dem Tag
-    /// auffliegt.
+    /// In the release job a dedicated step should run this test with
+    /// the `--ignored` flag so a repo drift surfaces before the tag.
     #[tokio::test]
     #[ignore = "needs network access to huggingface.co"]
     async fn silero_vad_real_download_hash_matches_pinned() {
@@ -568,9 +570,9 @@ mod tests {
             .await
             .expect("create temp dir");
 
-        // Falls ein vorheriger Test-Lauf das File schon abgelegt hat:
-        // weg damit, sonst nimmt `download_to_file` den existierenden
-        // Hash-Match-Pfad und prueft das Wire-Protokoll nicht mehr.
+        // If a previous test run already left the file here: drop it,
+        // otherwise `download_to_file` takes the existing hash-match
+        // path and no longer exercises the wire protocol.
         let expected_file = dest_dir.join(VadModel::SileroV6_2_0.filename());
         if expected_file.exists() {
             tokio::fs::remove_file(&expected_file)
@@ -580,8 +582,8 @@ mod tests {
 
         let result = download_vad(VadModel::SileroV6_2_0, &dest_dir, |_| {}).await;
 
-        // Cleanup vor dem Assert, damit bei Fehlschlag kein Test-File
-        // im /tmp herumliegt.
+        // Cleanup before the assert, so no test file lingers in /tmp
+        // on failure.
         let _ = tokio::fs::remove_dir_all(&dest_dir).await;
 
         let path = result.expect("Silero-VAD download must succeed");

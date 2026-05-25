@@ -51,10 +51,10 @@ function systemPrefersDark(): boolean {
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
 }
 
-// System-Theme-Wechsel beobachten. Callback feuert nur, wenn die aktuelle
-// User-Wahl "system" ist — sonst gewinnt der explizite Override. Wir
-// lesen die Wahl frisch aus localStorage statt aus einem Store-Snapshot,
-// damit es keinen Stale-Closure-Bug gibt.
+// Observe system theme changes. The callback fires only when the
+// current user choice is "system" — otherwise the explicit override
+// wins. We read the choice fresh from localStorage instead of from a
+// store snapshot, so there's no stale-closure bug.
 export function subscribeSystemTheme(
   onChange: (resolved: ResolvedTheme) => void,
 ): () => void {

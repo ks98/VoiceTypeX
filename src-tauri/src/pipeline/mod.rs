@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! State-Machine-Pipeline-Driver.
+//! State-machine pipeline driver.
 //!
-//! Verbindet den einen globalen Menue-Hotkey mit Recorder, Transcriber,
-//! Processor und Injector. Der Hotkey oeffnet im Idle-State das Modus-
-//! Auswahl-Overlay; nach Enter im Frontend startet die Pipeline ueber
-//! den `start_recording`-IPC-Command. Im Recording-State stoppt
-//! derselbe Hotkey die Aufnahme und laesst die Pipeline durchlaufen.
+//! Connects the single global menu hotkey with `Recorder`, `Transcriber`,
+//! `Processor` and `Injector`. In the `Idle` state the hotkey opens the
+//! mode-selection overlay; after `Enter` in the frontend the pipeline
+//! starts via the `start_recording` IPC command. In the `Recording` state
+//! the same hotkey stops recording and lets the pipeline run through.
 
 use crate::audio::{play_start_cue, play_stop_cue, recorder::RecorderHandle, RecorderConfig};
 use crate::core::error::{Result, VoiceTypeError};
@@ -25,35 +25,34 @@ use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use tauri_plugin_notification::NotificationExt;
 
-/// Payload fuer das `app://partial-transcript`-Event. Frontend zeigt den
-/// Text im Overlay an, jedes Event ersetzt den bisherigen Stand (kein
-/// Append). Leerer String = "Partial loeschen" (vor/nach Streaming).
+/// Payload for the `app://partial-transcript` event. The frontend shows
+/// the text in the overlay; each event replaces the previous state (no
+/// append). Empty string = "clear partial" (before/after streaming).
 #[derive(Clone, Serialize)]
 struct PartialTranscriptPayload {
     text: String,
 }
 
-/// Konfiguration des Streaming-Decode-Loops. Steht hier zentral, damit
-/// die Latenz/CPU-Trade-offs an einer Stelle sichtbar sind.
+/// Configuration of the streaming decode loop. Kept centrally here so the
+/// latency/CPU trade-offs are visible in one place.
 ///
-/// Werte sind defensiv fuer CPU-only-Builds (`fast-cpu` ohne GPU-Backend)
-/// gewaehlt. Auf Vulkan/CUDA-Builds koennte man INITIAL_WAIT halbieren
-/// und INTERVAL auf 500 ms reduzieren — Phase-3-Thema.
+/// Values are chosen defensively for CPU-only builds (`fast-cpu` without
+/// GPU backend). On Vulkan/CUDA builds INITIAL_WAIT could be halved and
+/// INTERVAL reduced to 500 ms — a phase-3 topic.
 const STREAMING_INITIAL_WAIT_MS: u64 = 2_000;
 const STREAMING_INTERVAL_MS: u64 = 800;
-/// Erste Pass startet erst, wenn 1 s Audio im Buffer ist — kuerzere Audios
-/// landen oft im "single timestamp ending - skip entire chunk"-Fall von
-/// whisper.cpp, was leere Outputs erzeugt.
-const STREAMING_MIN_AUDIO_SAMPLES: usize = 16_000; // 1 s bei 16 kHz
+/// The first pass only starts when 1 s of audio is in the buffer — shorter
+/// audios often hit the "single timestamp ending - skip entire chunk" case
+/// of whisper.cpp, which produces empty outputs.
+const STREAMING_MIN_AUDIO_SAMPLES: usize = 16_000; // 1 s at 16 kHz
 
-/// Toggle-Logik fuer den IPC-Pfad (UI-Trigger-Button in der Modi-Liste,
-/// `stop_recording`-Command).
+/// Toggle logic for the IPC path (UI trigger button in the mode list,
+/// `stop_recording` command).
 ///
-/// Beim Toggle-Stop nutzen wir den im AppContext gespeicherten
-/// `active_mode` statt des Parameters: sonst koennte ein UI-Trigger fuer
-/// Modus B die Pipeline finalisieren, die mit Modus A vom Menue-Hotkey
-/// gestartet wurde. Der Parameter-Modus ist nur fuer den Start-Pfad
-/// relevant.
+/// On toggle-stop we use the `active_mode` stored in the `AppContext`
+/// instead of the parameter: otherwise a UI trigger for mode B could
+/// finalize the pipeline that was started with mode A via the menu
+/// hotkey. The parameter mode is only relevant for the start path.
 pub async fn execute_mode(app: AppHandle, ctx: Arc<AppContext>, mode: Mode) -> Result<()> {
     let current = ctx.state_bus.current();
 
@@ -69,12 +68,12 @@ pub async fn execute_mode(app: AppHandle, ctx: Arc<AppContext>, mode: Mode) -> R
     }
 }
 
-/// Handler fuer den einen globalen Menue-Hotkey.
+/// Handler for the single global menu hotkey.
 ///
-/// - `Idle` → `menu`-Window zeigen, Fokus dorthin geben.
-/// - `Recording` → laufende Aufnahme mit dem `active_mode` finalisieren
-///   (Toggle-Stop).
-/// - sonst → ignorieren (Pipeline arbeitet gerade, kein erneuter Trigger).
+/// - `Idle` → show the `menu` window, hand focus to it.
+/// - `Recording` → finalize the in-flight recording with the `active_mode`
+///   (toggle-stop).
+/// - otherwise → ignore (pipeline is busy, no re-trigger).
 pub async fn handle_menu_hotkey(app: AppHandle, ctx: Arc<AppContext>) -> Result<()> {
     let current = ctx.state_bus.current();
     match current {
@@ -83,10 +82,10 @@ pub async fn handle_menu_hotkey(app: AppHandle, ctx: Arc<AppContext>) -> Result<
                 if let Err(e) = menu.show() {
                     tracing::warn!(error = %e, "menu.show() failed");
                 }
-                // set_focus auf Wayland Compositor-abhaengig. Das menu-
-                // Window startet mit `focus: true` in der Config, das gibt
-                // KDE einen staerkeren Hint als ein nachtraegliches
-                // set_focus auf das overlay-Window.
+                // set_focus on Wayland is compositor-dependent. The menu
+                // window starts with `focus: true` in the config, which
+                // gives KDE a stronger hint than a subsequent set_focus
+                // on the overlay window.
                 if let Err(e) = menu.set_focus() {
                     tracing::warn!(error = %e, "menu.set_focus() failed (compositor quirk)");
                 }
@@ -112,24 +111,24 @@ pub async fn handle_menu_hotkey(app: AppHandle, ctx: Arc<AppContext>) -> Result<
 async fn start_recording(app: &AppHandle, ctx: &Arc<AppContext>, mode: &Mode) -> Result<()> {
     ctx.state_bus.transition(AppState::Recording)?;
 
-    // Aktiven Modus merken: der Menue-Hotkey-Stop liest hier den Modus,
-    // mit dem die Pipeline finalisiert werden muss. Wird in
-    // `finish_recording_and_inject` wieder geleert.
+    // Remember the active mode: the menu-hotkey stop reads the mode here
+    // that the pipeline must be finalized with. Cleared again in
+    // `finish_recording_and_inject`.
     *ctx.active_mode.lock() = Some(mode.clone());
 
-    // Menue-Window verstecken, falls der Start aus dem Menue kam — sonst
-    // bleibt es sichtbar hinter dem Overlay. Idempotent: war es schon
-    // versteckt (UI-Trigger-Pfad), passiert nichts.
+    // Hide the menu window if the start came from the menu — otherwise it
+    // stays visible behind the overlay. Idempotent: if it was already
+    // hidden (UI-trigger path), nothing happens.
     if let Some(menu) = app.get_webview_window("menu") {
         if let Err(e) = menu.hide() {
             tracing::warn!(error = %e, "menu.hide() before recording failed");
         }
     }
 
-    // Status-Overlay sichtbar machen. Das Window hat `focus: false`,
-    // klaut also keinen Tastatur-Fokus von der Ziel-App. Vor dem
-    // libei-Inject (`finish_recording_and_inject`) versteckt sich das
-    // Overlay wieder und der Fokus bleibt bei der Ziel-App.
+    // Make the status overlay visible. The window has `focus: false`,
+    // so it doesn't steal keyboard focus from the target app. Before the
+    // libei inject (`finish_recording_and_inject`) the overlay hides
+    // again and focus stays with the target app.
     if let Some(overlay) = app.get_webview_window("overlay") {
         if let Err(e) = overlay.show() {
             tracing::warn!(error = %e, "Overlay show() failed (non-fatal)");
@@ -142,20 +141,19 @@ async fn start_recording(app: &AppHandle, ctx: &Arc<AppContext>, mode: &Mode) ->
 
     let device_name = ctx.settings.read().audio_input_device.clone();
     let mut recorder = RecorderHandle::start(RecorderConfig { device_name }).inspect_err(|e| {
-        // Bei Fehler State zurueck auf Idle, damit kein Deadlock entsteht.
-        // active_mode auch raeumen, sonst sieht der Menue-Hotkey einen
-        // veralteten Eintrag.
+        // On error reset state to Idle so no deadlock occurs. Also clear
+        // active_mode, otherwise the menu hotkey would see a stale entry.
         *ctx.active_mode.lock() = None;
         let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
         let _ = ctx.state_bus.transition(AppState::Idle);
     })?;
 
-    // Streaming-Worker nur bei lokalem STT spawnen. Cloud-Modi (xAI,
-    // OpenAI, Groq, Deepgram) haben keine Streaming-Schnittstelle, dort
-    // bleibt der One-Shot-Pfad nach Stop-Hotkey aktiv. Wir holen jetzt
-    // samples_handle + meta vom Recorder, bevor er in den Slot gelegt
-    // wird — danach ist er hinter einem Mutex, den wir ueber `.await`
-    // hinweg nicht halten duerfen.
+    // Only spawn the streaming worker for local STT. Cloud modes (xAI,
+    // OpenAI, Groq, Deepgram) have no streaming interface; the one-shot
+    // path after the stop hotkey stays active there. We grab the
+    // samples_handle + meta from the recorder now, before it is put into
+    // the slot — afterwards it sits behind a mutex we must not hold
+    // across `.await`.
     if mode.transcription == TranscriptionTarget::Local {
         let samples_arc = recorder.samples_handle();
         match recorder.await_meta().await {
@@ -164,12 +162,12 @@ async fn start_recording(app: &AppHandle, ctx: &Arc<AppContext>, mode: &Mode) ->
                 let language = mode.language.clone();
                 let initial_prompt = mode.initial_prompt.clone();
                 let n_threads = ctx.settings.read().whisper_n_threads;
-                // Mode-Override fuer Whisper-Slot bereits hier aufloesen,
-                // damit der Streaming-Worker die gleiche Transcriber-
-                // Instanz nutzt wie der Final-Pass nach Stop. Sonst
-                // wuerde der User waehrend der Aufnahme die Default-
-                // Modell-Partials sehen und nach Stop einen abweichenden
-                // Final-Decode bekommen.
+                // Resolve the mode override for the Whisper slot here
+                // already, so the streaming worker uses the same
+                // transcriber instance as the final pass after stop.
+                // Otherwise the user would see partials from the default
+                // model during recording, and get a diverging final
+                // decode after stop.
                 let transcriber_for_stream = resolve_local_transcriber(ctx, mode);
                 let handle = tauri::async_runtime::spawn(async move {
                     streaming_worker(
@@ -187,9 +185,9 @@ async fn start_recording(app: &AppHandle, ctx: &Arc<AppContext>, mode: &Mode) ->
                 tracing::info!("Streaming-Worker gespawnt");
             }
             Err(e) => {
-                // Streaming-Worker-Start fehlgeschlagen ist nicht fatal —
-                // der Final-Pass nach Stop-Hotkey laeuft weiter, der User
-                // bekommt nur kein Live-Partial. WARN, kein Abort.
+                // A failed streaming-worker start is not fatal — the
+                // final pass after the stop hotkey still runs; the user
+                // just gets no live partial. WARN, no abort.
                 tracing::warn!(error = %e, "await_meta before streaming worker failed — running without live partial");
             }
         }
@@ -200,10 +198,10 @@ async fn start_recording(app: &AppHandle, ctx: &Arc<AppContext>, mode: &Mode) ->
     Ok(())
 }
 
-/// Streaming-Decode-Loop. Laeuft solange `State::Recording`; emittiert
-/// stabile Prefixes ueber `app://partial-transcript`. Wird in
-/// `finish_recording_and_inject` per `JoinHandle::abort()` beendet, bevor
-/// der Final-Pass startet.
+/// Streaming decode loop. Runs while `State::Recording`; emits stable
+/// prefixes via `app://partial-transcript`. Terminated by
+/// `finish_recording_and_inject` via `JoinHandle::abort()` before the
+/// final pass starts.
 async fn streaming_worker(
     app: AppHandle,
     transcriber: Arc<LocalTranscriber>,
@@ -216,9 +214,9 @@ async fn streaming_worker(
     let ctx: Arc<AppContext> = app.state::<Arc<AppContext>>().inner().clone();
     use tokio::time::{sleep, Duration};
 
-    // Erste Wartezeit, damit das Mikrofon ueberhaupt etwas Substanzielles
-    // im Buffer hat. <1.5 s deutsches Sprach-Audio liefert sonst leere
-    // Decodes oder Whisper halluziniert.
+    // Initial wait so the microphone has anything substantial in the
+    // buffer at all. Otherwise <1.5 s of German speech audio yields
+    // empty decodes or Whisper hallucinates.
     tracing::info!("Streaming worker running (initial_wait={STREAMING_INITIAL_WAIT_MS}ms)");
     sleep(Duration::from_millis(STREAMING_INITIAL_WAIT_MS)).await;
 
@@ -228,13 +226,13 @@ async fn streaming_worker(
 
     loop {
         iteration += 1;
-        // Bail wenn State nicht mehr Recording (Pipeline finalisiert).
+        // Bail if state is no longer Recording (pipeline finalized).
         if !matches!(ctx.state_bus.current(), AppState::Recording) {
             tracing::info!(iteration, "Streaming-Worker: State != Recording, Exit");
             break;
         }
 
-        // Buffer kurz locken, klonen, freigeben — CPU-Arbeit lockfrei.
+        // Briefly lock, clone, release the buffer — CPU work lock-free.
         let raw = samples_arc.lock().clone();
         if raw.len() < STREAMING_MIN_AUDIO_SAMPLES {
             tracing::debug!(iteration, raw_len = raw.len(), "Audio zu kurz, skip");
@@ -273,15 +271,15 @@ async fn streaming_worker(
                     "Streaming-Pass fertig"
                 );
 
-                // LocalAgreement-2 zur Telemetrie behalten (zeigt wie stabil
-                // die Decodes konvergieren), aber NICHT als Emit-Gate benutzen.
-                // Begruendung: auf CPU-only-Hardware dauert ein Pass 8-12 s;
-                // ein zweiter Pass kommt vor dem Stop-Hotkey selten durch,
-                // wodurch LA-2 alle Emits blockiert. Pragmatisch emittieren
-                // wir jeden Decode direkt — Text kann "wabern" wenn ein
-                // spaeterer Pass den ersten revidiert, aber das ist besser
-                // als gar nichts. Der Final-Pass nach Stop ueberschreibt
-                // sowieso autoritativ.
+                // Keep LocalAgreement-2 for telemetry (it shows how
+                // stably the decodes converge), but do NOT use it as an
+                // emit gate. Reason: on CPU-only hardware one pass takes
+                // 8-12 s; a second pass rarely completes before the stop
+                // hotkey, so LA-2 would block all emits. Pragmatically
+                // we emit every decode directly — text may "waver" if a
+                // later pass revises the first one, but that is better
+                // than nothing. The final pass after stop overwrites
+                // authoritatively anyway.
                 let stable = stable_prefix(&prev_text, &curr_text);
                 tracing::debug!(
                     iteration,
@@ -315,10 +313,10 @@ async fn streaming_worker(
     }
 }
 
-/// Spawnt eine Pulsing-Animation: alle 600 ms wechselt das Tray-Icon
-/// zwischen `recording` und `recording_pulse`, solange der StateBus
-/// `Recording` meldet. Der Loop terminiert sich selbst — kein Stop-Signal
-/// noetig.
+/// Spawns a pulsing animation: every 600 ms the tray icon alternates
+/// between `recording` and `recording_pulse` as long as the `StateBus`
+/// reports `Recording`. The loop terminates itself — no stop signal
+/// needed.
 pub fn spawn_tray_recording_pulse(app: AppHandle) {
     use std::time::Duration;
 
@@ -334,9 +332,9 @@ pub fn spawn_tray_recording_pulse(app: AppHandle) {
 
             let current = state_rx.borrow().clone();
             if !matches!(current, AppState::Recording) {
-                // Pulse pausiert ausserhalb des Recording-States;
-                // wir bleiben im Loop, weil ein neuer Recording-Zyklus
-                // dieselbe Task wiederbeleben soll.
+                // Pulse pauses outside the Recording state; we stay in
+                // the loop because a new recording cycle should bring
+                // the same task back to life.
                 continue;
             }
 
@@ -352,7 +350,7 @@ pub fn spawn_tray_recording_pulse(app: AppHandle) {
             }
             bright = !bright;
 
-            // Wenn der Receiver geschlossen wurde (App-Shutdown), beende.
+            // If the receiver was closed (app shutdown), exit.
             if state_rx.has_changed().is_err() {
                 break;
             }
@@ -374,16 +372,16 @@ async fn finish_recording_and_inject(
         "Pipeline-Start (Modus-Eigenschaften)"
     );
 
-    // active_mode jetzt schon raeumen — ab hier ist die Pipeline busy und
-    // der Menue-Hotkey wuerde im Recording-State sowieso nichts mehr tun
-    // (State ist schon Transcribing/Postprocessing/Injecting). Wir
-    // vermeiden, dass eine Pipeline-Exception den Eintrag stehen laesst.
+    // Clear active_mode already here — from this point the pipeline is
+    // busy and the menu hotkey would do nothing in the Recording state
+    // anyway (state is already Transcribing/Postprocessing/Injecting).
+    // We avoid a pipeline exception leaving the entry behind.
     *ctx.active_mode.lock() = None;
 
-    // Phase-2-Streaming-Worker abbrechen, bevor der Final-Pass laeuft.
-    // abort() unterbricht den Loop am naechsten await — CPU-Arbeit
-    // innerhalb spawn_blocking laeuft noch zu Ende, blockiert uns aber
-    // nicht. Anschliessend Partial-Anzeige im Overlay loeschen.
+    // Abort the phase-2 streaming worker before the final pass runs.
+    // abort() interrupts the loop at the next await — CPU work inside
+    // spawn_blocking still finishes, but doesn't block us. Then clear
+    // the partial display in the overlay.
     if let Some(handle) = ctx.active_streaming_handle.lock().take() {
         handle.abort();
         tracing::debug!("Streaming-Worker abortet");
@@ -412,7 +410,8 @@ async fn finish_recording_and_inject(
         let _ = ctx.state_bus.transition(AppState::Idle);
     })?;
 
-    // STT — lokal (ggf. Mode-Override-Slot) oder Cloud, je nach Modus.
+    // STT — local (with optional mode-override slot) or cloud, depending
+    // on the mode.
     let transcriber: Arc<dyn Transcriber> = match mode.transcription {
         TranscriptionTarget::Local => {
             let local = resolve_local_transcriber(ctx, mode);
@@ -427,8 +426,8 @@ async fn finish_recording_and_inject(
         }
     };
 
-    // Settings-Read hier vor dem await — der RwLockReadGuard von parking_lot
-    // ist nicht Send und darf nicht ueber await-Punkte hinweg leben.
+    // Settings read here before the await — the parking_lot
+    // RwLockReadGuard is not Send and must not live across await points.
     let n_threads = ctx.settings.read().whisper_n_threads;
     let transcript = transcriber
         .transcribe_oneshot(
@@ -445,7 +444,7 @@ async fn finish_recording_and_inject(
             let _ = ctx.state_bus.transition(AppState::Idle);
         })?;
 
-    // Postprocessing — none / lokal (Ollama) / Cloud-LLM.
+    // Postprocessing — none / local (Ollama) / cloud LLM.
     let final_text = match mode.processing {
         ProcessingTarget::None => transcript,
         ProcessingTarget::Local => {
@@ -472,8 +471,8 @@ async fn finish_recording_and_inject(
 
     if final_text.trim().is_empty() {
         tracing::warn!(mode = %mode.id, "Pipeline-Output leer — kein Inject");
-        // Overlay verstecken auch im Empty-Pfad, damit der Compositor-State
-        // konsistent bleibt.
+        // Hide the overlay also in the empty path, so the compositor
+        // state stays consistent.
         if let Some(overlay) = app.get_webview_window("overlay") {
             let _ = overlay.hide();
         }
@@ -481,11 +480,11 @@ async fn finish_recording_and_inject(
         return Ok(());
     }
 
-    // **Kritischer Schritt:** Overlay vor libei-Inject verstecken, damit
-    // der Tastatur-Fokus zur vorher fokussierten Ziel-App zurueckspringt.
-    // Ohne diesen Schritt landet libei-Strg+V im Overlay-Window selbst.
-    // Die 80 ms Pause gibt dem Compositor Zeit, den Fokus-Wechsel
-    // tatsaechlich zu vollziehen, bevor libei tippt.
+    // **Critical step:** hide the overlay before the libei inject so the
+    // keyboard focus jumps back to the previously focused target app.
+    // Without this step libei-Ctrl+V lands in the overlay window itself.
+    // The 80 ms pause gives the compositor time to actually perform the
+    // focus switch before libei types.
     if let Some(overlay) = app.get_webview_window("overlay") {
         if let Err(e) = overlay.hide() {
             tracing::warn!(error = %e, "Overlay hide() before inject failed");
@@ -531,13 +530,13 @@ async fn run_local_processing(
         ..Default::default()
     };
 
-    // Engine-Wahl pro Modus. `None` faellt jetzt auf `"embedded"` zurueck —
-    // der eingebaute llama-cpp-2-Pfad braucht keinen externen Daemon und
-    // ist seit Phase 3b die produktive Standard-Variante. Bestehende TOMLs
-    // mit Ollama-Konfiguration werden in `Mode::migrate_deprecated_fields`
-    // explizit auf `"ollama"` gesetzt, sodass dieser Default-Switch sie
-    // nicht trifft. `"ollama"` bleibt fuer User mit eigener Daemon-
-    // Installation als Opt-in verfuegbar.
+    // Engine choice per mode. `None` now falls back to `"embedded"` —
+    // the built-in llama-cpp-2 path needs no external daemon and has
+    // been the production default variant since phase 3b. Existing
+    // TOMLs with Ollama config are explicitly set to `"ollama"` by
+    // `Mode::migrate_deprecated_fields`, so this default switch does
+    // not affect them. `"ollama"` remains available as opt-in for users
+    // with their own daemon installation.
     let engine = mode.local_engine.as_deref().unwrap_or("embedded");
     match engine {
         "embedded" => {
@@ -559,10 +558,10 @@ async fn run_local_processing_ollama(
     system_prompt: &str,
     opts: ProcessOpts,
 ) -> Result<String> {
-    // `ollama_model_tag` ist der neue Pflicht-Schluessel. `local_llm_model`
-    // bleibt als deprecated Fallback fuer noch nicht migrierte TOMLs (die
-    // Migration in `load_mode_from_path` kopiert das Feld bereits, aber wir
-    // sind defensiv).
+    // `ollama_model_tag` is the new required key. `local_llm_model`
+    // remains as a deprecated fallback for not-yet-migrated TOMLs (the
+    // migration in `load_mode_from_path` already copies the field, but
+    // we are defensive).
     let model = mode
         .ollama_model_tag
         .clone()
@@ -581,16 +580,16 @@ async fn run_local_processing_ollama(
     processor.process(transcript, system_prompt, opts).await
 }
 
-/// Resolver fuer den `LocalTranscriber`, den ein Modus benutzen soll.
+/// Resolver for the `LocalTranscriber` that a mode should use.
 ///
-/// - Kein `mode.whisper_model_slot` gesetzt → globaler
-///   `ctx.local_transcriber` (Whisper-Modell aus den Settings).
-/// - Slot identisch mit dem globalen Default-Slot → ebenfalls globaler
-///   Transcriber, damit wir kein zweites Modell parallel im RAM halten.
-/// - Sonst: Cache-Lookup in `ctx.extra_transcribers`; bei Cache-Miss
-///   wird ein neuer `LocalTranscriber` fuer den Slot konstruiert
-///   (Modell-Datei wird erst beim ersten `transcribe`-Aufruf in den
-///   Whisper-Context geladen — der Resolver allokiert nur Metadaten).
+/// - No `mode.whisper_model_slot` set → global `ctx.local_transcriber`
+///   (Whisper model from the settings).
+/// - Slot identical to the global default slot → also the global
+///   transcriber, so we don't hold a second model in RAM in parallel.
+/// - Otherwise: cache lookup in `ctx.extra_transcribers`; on a cache
+///   miss a new `LocalTranscriber` is constructed for the slot (the
+///   model file is only loaded into the Whisper context on the first
+///   `transcribe` call — the resolver only allocates metadata).
 fn resolve_local_transcriber(ctx: &Arc<AppContext>, mode: &Mode) -> Arc<LocalTranscriber> {
     let Some(slot_slug) = mode.whisper_model_slot.as_ref() else {
         return ctx.local_transcriber.clone();
@@ -623,7 +622,8 @@ fn resolve_local_transcriber(ctx: &Arc<AppContext>, mode: &Mode) -> Arc<LocalTra
         .clone()
 }
 
-/// Analog fuer den Embedded-LLM-Processor (`mode.embedded_llm_slot`).
+/// Analogous resolver for the embedded LLM processor
+/// (`mode.embedded_llm_slot`).
 fn resolve_embedded_llm(ctx: &Arc<AppContext>, mode: &Mode) -> Arc<LlamaEmbeddedProcessor> {
     let Some(slot_slug) = mode.embedded_llm_slot.as_ref() else {
         return ctx.local_llm_processor.clone();
@@ -675,13 +675,13 @@ async fn run_cloud_processing(mode: &Mode, transcript: &str) -> Result<String> {
     processor.process(transcript, system_prompt, opts).await
 }
 
-/// Registriere den einen globalen Menue-Hotkey (X11/Windows-Pfad).
+/// Register the single global menu hotkey (X11/Windows path).
 ///
-/// Anders als frueher gibt es **einen** Shortcut fuer die ganze App: der
-/// `Settings.menu_hotkey` oeffnet das Modus-Auswahl-Menue (im Idle-State)
-/// bzw. stoppt eine laufende Aufnahme (im Recording-State). Wir reagieren
-/// nur auf `Pressed`; Release-Events werden ignoriert, weil PTT durch
-/// den Menue-Flow obsolet ist.
+/// Unlike before there is **one** shortcut for the whole app: the
+/// `Settings.menu_hotkey` opens the mode-selection menu (in the Idle
+/// state) or stops an in-flight recording (in the Recording state). We
+/// only react to `Pressed`; release events are ignored, because PTT is
+/// obsolete due to the menu flow.
 pub fn register_menu_hotkey(app: &AppHandle, ctx: Arc<AppContext>) -> Result<()> {
     let accelerator = ctx.settings.read().menu_hotkey.clone();
 
@@ -718,18 +718,18 @@ pub fn register_menu_hotkey(app: &AppHandle, ctx: Arc<AppContext>) -> Result<()>
     Ok(())
 }
 
-/// Wayland-Pfad: bindet den einen Menue-Hotkey ueber das
-/// xdg-portal.GlobalShortcuts und spawnt einen Listener, der jede
-/// Activation auf `handle_menu_hotkey` mappt.
+/// Wayland path: binds the single menu hotkey via xdg-portal
+/// `GlobalShortcuts` and spawns a listener that maps every activation to
+/// `handle_menu_hotkey`.
 ///
-/// Auf Wayland ist der Hotkey nur ein **Vorschlag** — der Compositor zeigt
-/// dem User beim ersten Start einen Dialog zur finalen Zuweisung.
+/// On Wayland the hotkey is only a **suggestion** — the compositor shows
+/// the user a dialog for the final assignment on the first start.
 ///
-/// Zwei Tasks werden gespawnt:
-/// 1) Session-Task: haelt die Portal-Verbindung am Leben + sendet Events
-///    in den broadcast-Channel.
-/// 2) Dispatcher-Task: liest broadcast-Channel, ruft `handle_menu_hotkey`.
-///    Release-Events werden ignoriert (kein PTT mehr).
+/// Two tasks are spawned:
+/// 1) Session task: keeps the portal connection alive and sends events
+///    into the broadcast channel.
+/// 2) Dispatcher task: reads the broadcast channel, calls
+///    `handle_menu_hotkey`. Release events are ignored (no more PTT).
 #[cfg(target_os = "linux")]
 pub fn spawn_wayland_hotkey_session(app: AppHandle, ctx: Arc<AppContext>) {
     use crate::hotkey::linux_wayland::{run_global_shortcuts_session, WaylandShortcutSpec};
@@ -746,7 +746,7 @@ pub fn spawn_wayland_hotkey_session(app: AppHandle, ctx: Arc<AppContext>) {
     let sender_clone = sender.clone();
     let effective_cache = Arc::clone(&ctx.effective_menu_hotkey);
 
-    // Task 1: Portal-Session
+    // Task 1: portal session
     tauri::async_runtime::spawn(async move {
         if let Err(e) =
             run_global_shortcuts_session(specs, sender_clone, Some(effective_cache)).await
@@ -755,7 +755,7 @@ pub fn spawn_wayland_hotkey_session(app: AppHandle, ctx: Arc<AppContext>) {
         }
     });
 
-    // Task 2: Dispatcher — nur auf Pressed reagieren.
+    // Task 2: dispatcher — only react to Pressed.
     let app_for_dispatch = app.clone();
     let ctx_for_dispatch = Arc::clone(&ctx);
     tauri::async_runtime::spawn(async move {
@@ -787,10 +787,10 @@ pub fn spawn_wayland_hotkey_session(app: AppHandle, ctx: Arc<AppContext>) {
     drop(sender);
 }
 
-/// Spawnt einen Listener, der jede State-Aenderung als Tauri-Event
-/// `app://state` ans Frontend emittiert. Payload: { state: "recording"
-/// | "transcribing" | ..., error?: string }. Das Overlay-Window
-/// abonniert das Event und zeigt sich entsprechend.
+/// Spawns a listener that emits every state change as the Tauri event
+/// `app://state` to the frontend. Payload: { state: "recording" |
+/// "transcribing" | ..., error?: string }. The overlay window
+/// subscribes to the event and shows itself accordingly.
 pub fn spawn_state_event_emitter(app: AppHandle) {
     let mut rx = {
         let state = app.state::<Arc<AppContext>>();
@@ -815,14 +815,13 @@ pub fn spawn_state_event_emitter(app: AppHandle) {
     });
 }
 
-/// Spawnt einen Listener, der das Overlay-Window automatisch versteckt,
-/// sobald der State auf `Idle` (oder kurzzeitig `Error`) wechselt. Damit
-/// ist sichergestellt, dass das Overlay auch bei Pipeline-Fehlern
-/// (Transkriptions-Error, LLM-Failure) wieder verschwindet — und nicht
-/// nur im Happy-Path-Inject-Pfad. Das Sichtbar-Machen ist explizit in
-/// `start_recording` (siehe oben), nicht hier — sonst koennte das Window
-/// kurzzeitig wieder aufpoppen, wenn schon hidden, weil ein State-Event
-/// nochmal Recording meldet.
+/// Spawns a listener that hides the overlay window automatically as soon
+/// as the state switches to `Idle` (or briefly `Error`). This ensures
+/// that the overlay also disappears on pipeline errors (transcription
+/// error, LLM failure) — not only on the happy-path inject path. Making
+/// it visible is explicitly done in `start_recording` (see above), not
+/// here — otherwise the window could briefly pop up again when already
+/// hidden, because a state event reports Recording once more.
 pub fn spawn_overlay_state_listener(app: AppHandle) {
     let mut rx = {
         let state = app.state::<Arc<AppContext>>();
@@ -843,12 +842,12 @@ pub fn spawn_overlay_state_listener(app: AppHandle) {
     });
 }
 
-/// Spawnt einen Listener, der StateBus-Aenderungen in Tray-Icon-Updates
-/// uebersetzt.
+/// Spawns a listener that translates `StateBus` changes into tray-icon
+/// updates.
 pub fn spawn_tray_state_listener(app: AppHandle) {
-    // `tauri::State` ist nur eine Reference auf das gemanagte Singleton; wir
-    // ziehen uns einen Receiver aus dem StateBus und lassen die State-Reference
-    // sofort wieder fallen (passiert implizit am Block-Ende).
+    // `tauri::State` is only a reference to the managed singleton; we
+    // pull a receiver out of the StateBus and let the state reference
+    // drop right away (happens implicitly at the end of the block).
     let mut rx = {
         let state = app.state::<Arc<AppContext>>();
         state.state_bus.subscribe()
@@ -875,23 +874,24 @@ pub fn spawn_tray_state_listener(app: AppHandle) {
     });
 }
 
-/// Pipeline-Stage-Choreographie-Tests.
+/// Pipeline-stage choreography tests.
 ///
-/// Hintergrund: die echten Pipeline-Funktionen (`finish_recording_and_inject`
-/// etc.) sind eng an `tauri::AppHandle` gekoppelt (Window-Show/Hide, Event-
-/// Emit, Audio-Cues, `RecorderHandle`). Direkt zu mocken wuerde Refactoring
-/// erfordern, das ueber den Scope dieser Tests hinausgeht.
+/// Background: the real pipeline functions (`finish_recording_and_inject`
+/// etc.) are tightly coupled to `tauri::AppHandle` (window show/hide,
+/// event emit, audio cues, `RecorderHandle`). Mocking them directly
+/// would require refactoring that goes beyond the scope of these tests.
 ///
-/// Stattdessen prueft `run_pipeline_stages_for_test` die Trait-Choreographie
-/// ab dem Punkt nach Recorder-Stop: Transcribe → Optional Process → Inject,
-/// plus die State-Transitions. Das ist der Kern, der bei Modus-Aenderungen
-/// und Provider-Wechseln am haeufigsten bricht. Window-/Audio-Cue-/Recorder-
-/// Aufrufe werden bewusst nicht abgedeckt — sie sind reine I/O-Glue und in
-/// der echten Funktion klar isoliert.
+/// Instead, `run_pipeline_stages_for_test` checks the trait choreography
+/// from the point after recorder stop: Transcribe → Optional Process →
+/// Inject, plus the state transitions. That's the core that breaks most
+/// often on mode changes and provider switches. Window / audio-cue /
+/// recorder calls are deliberately not covered — they are pure I/O glue
+/// and clearly isolated in the real function.
 ///
-/// Zusaetzlich testen wir die State-basierte Trigger-Logik aus
-/// `execute_mode`/`handle_menu_hotkey` (Hotkey-while-busy) direkt am
-/// `StateBus`, weil sie genau ein Match auf `state_bus.current()` ist.
+/// Additionally we test the state-based trigger logic from
+/// `execute_mode` / `handle_menu_hotkey` (hotkey-while-busy) directly on
+/// the `StateBus`, because it is exactly a match on
+/// `state_bus.current()`.
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -904,10 +904,10 @@ mod tests {
     use std::sync::Arc;
     use tokio::sync::Mutex as TokioMutex;
 
-    // --- Mock-Implementierungen der Pipeline-Traits ---
+    // --- Mock implementations of the pipeline traits ---
     //
-    // Konstanter Output (Transcriber/Processor) bzw. Sammel-Vec (Injector).
-    // Keine Sleeps, keine Random-Werte → deterministisch.
+    // Constant output (transcriber/processor) or collecting Vec
+    // (injector). No sleeps, no random values → deterministic.
 
     struct MockTranscriber {
         output: String,
@@ -973,15 +973,14 @@ mod tests {
         }
     }
 
-    /// Test-only Stage-Choreographie ab dem Punkt nach Recorder-Stop.
+    /// Test-only stage choreography from the point after recorder stop.
     ///
-    /// Spiegelt die State-Transitions und Trait-Aufrufe aus
-    /// `finish_recording_and_inject` (Zeile 404-512) 1:1 wider, **ohne**
-    /// AppHandle-Aufrufe (Overlay-Hide, Emit, Window-Lookups). Wenn die
-    /// echte Funktion ihre Reihenfolge oder ihren Error-Recovery-Pfad
-    /// aendert, muss dieser Helper synchron mitgezogen werden — das ist
-    /// die bewusste Trade-off-Entscheidung gegen einen vollstaendigen
-    /// Tauri-Mock.
+    /// Mirrors the state transitions and trait calls from
+    /// `finish_recording_and_inject` (lines 404-512) 1:1, **without**
+    /// AppHandle calls (overlay hide, emit, window lookups). If the real
+    /// function changes its ordering or its error-recovery path, this
+    /// helper must be updated in sync — that is the deliberate trade-off
+    /// against a full Tauri mock.
     async fn run_pipeline_stages_for_test(
         state_bus: &StateBus,
         transcriber: Arc<dyn Transcriber>,
@@ -1035,10 +1034,10 @@ mod tests {
         Ok(final_text)
     }
 
-    /// Happy-Path: Mock-Transcriber gibt festen String zurueck, Passthrough-
-    /// Processor leitet ihn durch, Mock-Injector sammelt ihn ein. State soll
-    /// am Ende wieder Idle sein. Verteidigt gegen Regressionen in der
-    /// Stage-Reihenfolge und in den Trait-Signaturen.
+    /// Happy path: the mock transcriber returns a fixed string, the
+    /// passthrough processor passes it through, the mock injector
+    /// collects it. State must be Idle again at the end. Defends against
+    /// regressions in the stage order and in the trait signatures.
     #[tokio::test]
     async fn pipeline_happy_path_mock_chain_finishes_idle() {
         let bus = StateBus::new();
@@ -1068,9 +1067,9 @@ mod tests {
         assert_eq!(recorded.as_slice(), &["Hallo Welt".to_string()]);
     }
 
-    /// Error-Recovery: Transcriber-Failure muss in State::Idle muenden
-    /// (nicht stuck-in-Transcribing). Verteidigt gegen die Klasse von Bugs,
-    /// die ohne `inspect_err`-Cleanup-Pfad entstehen wuerden.
+    /// Error recovery: a transcriber failure must end up in State::Idle
+    /// (not stuck-in-Transcribing). Defends against the class of bugs
+    /// that would arise without the `inspect_err` cleanup path.
     #[tokio::test]
     async fn pipeline_transcriber_error_returns_state_to_idle() {
         let bus = StateBus::new();
@@ -1091,18 +1090,18 @@ mod tests {
         assert!(recorded.is_empty(), "no inject after STT failure");
     }
 
-    /// Hotkey-while-busy: `execute_mode` ignoriert Trigger, wenn die
-    /// Pipeline weder Idle noch Recording ist. Spiegelt das Match aus
-    /// `execute_mode` (Zeile 57-70). Wenn dieser Test rot ist, hat
-    /// jemand den Else-Zweig (busy → Ok(()) ohne Side-Effects) gebrochen.
+    /// Hotkey-while-busy: `execute_mode` ignores triggers when the
+    /// pipeline is neither Idle nor Recording. Mirrors the match from
+    /// `execute_mode` (lines 57-70). If this test is red, someone has
+    /// broken the else branch (busy → Ok(()) without side-effects).
     #[tokio::test]
     async fn execute_mode_branch_ignores_trigger_when_pipeline_busy() {
         let bus = StateBus::new();
-        // Recording → Transcribing ist der erste "busy"-Zustand.
+        // Recording → Transcribing is the first "busy" state.
         bus.transition(AppState::Recording).unwrap();
         bus.transition(AppState::Transcribing).unwrap();
 
-        // Die Entscheidungslogik aus `execute_mode`:
+        // The decision logic from `execute_mode`:
         let current = bus.current();
         let decision = if matches!(current, AppState::Recording) {
             "finalize"
@@ -1112,14 +1111,14 @@ mod tests {
             "ignore"
         };
         assert_eq!(decision, "ignore");
-        // Wichtig: KEIN State-Uebergang darf passiert sein. Der StateBus
-        // bleibt auf Transcribing — der Trigger wurde geschluckt.
+        // Important: NO state transition must have happened. The
+        // StateBus stays on Transcribing — the trigger was swallowed.
         assert_eq!(bus.current(), AppState::Transcribing);
 
-        // Auch fuer Postprocessing und Injecting greift derselbe
-        // ignore-Pfad — wir verifizieren das exemplarisch, damit eine
-        // spaetere Erweiterung von `execute_mode` (z.B. Sonderbehandlung
-        // fuer einen einzelnen busy-State) bewusst getroffen werden muss.
+        // The same ignore path also applies to Postprocessing and
+        // Injecting — we verify this exemplarily, so a later extension
+        // of `execute_mode` (e.g. special handling for a single busy
+        // state) must be made deliberately.
         bus.transition(AppState::Postprocessing).unwrap();
         let current = bus.current();
         let decision = if matches!(current, AppState::Recording | AppState::Idle) {

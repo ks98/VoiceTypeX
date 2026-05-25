@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! xAI Speech-to-Text — `POST https://api.x.ai/v1/stt`, multipart/form-data
-//! mit `file` als letztem Field. Response: `text`, `language`, `duration`,
-//! `words[]` mit Word-Level-Timestamps. Wir nutzen nur `text`.
+//! xAI speech-to-text — `POST https://api.x.ai/v1/stt`,
+//! multipart/form-data with `file` as the last field. Response:
+//! `text`, `language`, `duration`, `words[]` with word-level
+//! timestamps. We only use `text`.
 
 use crate::core::error::{Result, VoiceTypeError};
 use crate::core::retry::with_retry;
@@ -42,8 +43,8 @@ impl Transcriber for XaiTranscriber {
         let url = format!("{}/stt", self.base_url.trim_end_matches('/'));
 
         with_retry(|| async {
-            // `file` muss laut xAI das LETZTE Field sein. multipart::Form ist
-            // nicht Clone — pro Versuch neu bauen.
+            // According to xAI `file` must be the LAST field.
+            // `multipart::Form` is not Clone — rebuild per attempt.
             let part = reqwest::multipart::Part::bytes(audio.to_vec())
                 .file_name("audio.wav")
                 .mime_str("audio/wav")

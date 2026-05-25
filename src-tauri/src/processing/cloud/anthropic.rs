@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Anthropic Claude via Messages-API. Eigene Konventionen:
-//! - Header `x-api-key` statt `Authorization: Bearer`
-//! - Header `anthropic-version: 2023-06-01` (aktuell stabil)
-//! - System-Prompt ist eigenes Top-Level-Field (NICHT in messages)
-//! - Response ist `content: [{type: "text", text: ...}]`-Array
+//! Anthropic Claude via the Messages API. Its own conventions:
+//! - Header `x-api-key` instead of `Authorization: Bearer`
+//! - Header `anthropic-version: 2023-06-01` (currently stable)
+//! - The system prompt is its own top-level field (NOT in messages)
+//! - The response is a `content: [{type: "text", text: ...}]` array
 
 use crate::core::error::{Result, VoiceTypeError};
 use crate::core::retry::with_retry;
@@ -33,9 +33,10 @@ impl AnthropicProcessor {
         }
     }
 
-    /// Pruefe Auth via einer minimalen `POST /messages`-Anfrage (max_tokens=1)
-    /// gegen das billigste Modell. Anthropic hat keinen kostenlosen
-    /// Auth-Endpoint, daher kostet der Test ~1 Token (Cent-Bruchteil).
+    /// Check auth via a minimal `POST /messages` request
+    /// (max_tokens=1) against the cheapest model. Anthropic has no
+    /// free auth endpoint, so the test costs ~1 token (a fraction of
+    /// a cent).
     pub async fn test_connection(&self) -> Result<()> {
         let url = format!("{}/messages", self.base_url.trim_end_matches('/'));
         let body = serde_json::json!({
