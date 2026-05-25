@@ -36,6 +36,50 @@ pub enum InjectionMethod {
     Keystrokes,
 }
 
+/// Where the text a mode operates on comes from.
+///
+/// - `Voice` (default): classic dictation — the spoken audio is the
+///   only input; the transcript flows straight into processing/inject.
+/// - `Selection`: the text currently selected in the focused app is
+///   read first ("Bearbeiten" feature); the spoken audio becomes an
+///   optional instruction layered on top. Requires `processing != none`
+///   — there is nothing to transform the selection with otherwise.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum InputSource {
+    #[default]
+    Voice,
+    Selection,
+}
+
+/// What happens with the LLM result relative to the selection.
+///
+/// - `Insert` (default): inject at the cursor — the existing dictation
+///   behaviour (over a selection most apps overwrite it on paste).
+/// - `Replace`: overwrite the selection with the result.
+/// - `Append` / `Prepend`: keep the selection, place the result after /
+///   before it (the injector collapses the selection first).
+/// - `Auto`: the LLM decides per response via a leading sentinel line
+///   (`@@REPLACE` / `@@APPEND` / `@@PREPEND`); unparseable responses
+///   fall back to `Mode.output_fallback`. Only valid with
+///   `input = selection`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum OutputAction {
+    #[default]
+    Insert,
+    Replace,
+    Append,
+    Prepend,
+    Auto,
+}
+
+/// Default for `Mode.output_fallback`: `Replace` is the most common edit
+/// action and a safe landing when an `auto` mode emits no sentinel.
+fn default_output_fallback() -> OutputAction {
+    OutputAction::Replace
+}
+
 // `Eq` is dropped because the f32 sampling fields (temperature / top_p
 // / repeat_penalty) do not implement `Eq` (NaN != NaN). `PartialEq` is
 // enough — `Mode` is not used as a HashMap/HashSet key anywhere.
@@ -122,6 +166,21 @@ pub struct Mode {
     #[serde(default)]
     pub injection_method: InjectionMethod,
 
+    /// Where the operated-on text comes from — `voice` (default,
+    /// dictation) or `selection` ("Bearbeiten"). See `InputSource`.
+    #[serde(default)]
+    pub input: InputSource,
+
+    /// What to do with the LLM result relative to the selection. See
+    /// `OutputAction`. Only meaningful when `input = selection`.
+    #[serde(default)]
+    pub output: OutputAction,
+
+    /// Fallback action when `output = auto` and the LLM emits no
+    /// recognizable sentinel line. Must not itself be `auto`.
+    #[serde(default = "default_output_fallback")]
+    pub output_fallback: OutputAction,
+
     #[serde(default)]
     pub language: Option<String>,
     #[serde(default)]
@@ -196,6 +255,27 @@ impl Mode {
         if self.processing != ProcessingTarget::None && self.system_prompt.is_none() {
             return Err(VoiceTypeError::Mode(format!(
                 "Mode '{}': processing != none, but no system_prompt set",
+                self.id
+            )));
+        }
+        // Edit-mode ("Bearbeiten") consistency: a selection-based mode
+        // must have an LLM to transform the selection with, and the
+        // selection-relative output actions only make sense there.
+        if self.input == InputSource::Selection && self.processing == ProcessingTarget::None {
+            return Err(VoiceTypeError::Mode(format!(
+                "Mode '{}': input=selection requires processing != none (transforming a selection needs an LLM)",
+                self.id
+            )));
+        }
+        if self.output != OutputAction::Insert && self.input != InputSource::Selection {
+            return Err(VoiceTypeError::Mode(format!(
+                "Mode '{}': output={:?} requires input=selection (voice modes inject at the cursor)",
+                self.id, self.output
+            )));
+        }
+        if self.output_fallback == OutputAction::Auto {
+            return Err(VoiceTypeError::Mode(format!(
+                "Mode '{}': output_fallback must not be 'auto'",
                 self.id
             )));
         }
@@ -587,5 +667,122 @@ mod tests {
         )
         .unwrap();
         assert!(m.local_engine.is_none());
+    }
+
+    #[test]
+    fn voice_mode_defaults_to_insert_and_replace_fallback() {
+        // A plain dictation mode sets none of the edit fields. The
+        // defaults must keep it a Voice/Insert mode so existing TOMLs
+        // behave exactly as before.
+        let m = parse(
+            r#"
+            id = "exakt"
+            name = "Exaktes Diktat"
+            transcription = "local"
+            processing = "none"
+        "#,
+        )
+        .unwrap();
+        assert_eq!(m.input, InputSource::Voice);
+        assert_eq!(m.output, OutputAction::Insert);
+        assert_eq!(m.output_fallback, OutputAction::Replace);
+    }
+
+    #[test]
+    fn edit_mode_with_selection_and_processing_parses() {
+        let m = parse(
+            r#"
+            id = "verbessern"
+            name = "Verbessern"
+            transcription = "cloud"
+            processing = "cloud"
+            cloud_stt_provider = "xai"
+            cloud_llm_provider = "xai"
+            input = "selection"
+            output = "replace"
+            system_prompt = "Improve the selected text."
+        "#,
+        )
+        .unwrap();
+        assert_eq!(m.input, InputSource::Selection);
+        assert_eq!(m.output, OutputAction::Replace);
+    }
+
+    #[test]
+    fn auto_output_mode_parses_with_fallback() {
+        let m = parse(
+            r#"
+            id = "frei"
+            name = "Frei bearbeiten"
+            transcription = "cloud"
+            processing = "cloud"
+            cloud_stt_provider = "xai"
+            cloud_llm_provider = "xai"
+            input = "selection"
+            output = "auto"
+            output_fallback = "append"
+            system_prompt = "Apply the instruction."
+        "#,
+        )
+        .unwrap();
+        assert_eq!(m.output, OutputAction::Auto);
+        assert_eq!(m.output_fallback, OutputAction::Append);
+    }
+
+    #[test]
+    fn selection_input_without_processing_fails() {
+        // input=selection but processing=none — there is no LLM to
+        // transform the selection with.
+        let err = parse(
+            r#"
+            id = "broken"
+            name = "Broken"
+            transcription = "local"
+            processing = "none"
+            input = "selection"
+        "#,
+        )
+        .unwrap_err();
+        assert!(matches!(err, VoiceTypeError::Mode(_)));
+    }
+
+    #[test]
+    fn selection_output_on_voice_mode_fails() {
+        // output=replace without input=selection — a voice mode injects
+        // at the cursor and has no selection to replace.
+        let err = parse(
+            r#"
+            id = "broken"
+            name = "Broken"
+            transcription = "cloud"
+            processing = "cloud"
+            cloud_stt_provider = "xai"
+            cloud_llm_provider = "xai"
+            output = "replace"
+            system_prompt = "x"
+        "#,
+        )
+        .unwrap_err();
+        assert!(matches!(err, VoiceTypeError::Mode(_)));
+    }
+
+    #[test]
+    fn output_fallback_auto_fails() {
+        let err = parse(
+            r#"
+            id = "broken"
+            name = "Broken"
+            transcription = "cloud"
+            processing = "cloud"
+            cloud_stt_provider = "xai"
+            cloud_llm_provider = "xai"
+            input = "selection"
+            output = "auto"
+            output_fallback = "auto"
+            system_prompt = "x"
+        "#,
+        )
+        .unwrap_err();
+        assert!(matches!(err, VoiceTypeError::Mode(_)));
     }
 }
