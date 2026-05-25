@@ -217,7 +217,7 @@ impl TextInjector for WaylandLibeiInjector {
                     // keypress before any subsequent code (e.g. the
                     // state bus switching to Idle) runs.
                     tokio::time::sleep(Duration::from_millis(80)).await;
-                    tracing::debug!("libei: Ctrl+V gesendet");
+                    tracing::debug!("libei: Ctrl+V sent");
                 }
             }
             None => {
@@ -236,7 +236,7 @@ impl WaylandLibeiInjector {
             .notification()
             .builder()
             .title("VoiceTypeX")
-            .body("Text in der Zwischenablage. Druecke Ctrl+V in der Ziel-App.")
+            .body("Text copied to clipboard. Press Ctrl+V in the target app.")
             .show();
     }
 }

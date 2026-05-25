@@ -130,7 +130,7 @@ impl WorkerState {
         match request {
             ei::Event::Handshake(handshake, request) => match request {
                 ei::handshake::Event::HandshakeVersion { version } => {
-                    tracing::info!(server_version = version, "libei: Handshake gestartet");
+                    tracing::info!(server_version = version, "libei: handshake started");
                     handshake.handshake_version(1);
                     handshake.name("voicetypex");
                     handshake.context_type(ei::handshake::ContextType::Sender);
@@ -305,7 +305,7 @@ impl WorkerState {
             return;
         };
         if !self.emulation_active {
-            tracing::warn!("libei: send_ctrl_v ohne aktive Emulation (kein Resumed?)");
+            tracing::warn!("libei: send_ctrl_v without active emulation (no Resumed?)");
             return;
         }
 
@@ -491,7 +491,7 @@ pub fn run_libei_worker(
         // 4. Setup timeout: if no keyboard is ready after 5 s, signal
         //    failure and exit.
         if state.ready_tx.is_some() && std::time::Instant::now() > setup_deadline {
-            tracing::warn!("libei: Setup-Timeout — kein Keyboard-Device innerhalb 5s ready");
+            tracing::warn!("libei: setup timeout — no keyboard device ready within 5s");
             if let Some(tx) = state.ready_tx.take() {
                 let _ = tx.send(false);
             }

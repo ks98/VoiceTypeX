@@ -97,7 +97,7 @@ impl LocalTranscriber {
         let ctx = WhisperContext::new_with_params(path_str, WhisperContextParameters::default())
             .map_err(|e| VoiceTypeError::Transcription(format!("WhisperContext: {e}")))?;
         *guard = Some(ctx);
-        tracing::info!(model = %path_str, "Whisper-Modell geladen");
+        tracing::info!(model = %path_str, "Whisper model loaded");
         Ok(())
     }
 }

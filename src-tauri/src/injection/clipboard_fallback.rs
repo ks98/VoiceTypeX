@@ -85,14 +85,14 @@ impl TextInjector for ClipboardFallbackInjector {
         if !session.auto_paste_supported {
             tracing::info!(
                 display_server = %session.display_server,
-                "Clipboard gesetzt — Auto-Paste nicht verfuegbar, User muss Ctrl+V druecken"
+                "Clipboard set — auto-paste unavailable, user must press Ctrl+V"
             );
             let _ = self
                 .app_handle
                 .notification()
                 .builder()
                 .title("VoiceTypeX")
-                .body("Text in der Zwischenablage. Druecke Ctrl+V in der Ziel-App.")
+                .body("Text copied to clipboard. Press Ctrl+V in the target app.")
                 .show();
             return Ok(());
         }

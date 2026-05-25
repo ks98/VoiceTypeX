@@ -17,7 +17,7 @@ pub struct WhisperBackendInfo {
     /// Backend identifier: "cpu", "openblas", "vulkan", "cuda",
     /// "metal", "coreml".
     pub backend: &'static str,
-    /// Short German-language description for the UI.
+    /// Short English description for the UI / Logs tab.
     pub description: &'static str,
     /// Expected speedup factor over the `cpu` default. A conservative
     /// estimate — real values depend on the model and the hardware.
@@ -33,7 +33,7 @@ pub fn active_backend() -> WhisperBackendInfo {
     {
         return WhisperBackendInfo {
             backend: "cuda",
-            description: "NVIDIA CUDA — sehr schnell, braucht CUDA-Toolkit + NVIDIA-GPU",
+            description: "NVIDIA CUDA — very fast, requires CUDA toolkit + NVIDIA GPU",
             expected_speedup: 10.0,
         };
     }
@@ -41,7 +41,7 @@ pub fn active_backend() -> WhisperBackendInfo {
     {
         return WhisperBackendInfo {
             backend: "vulkan",
-            description: "Vulkan — GPU-beschleunigt cross-platform (NVIDIA, AMD, Intel)",
+            description: "Vulkan — GPU-accelerated cross-platform (NVIDIA, AMD, Intel)",
             expected_speedup: 7.0,
         };
     }
@@ -49,7 +49,7 @@ pub fn active_backend() -> WhisperBackendInfo {
     {
         return WhisperBackendInfo {
             backend: "metal",
-            description: "Apple Metal — sehr schnell auf macOS-Geraeten",
+            description: "Apple Metal — very fast on macOS devices",
             expected_speedup: 8.0,
         };
     }
@@ -57,7 +57,7 @@ pub fn active_backend() -> WhisperBackendInfo {
     {
         return WhisperBackendInfo {
             backend: "coreml",
-            description: "Apple CoreML — Apple-Silicon optimiert",
+            description: "Apple CoreML — Apple Silicon optimized",
             expected_speedup: 8.0,
         };
     }
@@ -65,7 +65,7 @@ pub fn active_backend() -> WhisperBackendInfo {
     {
         return WhisperBackendInfo {
             backend: "openblas",
-            description: "OpenBLAS — beschleunigte CPU-Math, keine GPU noetig",
+            description: "OpenBLAS — accelerated CPU math, no GPU needed",
             expected_speedup: 2.5,
         };
     }
@@ -79,7 +79,7 @@ pub fn active_backend() -> WhisperBackendInfo {
     {
         WhisperBackendInfo {
             backend: "cpu",
-            description: "CPU (kein BLAS, keine GPU) — default, langsamster Pfad",
+            description: "CPU (no BLAS, no GPU) — default, slowest path",
             expected_speedup: 1.0,
         }
     }

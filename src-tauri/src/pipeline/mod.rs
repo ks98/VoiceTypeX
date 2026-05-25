@@ -182,7 +182,7 @@ async fn start_recording(app: &AppHandle, ctx: &Arc<AppContext>, mode: &Mode) ->
                     .await;
                 });
                 *ctx.active_streaming_handle.lock() = Some(handle);
-                tracing::info!("Streaming-Worker gespawnt");
+                tracing::info!("Streaming worker spawned");
             }
             Err(e) => {
                 // A failed streaming-worker start is not fatal — the
@@ -194,7 +194,7 @@ async fn start_recording(app: &AppHandle, ctx: &Arc<AppContext>, mode: &Mode) ->
     }
 
     *ctx.recorder_slot.lock() = Some(recorder);
-    tracing::info!(mode = %mode.id, "Aufnahme gestartet");
+    tracing::info!(mode = %mode.id, "Recording started");
     Ok(())
 }
 
@@ -397,7 +397,7 @@ async fn finish_recording_and_inject(
         .recorder_slot
         .lock()
         .take()
-        .ok_or_else(|| VoiceTypeError::Audio("Stop ohne aktiven Recorder".into()))?;
+        .ok_or_else(|| VoiceTypeError::Audio("Stop without active recorder".into()))?;
 
     ctx.state_bus.transition(AppState::Transcribing)?;
 
@@ -470,7 +470,7 @@ async fn finish_recording_and_inject(
     ctx.state_bus.transition(AppState::Injecting)?;
 
     if final_text.trim().is_empty() {
-        tracing::warn!(mode = %mode.id, "Pipeline-Output leer — kein Inject");
+        tracing::warn!(mode = %mode.id, "Pipeline output empty — skipping inject");
         // Hide the overlay also in the empty path, so the compositor
         // state stays consistent.
         if let Some(overlay) = app.get_webview_window("overlay") {

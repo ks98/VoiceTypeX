@@ -351,7 +351,7 @@ where
         if let Some(expected) = expected_sha256 {
             let actual = compute_sha256(dest_path).await?;
             if actual.eq_ignore_ascii_case(expected) {
-                tracing::info!(file = %label, "Datei bereits vorhanden + Hash OK");
+                tracing::info!(file = %label, "File already present + hash OK");
                 return Ok(dest_path.to_path_buf());
             }
             tracing::warn!(
@@ -359,7 +359,7 @@ where
                 "Hash mismatch — re-download (expected={expected}, got={actual})"
             );
         } else {
-            tracing::info!(file = %label, "Datei vorhanden, kein Hash-Reference — akzeptiert");
+            tracing::info!(file = %label, "File present, no hash reference — accepted");
             return Ok(dest_path.to_path_buf());
         }
     }
