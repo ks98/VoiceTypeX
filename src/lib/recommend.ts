@@ -36,7 +36,7 @@ export function recommendLlmSlot(totalRamGb: number): LlmSlotRecommendation {
   if (totalRamGb < 12) {
     return {
       slot: "gemma4-e2b-it-q5_k_m",
-      label: "Gemma 4 E2B (Mittel)",
+      label: "Gemma 4 E2B (Mid)",
     };
   }
   return { slot: "gemma4-e4b-it-q5_k_m", label: "Gemma 4 E4B (Pro)" };

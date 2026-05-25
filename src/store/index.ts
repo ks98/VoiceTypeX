@@ -68,7 +68,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       const audioDevices = await ipcListAudioDevices();
       set({ audioDevices });
     } catch (e) {
-      set({ error: `Audio-Geraete: ${e}` });
+      set({ error: `Audio devices: ${e}` });
     }
   },
   update: async (partial) => {
