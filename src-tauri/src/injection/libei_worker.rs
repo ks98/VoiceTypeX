@@ -48,6 +48,9 @@ use xkbcommon::xkb;
 pub enum KeyCommand {
     /// Send Ctrl+V (press Ctrl, press V, release V, release Ctrl).
     CtrlV,
+    /// Send Ctrl+C — copies the focused app's selection so the
+    /// "Bearbeiten" feature can read it from the clipboard.
+    CtrlC,
     /// Shut down the worker cleanly.
     Shutdown,
 }
@@ -102,7 +105,9 @@ struct WorkerState {
     /// Ctrl+V only keys + frame, no new `start_emulating`.
     emulation_active: bool,
     ready_tx: Option<oneshot::Sender<bool>>,
-    pending_ctrl_v: bool,
+    /// A Ctrl+<key> combo requested from the tokio side, pending until
+    /// the keyboard is ready. `Some(v)` = paste, `Some(c)` = copy.
+    pending_key: Option<xkb::Keysym>,
     running: bool,
 }
 
@@ -279,10 +284,12 @@ impl WorkerState {
         }
     }
 
-    /// Send the Ctrl+V sequence. Only call when `is_ready()` is true
-    /// (keyboard + keymap + resumed + emulation active via the
-    /// `Resumed` handler). NO `start_emulating`/`stop_emulating` here —
-    /// the emulation session is persistent from the first Resumed.
+    /// Send a `Ctrl+<key>` sequence (e.g. Ctrl+V to paste, Ctrl+C to
+    /// copy a selection). Only call when `is_ready()` is true, i.e.
+    /// keyboard, keymap and resumed are all set and emulation is active
+    /// (established in the `Resumed` handler). NO
+    /// `start_emulating`/`stop_emulating` here — the emulation session
+    /// is persistent from the first Resumed.
     ///
     /// **Important:** we pass `context` so we can flush after EVERY
     /// frame. Without flush reis collects all four `device.frame`
@@ -295,17 +302,17 @@ impl WorkerState {
     /// Four frames, one per key transition. Each `device.frame` is one
     /// "logical hardware event" (libei spec); the pattern matches what
     /// lan-mouse uses in production.
-    fn send_ctrl_v(&mut self, context: &ei::Context) {
+    fn send_ctrl_combo(&mut self, context: &ei::Context, key_sym: xkb::Keysym) {
         let Some((device, keyboard)) = &self.active_keyboard else {
-            tracing::warn!("libei: send_ctrl_v ohne aktives Keyboard");
+            tracing::warn!("libei: send_ctrl_combo without active keyboard");
             return;
         };
         let Some(keymap) = &self.keymap else {
-            tracing::warn!("libei: send_ctrl_v without keymap");
+            tracing::warn!("libei: send_ctrl_combo without keymap");
             return;
         };
         if !self.emulation_active {
-            tracing::warn!("libei: send_ctrl_v without active emulation (no Resumed?)");
+            tracing::warn!("libei: send_ctrl_combo without active emulation (no Resumed?)");
             return;
         }
 
@@ -313,17 +320,17 @@ impl WorkerState {
             tracing::warn!("libei: Control_L not in keymap");
             return;
         };
-        let Some(v_keycode) = find_keycode(keymap, xkb::Keysym::v) else {
-            tracing::warn!("libei: keysym 'v' not in keymap");
+        let Some(key_keycode) = find_keycode(keymap, key_sym) else {
+            tracing::warn!(keysym = ?key_sym, "libei: requested keysym not in keymap");
             return;
         };
 
         let serial = self.last_serial;
         // EI convention: keycode minus 8 (XKB keycodes are +8 relative
         // to Linux keycodes). Spec requires evdev keycodes
-        // (KEY_LEFTCTRL=29, KEY_V=47).
+        // (KEY_LEFTCTRL=29, KEY_V=47, KEY_C=46).
         let ctrl_evdev = ctrl_keycode - 8;
-        let v_evdev = v_keycode - 8;
+        let key_evdev = key_keycode - 8;
 
         // Helper: write the frame + flush immediately + briefly sleep
         // (simulate the keyboard scan rhythm).
@@ -333,23 +340,23 @@ impl WorkerState {
             keyboard.key(key, state);
             device.frame(serial, t);
             if let Err(e) = context.flush() {
-                tracing::warn!(error = %e, "libei: flush failed during Ctrl+V");
+                tracing::warn!(error = %e, "libei: flush failed during Ctrl+combo");
             }
             std::thread::sleep(std::time::Duration::from_millis(1));
             t
         };
 
         last_t = send_frame(ctrl_evdev, ei::keyboard::KeyState::Press, last_t);
-        last_t = send_frame(v_evdev, ei::keyboard::KeyState::Press, last_t);
-        last_t = send_frame(v_evdev, ei::keyboard::KeyState::Released, last_t);
+        last_t = send_frame(key_evdev, ei::keyboard::KeyState::Press, last_t);
+        last_t = send_frame(key_evdev, ei::keyboard::KeyState::Released, last_t);
         last_t = send_frame(ctrl_evdev, ei::keyboard::KeyState::Released, last_t);
 
         tracing::info!(
             serial,
             ctrl_evdev,
-            v_evdev,
+            key_evdev,
             last_time_us = last_t,
-            "libei: Ctrl+V gesendet (4 Frames mit per-Frame-flush + 1 ms Pause)"
+            "libei: Ctrl+combo sent (4 frames with per-frame flush + 1 ms pause)"
         );
     }
 }
@@ -431,7 +438,7 @@ pub fn run_libei_worker(
         keyboard_resumed: false,
         emulation_active: false,
         ready_tx: Some(ready_tx),
-        pending_ctrl_v: false,
+        pending_key: None,
         running: true,
     };
 
@@ -463,7 +470,8 @@ pub fn run_libei_worker(
         // 2. Poll commands from the tokio side
         loop {
             match cmd_rx.try_recv() {
-                Ok(KeyCommand::CtrlV) => state.pending_ctrl_v = true,
+                Ok(KeyCommand::CtrlV) => state.pending_key = Some(xkb::Keysym::v),
+                Ok(KeyCommand::CtrlC) => state.pending_key = Some(xkb::Keysym::c),
                 Ok(KeyCommand::Shutdown) => state.running = false,
                 Err(mpsc::TryRecvError::Empty) => break,
                 Err(mpsc::TryRecvError::Disconnected) => {
@@ -473,17 +481,17 @@ pub fn run_libei_worker(
             }
         }
 
-        // 3. Execute pending Ctrl+V if everything is ready
-        if state.pending_ctrl_v {
+        // 3. Execute a pending Ctrl+<key> combo once everything is ready
+        if let Some(key_sym) = state.pending_key {
             if state.is_ready() {
-                state.send_ctrl_v(&context);
-                state.pending_ctrl_v = false;
+                state.send_ctrl_combo(&context, key_sym);
+                state.pending_key = None;
             } else {
                 tracing::trace!(
                     has_keyboard = state.active_keyboard.is_some(),
                     has_keymap = state.keymap.is_some(),
                     resumed = state.keyboard_resumed,
-                    "libei: Ctrl+V pending, aber Vorbedingungen noch nicht erfuellt"
+                    "libei: Ctrl+combo pending, but preconditions not yet met"
                 );
             }
         }
