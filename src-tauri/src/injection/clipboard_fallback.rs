@@ -26,6 +26,7 @@
 
 use crate::core::error::{Result, VoiceTypeError};
 use crate::core::session::detect_session;
+use crate::core::OutputAction;
 use crate::injection::{InjectOptions, InjectionStrategy, InjectorCapabilities, TextInjector};
 use async_trait::async_trait;
 use std::time::Duration;
@@ -104,7 +105,10 @@ impl TextInjector for ClipboardFallbackInjector {
             return Ok(());
         }
 
-        // X11 / Windows: full save → set → paste → restore path.
+        // X11 / Windows: full save → set → (collapse) → paste → restore.
+        // For append/prepend the selection is collapsed first so the
+        // paste lands after/before it instead of overwriting it.
+        collapse_selection_for_action(opts.action).await?;
         send_paste_shortcut().await?;
 
         if let Some(prev) = saved {
@@ -183,6 +187,37 @@ async fn inject_keystrokes(text: &str) -> Result<()> {
         enigo
             .text(&owned)
             .map_err(|e| VoiceTypeError::Injection(format!("enigo.text: {e}")))?;
+        Ok(())
+    })
+    .await
+    .map_err(|e| VoiceTypeError::Injection(format!("spawn_blocking: {e}")))?
+}
+
+/// Collapse the active selection before pasting, for the append/prepend
+/// edit actions:
+/// - `Append`: Right arrow → caret to the end of the selection, paste
+///   lands after the kept original.
+/// - `Prepend`: Left arrow → caret to the start, paste lands before it.
+/// - `Replace`/`Insert`/`Auto`: no-op — pasting over an active
+///   selection overwrites it, pasting at a caret inserts.
+///
+/// Relies on the selection surviving the focus round-trip (menu → target
+/// app); see docs/PLATFORMS.md for the manual-verification note.
+async fn collapse_selection_for_action(action: OutputAction) -> Result<()> {
+    use enigo::Key;
+    let key = match action {
+        OutputAction::Append => Key::RightArrow,
+        OutputAction::Prepend => Key::LeftArrow,
+        OutputAction::Replace | OutputAction::Insert | OutputAction::Auto => return Ok(()),
+    };
+    tokio::task::spawn_blocking(move || -> Result<()> {
+        use enigo::{Direction, Enigo, Keyboard, Settings};
+
+        let mut enigo = Enigo::new(&Settings::default())
+            .map_err(|e| VoiceTypeError::Injection(format!("enigo::new: {e}")))?;
+        enigo
+            .key(key, Direction::Click)
+            .map_err(|e| VoiceTypeError::Injection(format!("collapse key: {e}")))?;
         Ok(())
     })
     .await

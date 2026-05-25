@@ -22,6 +22,7 @@
 //! notification ("Press Ctrl+V") — no hard error.
 
 use crate::core::error::{Result, VoiceTypeError};
+use crate::core::OutputAction;
 use crate::injection::libei_worker::{run_libei_worker, KeyCommand};
 use crate::injection::{InjectOptions, InjectionStrategy, InjectorCapabilities, TextInjector};
 use async_trait::async_trait;
@@ -187,6 +188,12 @@ impl TextInjector for WaylandLibeiInjector {
         if opts.strategy == InjectionStrategy::Keystrokes {
             tracing::info!(
                 "Wayland: injection_method=keystrokes nicht unterstuetzt, nutze libei+Clipboard"
+            );
+        }
+        if matches!(opts.action, OutputAction::Append | OutputAction::Prepend) {
+            tracing::info!(
+                action = ?opts.action,
+                "Wayland: append/prepend not yet supported (libei collapse key pending) — pasting at caret"
             );
         }
 

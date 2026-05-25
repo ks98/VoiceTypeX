@@ -19,6 +19,7 @@
 //! (X11/Windows with enigo; macOS fallback without auto-paste).
 
 use crate::core::error::Result;
+use crate::core::modes::OutputAction;
 use async_trait::async_trait;
 
 pub mod clipboard_fallback;
@@ -44,6 +45,12 @@ pub enum InjectionStrategy {
 #[derive(Debug, Clone)]
 pub struct InjectOptions {
     pub strategy: InjectionStrategy,
+    /// Where the text lands relative to a selection (edit modes):
+    /// `Replace`/`Insert` paste at the caret (overwriting any active
+    /// selection), `Append`/`Prepend` collapse the selection first.
+    /// `Auto` is resolved before reaching the injector and is treated
+    /// as `Replace` defensively.
+    pub action: OutputAction,
 }
 
 #[async_trait]

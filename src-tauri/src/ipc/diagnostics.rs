@@ -74,6 +74,7 @@ pub async fn test_auto_paste(
             &text,
             InjectOptions {
                 strategy: InjectionStrategy::Clipboard,
+                action: crate::core::OutputAction::Insert,
             },
         )
         .await

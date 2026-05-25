@@ -569,6 +569,7 @@ async fn finish_recording_and_inject(
             &final_text,
             InjectOptions {
                 strategy: injection_strategy,
+                action: output_action,
             },
         )
         .await
@@ -1093,6 +1094,7 @@ mod tests {
                 &final_text,
                 InjectOptions {
                     strategy: crate::injection::InjectionStrategy::Clipboard,
+                    action: OutputAction::Insert,
                 },
             )
             .await
