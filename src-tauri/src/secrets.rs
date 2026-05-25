@@ -125,9 +125,7 @@ impl Cipher {
         // supported target.
         #[cfg(target_os = "macos")]
         {
-            tracing::warn!(
-                "macOS secret encryption not implemented yet — using PLAIN storage."
-            );
+            tracing::warn!("macOS secret encryption not implemented yet — using PLAIN storage.");
             Cipher::Plain
         }
     }
@@ -252,9 +250,8 @@ fn dpapi_encrypt(plaintext: &[u8]) -> Result<String> {
         .map_err(|e| VoiceTypeError::Secrets(format!("DPAPI encrypt: {e}")))?;
     }
 
-    let ct = unsafe {
-        std::slice::from_raw_parts(out_blob.pbData, out_blob.cbData as usize).to_vec()
-    };
+    let ct =
+        unsafe { std::slice::from_raw_parts(out_blob.pbData, out_blob.cbData as usize).to_vec() };
     unsafe {
         let _ = LocalFree(Some(HLOCAL(out_blob.pbData as *mut _)));
     }
@@ -291,9 +288,8 @@ fn dpapi_decrypt(ct_b64: &str) -> Result<Vec<u8>> {
         .map_err(|e| VoiceTypeError::Secrets(format!("DPAPI decrypt: {e}")))?;
     }
 
-    let pt = unsafe {
-        std::slice::from_raw_parts(out_blob.pbData, out_blob.cbData as usize).to_vec()
-    };
+    let pt =
+        unsafe { std::slice::from_raw_parts(out_blob.pbData, out_blob.cbData as usize).to_vec() };
     unsafe {
         let _ = LocalFree(Some(HLOCAL(out_blob.pbData as *mut _)));
     }
@@ -389,10 +385,7 @@ fn load_v2(json: serde_json::Value, cipher: &Cipher) -> Result<HashMap<String, S
         // plain, re-encrypt on the way in. Same intent as v1 migration:
         // do not leave plaintext lying around once we can avoid it.
         if !current_is_plain {
-            tracing::info!(
-                "Migrating plain secrets file to {}",
-                cipher.method_name()
-            );
+            tracing::info!("Migrating plain secrets file to {}", cipher.method_name());
             let secrets = FileSecrets {
                 entries: entries.clone(),
             };
