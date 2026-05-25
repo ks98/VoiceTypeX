@@ -7,12 +7,15 @@ läuft — derselbe Hotkey stoppt.
 
 ## Status
 
-Funktional komplett auf **Linux/Wayland (KDE Plasma 6 + GNOME 46+)**,
-**Linux/X11** und **Windows**. Auto-Paste auf Wayland über
-`xdg-desktop-portal.RemoteDesktop` + libei. Settings und Wayland-
+**Beta** — funktional komplett auf **Linux/Wayland (KDE Plasma 6 +
+GNOME 46+)**, **Linux/X11** und **Windows**. Auto-Paste auf Wayland
+über `xdg-desktop-portal.RemoteDesktop` + libei. Settings und Wayland-
 Permission-Token persistent. Distribution-Bundles für Linux
 (`.deb` / `.rpm` / AppImage) + Windows (NSIS) verfügbar. macOS ist
 nicht im Scope.
+
+Beta-spezifische Hinweise: siehe Abschnitt
+[*„Beta-Status & Updates"*](#beta-status--updates) weiter unten.
 
 ## Kernablauf
 
@@ -89,9 +92,13 @@ Menü-Hotkey*.
 - **Cloud-Provider (BYOK):** xAI (STT + Grok, Default `grok-4-fast-non-reasoning`),
   OpenAI Whisper + GPT, Groq Whisper, Deepgram, Anthropic Claude
 - **Wayland Auto-Paste:** ashpd (RemoteDesktop-Portal) + reis (libei)
-- **Secrets:** `~/.config/.../secrets.json` (chmod 0600) als Source of
-  Truth, OS-Keychain best-effort Mirror (Linux-Setups mit
-  gnome-keyring + kwallet sind unzuverlässig)
+- **Secrets:** `~/.config/.../secrets.json` (chmod 0600), **at-rest
+  verschlüsselt**: Windows nutzt DPAPI (`CryptProtectData`), Linux
+  nutzt AES-256-GCM mit einem 32-Byte-Random-KEK aus dem
+  OS-Keyring (libsecret / kwallet). Wenn kein Keyring verfügbar ist,
+  fällt der Storage auf Plaintext zurück + zeigt eine rote Banner-
+  Warnung im API-Keys-Tab. macOS bleibt im Beta-Scope auf Plaintext
+  (Security.framework-Integration nach 1.0).
 - **Repo & CI:** GitLab (`.gitlab-ci.yml`)
 
 Architektur-Tiefe: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
@@ -175,18 +182,45 @@ Portal-Permission, WebView2-Cache, …) stehen in
 
 ## Datenschutz & Sicherheit
 
-- Audio, Transkripte und LLM-Antworten werden standardmäßig **nicht**
-  geloggt. Es existiert ein Opt-in-*Diagnose-Logging*-Toggle in den
-  Einstellungen.
+- Audio, Transkripte und LLM-Antworten werden **nicht** geloggt. Der
+  `LogRingBuffer` (sichtbar im *Logs*-Tab) filtert Provider-Response-
+  Bodies und Transkript-Snippets — nur Status-Codes, Provider-Namen
+  und Dauer-Metriken landen in den Logs.
 - **Keine** Telemetrie, **kein** Analytics.
-- Cloud-API-Keys werden **niemals** im Klartext auf Disk gespeichert —
-  sie liegen in `~/.config/.../secrets.json` mit chmod 0600 (plus
-  best-effort Spiegel in OS-Keychain) und werden nie geloggt, nie ins
-  Frontend exponiert (alle Provider-Requests gehen durch das Rust-Backend).
-- Whisper-Modelle werden **nicht** im Installer mitgebündelt — Downloader
-  mit Hash-Verifikation aus Hugging Face beim ersten Start.
+- **Cloud-API-Keys werden at-rest verschlüsselt** gespeichert: Windows
+  über DPAPI, Linux mit AES-256-GCM (KEK im OS-Keyring). Bei Linux-
+  Systemen ohne Keyring fällt der Storage auf Plaintext mit chmod 0600
+  zurück; der API-Keys-Tab zeigt in dem Fall eine rote Warning. Keys
+  werden nie geloggt und nie ins Frontend exponiert — alle Provider-
+  Requests gehen durch das Rust-Backend. Details siehe
+  [`SECURITY.md`](SECURITY.md).
+- **Content-Security-Policy** auf allen Webviews aktiv: nur `'self'`
+  + explizite Provider-Hosts (api.anthropic.com, api.openai.com,
+  api.x.ai, api.groq.com, api.deepgram.com, huggingface.co). Kein
+  Inline-Scripting, kein eval.
+- Whisper-Modelle werden **nicht** im Installer mitgebündelt —
+  Downloader mit SHA-256-Hash-Verifikation aus Hugging Face beim
+  ersten Start.
 - Beim System-Start wird **nicht** automatisch gestartet — Auto-Start
   ist explizites Opt-in.
+
+## Beta-Status & Updates
+
+- **Kein Auto-Updater im Beta.** Updates erfordern manuelles Re-Download
+  vom GitLab-Release. Plan für 1.0: signierter Auto-Updater via
+  `tauri-plugin-updater`. **Konsequenz für die Beta**: wenn ein
+  Sicherheitspatch erscheint, gibt es keine automatische Aktualisierung
+  — bitte abonniere das GitLab-Repo, um Release-Tags zu beobachten.
+- **Beta-Bundles sind unsigniert.** AppImage, .deb, .rpm und das
+  Windows-NSIS-Installer haben keine Code-Signatur. Distribution
+  ausschließlich über die offiziellen GitLab-Releases — bitte nicht
+  über Drittquellen oder Mirror beziehen.
+- **Linux-Voraussetzung für Encryption-at-rest:** libsecret
+  (gnome-keyring) oder kwallet muss installiert sein. Headless-/
+  Server-Setups laufen im Plaintext-Fallback mit deutlicher UI-Warning.
+- **Bug-Reports:** [GitLab Issues](https://gitlab.com/kevin-stenzel/voicetypex/issues)
+  inklusive `~/.config/de.kevin-stenzel.voicetypex/voicetypex.log`
+  (falls aktiviert) und der App-Version aus *Einstellungen → Diagnose*.
 
 ## Lizenz
 
