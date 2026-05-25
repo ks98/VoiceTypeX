@@ -111,6 +111,72 @@ test:linux:
     - if: '$CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "merge_request_event"'
 
 # ----------------------------------------------------------------------------
+# Audit Stage (Supply-Chain-Checks — laeuft parallel zu lint/test)
+# ----------------------------------------------------------------------------
+# `cargo audit` und `pnpm audit` finden Vulnerabilities in den
+# Dependency-Trees. Beide Jobs sind im Stage `test` angesiedelt, damit
+# sie parallel zu den eigentlichen Tests laufen und ohne `needs:`
+# nicht den Pfad zum Build-Stage blockieren — gleichzeitig brechen sie
+# bei Findings die Pipeline ab, sodass keine vulnerable Version
+# unbemerkt bis ins Bundle wandert.
+audit:cargo:
+  <<: *linux-base
+  stage: test
+  needs: []
+  script:
+    # cargo-audit ist nicht in der Default-Rust-Toolchain; via `--locked`
+    # bleibt die Version reproduzierbar und der CI-Cache (.cargo/...)
+    # macht den zweiten Lauf sub-second.
+    - cargo install --locked cargo-audit
+    # `--deny warnings` macht auch "yanked"-Crates und Informational-
+    # Advisories zu Fehlern, damit Auffaelligkeiten nicht im Log
+    # untergehen. Die `--ignore`-Liste suppressed bekannte
+    # transitive Unmaintained-Advisories aus dem Tauri-/GTK-Stack,
+    # die wir nicht selbst fixen koennen und die in jedem Lauf gleich
+    # bleiben wuerden. Liste regelmaessig pruefen; bei jedem Tauri-
+    # oder GTK-Update auf Eintraege, die nicht mehr ausgeloest werden,
+    # checken und entfernen.
+    - >-
+      cargo audit --file src-tauri/Cargo.lock --deny warnings
+      --ignore RUSTSEC-2024-0370
+      --ignore RUSTSEC-2024-0411
+      --ignore RUSTSEC-2024-0412
+      --ignore RUSTSEC-2024-0413
+      --ignore RUSTSEC-2024-0414
+      --ignore RUSTSEC-2024-0415
+      --ignore RUSTSEC-2024-0416
+      --ignore RUSTSEC-2024-0417
+      --ignore RUSTSEC-2024-0418
+      --ignore RUSTSEC-2024-0419
+      --ignore RUSTSEC-2024-0420
+      --ignore RUSTSEC-2024-0429
+      --ignore RUSTSEC-2025-0075
+      --ignore RUSTSEC-2025-0080
+      --ignore RUSTSEC-2025-0081
+      --ignore RUSTSEC-2025-0098
+      --ignore RUSTSEC-2025-0100
+  rules:
+    - if: '$CI_COMMIT_TAG'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "merge_request_event"'
+
+audit:pnpm:
+  <<: *linux-base
+  stage: test
+  needs: []
+  script:
+    - pnpm install --frozen-lockfile
+    # `--audit-level=high` schluckt low/moderate Findings — die landen
+    # zwar im Log, brechen aber den Job nicht. Anhebung auf `moderate`
+    # bei Bedarf in einer Folge-Iteration, sobald die bestehenden
+    # devDeps sauber sind.
+    - pnpm audit --audit-level=high
+  rules:
+    - if: '$CI_COMMIT_TAG'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "merge_request_event"'
+
+# ----------------------------------------------------------------------------
 # Build Stage (cargo check + pnpm build, ohne Bundle)
 # ----------------------------------------------------------------------------
 build:linux:
