@@ -219,6 +219,7 @@ pub fn run() {
                 extra_llm_processors: Arc::new(Mutex::new(std::collections::HashMap::new())),
                 active_streaming_handle: Arc::new(Mutex::new(None)),
                 injector,
+                selection_buffer: Arc::new(Mutex::new(None)),
                 settings: Arc::new(RwLock::new(initial_settings)),
                 settings_path,
                 log_buffer: log_buffer.clone(),

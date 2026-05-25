@@ -34,6 +34,13 @@ use tauri_plugin_notification::NotificationExt;
 
 const RESTORE_DELAY_MS: u64 = 200;
 
+/// How long to wait after the simulated copy shortcut before reading
+/// the clipboard. The target app needs a moment to service Ctrl+C and
+/// update the clipboard. Coarse fixed delay (matches the project's
+/// existing timing approach); a clipboard sequence-number poll would be
+/// a later refinement.
+const COPY_SETTLE_MS: u64 = 120;
+
 pub struct ClipboardFallbackInjector {
     app_handle: tauri::AppHandle,
 }
@@ -112,6 +119,52 @@ impl TextInjector for ClipboardFallbackInjector {
 
         Ok(())
     }
+
+    async fn read_selection(&self) -> Result<Option<String>> {
+        let session = detect_session();
+
+        // We can only simulate the copy shortcut reliably where enigo's
+        // key path works (X11/Windows). On "auto_paste_supported =
+        // false" sessions (Wayland is routed to WaylandLibeiInjector;
+        // this covers unknown/headless) we cannot read the selection
+        // here.
+        if !session.auto_paste_supported {
+            tracing::debug!(
+                display_server = %session.display_server,
+                "read_selection: session has no key-simulation path, returning None"
+            );
+            return Ok(None);
+        }
+
+        let clipboard = self.app_handle.clipboard();
+
+        // Save the current clipboard so the user's content survives the
+        // copy round-trip — and so we can detect "nothing was selected"
+        // (Ctrl+C then leaves the clipboard unchanged).
+        let saved = clipboard.read_text().ok();
+
+        send_copy_shortcut().await?;
+        tokio::time::sleep(Duration::from_millis(COPY_SETTLE_MS)).await;
+        let after = clipboard.read_text().ok();
+
+        // Restore the original clipboard. We already read `after`, so
+        // restoring immediately is safe (unlike the paste path, which
+        // must keep the text long enough for Ctrl+V).
+        if let Some(prev) = &saved {
+            if let Err(e) = clipboard.write_text(prev.clone()) {
+                tracing::warn!(error = %e, "Clipboard restore after selection read failed");
+            }
+        }
+
+        // "Nothing selected" heuristic: the copy left the clipboard
+        // empty or unchanged. A false negative is possible if the
+        // selection text equals the prior clipboard content — accepted
+        // edge case (see docs/PLATFORMS.md).
+        match after {
+            Some(text) if !text.is_empty() && saved.as_ref() != Some(&text) => Ok(Some(text)),
+            _ => Ok(None),
+        }
+    }
 }
 
 /// Types the text directly via enigo's `Keyboard::text` — no
@@ -130,6 +183,37 @@ async fn inject_keystrokes(text: &str) -> Result<()> {
         enigo
             .text(&owned)
             .map_err(|e| VoiceTypeError::Injection(format!("enigo.text: {e}")))?;
+        Ok(())
+    })
+    .await
+    .map_err(|e| VoiceTypeError::Injection(format!("spawn_blocking: {e}")))?
+}
+
+/// Send Cmd+C (macOS) or Ctrl+C (otherwise) via enigo to copy the
+/// current selection of the focused app. Mirror of
+/// `send_paste_shortcut`; enigo init can block, hence `spawn_blocking`.
+async fn send_copy_shortcut() -> Result<()> {
+    tokio::task::spawn_blocking(move || -> Result<()> {
+        use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+
+        let mut enigo = Enigo::new(&Settings::default())
+            .map_err(|e| VoiceTypeError::Injection(format!("enigo::new: {e}")))?;
+
+        #[cfg(target_os = "macos")]
+        let modifier = Key::Meta;
+        #[cfg(not(target_os = "macos"))]
+        let modifier = Key::Control;
+
+        enigo
+            .key(modifier, Direction::Press)
+            .map_err(|e| VoiceTypeError::Injection(format!("modifier press: {e}")))?;
+        enigo
+            .key(Key::Unicode('c'), Direction::Click)
+            .map_err(|e| VoiceTypeError::Injection(format!("C click: {e}")))?;
+        enigo
+            .key(modifier, Direction::Release)
+            .map_err(|e| VoiceTypeError::Injection(format!("modifier release: {e}")))?;
+
         Ok(())
     })
     .await

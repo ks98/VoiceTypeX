@@ -227,6 +227,16 @@ impl TextInjector for WaylandLibeiInjector {
 
         Ok(())
     }
+
+    async fn read_selection(&self) -> Result<Option<String>> {
+        // Selection reading on Wayland needs a simulated Ctrl+C via the
+        // libei worker (a `KeyCommand::CtrlC`) plus a clipboard read.
+        // Implemented in a dedicated step after verifying the
+        // ext-data-control / libei protocol docs. Until then edit modes
+        // degrade gracefully to an empty selection on Wayland.
+        tracing::debug!("read_selection: not yet implemented on Wayland (libei Ctrl+C pending)");
+        Ok(None)
+    }
 }
 
 impl WaylandLibeiInjector {

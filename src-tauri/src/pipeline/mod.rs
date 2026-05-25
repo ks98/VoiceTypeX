@@ -8,8 +8,9 @@
 //! the same hotkey stops recording and lets the pipeline run through.
 
 use crate::audio::{play_start_cue, play_stop_cue, recorder::RecorderHandle, RecorderConfig};
+use crate::core::edit::{compose_edit_input, resolve_output_action};
 use crate::core::error::{Result, VoiceTypeError};
-use crate::core::modes::{Mode, ProcessingTarget, TranscriptionTarget};
+use crate::core::modes::{InputSource, Mode, OutputAction, ProcessingTarget, TranscriptionTarget};
 use crate::core::state::AppState;
 use crate::core::AppContext;
 use crate::injection::{InjectOptions, InjectionStrategy};
@@ -78,6 +79,12 @@ pub async fn handle_menu_hotkey(app: AppHandle, ctx: Arc<AppContext>) -> Result<
     let current = ctx.state_bus.current();
     match current {
         AppState::Idle => {
+            // Eager selection capture for the "Bearbeiten" feature: read
+            // the focused app's selection NOW, while it still has focus
+            // — showing the menu below steals it. Gated on edit-mode
+            // presence so pure dictation setups pay nothing.
+            capture_selection_if_edit_modes(&ctx).await;
+
             if let Some(menu) = app.get_webview_window("menu") {
                 if let Err(e) = menu.show() {
                     tracing::warn!(error = %e, "menu.show() failed");
@@ -106,6 +113,34 @@ pub async fn handle_menu_hotkey(app: AppHandle, ctx: Arc<AppContext>) -> Result<
         }
     }
     Ok(())
+}
+
+/// Eagerly capture the focused app's selection into
+/// `ctx.selection_buffer` — but only when at least one edit mode
+/// (`Mode.input == Selection`) exists. The gate keeps pure dictation
+/// setups free of any cost (no copy keystroke, no clipboard churn,
+/// no added menu-open latency). Errors are non-fatal: the buffer is
+/// cleared and edit modes degrade to an empty selection.
+async fn capture_selection_if_edit_modes(ctx: &Arc<AppContext>) {
+    let has_edit_mode = ctx
+        .modes
+        .current()
+        .iter()
+        .any(|m| m.input == InputSource::Selection);
+    if !has_edit_mode {
+        return;
+    }
+
+    match ctx.injector.read_selection().await {
+        Ok(sel) => {
+            tracing::debug!(captured = sel.is_some(), "Eager selection capture");
+            *ctx.selection_buffer.lock() = sel;
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "Eager selection capture failed");
+            *ctx.selection_buffer.lock() = None;
+        }
+    }
 }
 
 async fn start_recording(app: &AppHandle, ctx: &Arc<AppContext>, mode: &Mode) -> Result<()> {
@@ -444,12 +479,31 @@ async fn finish_recording_and_inject(
             let _ = ctx.state_bus.transition(AppState::Idle);
         })?;
 
+    // For edit modes ("Bearbeiten") the LLM input is the captured
+    // selection plus the spoken instruction; for voice modes it is just
+    // the transcript. The Processor trait is unchanged — it receives the
+    // composed string as its "transcript". The selection is consumed
+    // (`take`) so a later invocation cannot reuse a stale one.
+    let processing_input = match mode.input {
+        InputSource::Voice => transcript,
+        InputSource::Selection => {
+            let selection = ctx.selection_buffer.lock().take().unwrap_or_default();
+            if selection.is_empty() {
+                tracing::warn!(
+                    mode = %mode.id,
+                    "Edit mode without a captured selection — applying the instruction to an empty selection"
+                );
+            }
+            compose_edit_input(&selection, &transcript)
+        }
+    };
+
     // Postprocessing — none / local (Ollama) / cloud LLM.
-    let final_text = match mode.processing {
-        ProcessingTarget::None => transcript,
+    let llm_output = match mode.processing {
+        ProcessingTarget::None => processing_input,
         ProcessingTarget::Local => {
             ctx.state_bus.transition(AppState::Postprocessing)?;
-            run_local_processing(ctx, mode, &transcript)
+            run_local_processing(ctx, mode, &processing_input)
                 .await
                 .inspect_err(|e| {
                     let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
@@ -458,7 +512,7 @@ async fn finish_recording_and_inject(
         }
         ProcessingTarget::Cloud => {
             ctx.state_bus.transition(AppState::Postprocessing)?;
-            run_cloud_processing(mode, &transcript)
+            run_cloud_processing(mode, &processing_input)
                 .await
                 .inspect_err(|e| {
                     let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
@@ -466,6 +520,19 @@ async fn finish_recording_and_inject(
                 })?
         }
     };
+
+    // For edit modes, resolve the effective injection action and strip
+    // the auto-mode sentinel; voice modes inject at the cursor as
+    // before. NOTE: the injectors do not yet honour append/prepend
+    // (collapse-then-paste lands in a follow-up step) — the action is
+    // logged here and threaded into injection next.
+    let (output_action, final_text) = match mode.input {
+        InputSource::Selection => {
+            resolve_output_action(mode.output, mode.output_fallback, &llm_output)
+        }
+        InputSource::Voice => (OutputAction::Insert, llm_output),
+    };
+    tracing::debug!(input = ?mode.input, action = ?output_action, "Injection action resolved");
 
     ctx.state_bus.transition(AppState::Injecting)?;
 
@@ -970,6 +1037,9 @@ mod tests {
         async fn inject(&self, text: &str, _opts: InjectOptions) -> Result<()> {
             self.injected.lock().await.push(text.to_string());
             Ok(())
+        }
+        async fn read_selection(&self) -> Result<Option<String>> {
+            Ok(None)
         }
     }
 

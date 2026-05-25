@@ -67,6 +67,14 @@ pub struct AppContext {
     /// `tauri::async_runtime::spawn(...)`.
     pub active_streaming_handle: Arc<Mutex<Option<tauri::async_runtime::JoinHandle<()>>>>,
     pub injector: Arc<dyn TextInjector>,
+    /// Selection captured eagerly when the menu hotkey opens the menu
+    /// in `Idle` (see `pipeline::handle_menu_hotkey`). Consumed by edit
+    /// modes (`Mode.input == Selection`) in
+    /// `finish_recording_and_inject`; voice modes ignore it. `None` =
+    /// nothing captured / nothing selected. Captured before the menu
+    /// steals focus, because reading the selection needs the target app
+    /// focused.
+    pub selection_buffer: Arc<Mutex<Option<String>>>,
     pub settings: Arc<RwLock<Settings>>,
     /// Persistence path for the settings
     /// (`~/.config/.../settings.json`). After each mutating IPC call,

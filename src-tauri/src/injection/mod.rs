@@ -51,6 +51,17 @@ pub trait TextInjector: Send + Sync {
     fn name(&self) -> &str;
     fn capabilities(&self) -> InjectorCapabilities;
     async fn inject(&self, text: &str, opts: InjectOptions) -> Result<()>;
+
+    /// Read the text currently selected in the focused target app
+    /// (input side of the "Bearbeiten" feature).
+    ///
+    /// Returns `Ok(None)` when nothing is selected, or when the
+    /// selection cannot be read on this platform/session. The
+    /// implementation simulates the copy shortcut and reads the
+    /// clipboard, so it must run **while the target app still has
+    /// focus** — i.e. before the menu/overlay windows steal it (see
+    /// `pipeline::handle_menu_hotkey`).
+    async fn read_selection(&self) -> Result<Option<String>>;
 }
 
 /// Returns the default injector. Platform routing:
