@@ -96,7 +96,7 @@ describe("translate", () => {
   });
 
   it("returns key with plural-suffix in candidate order but key fallback", () => {
-    // Wenn weder pluralisiert noch base existiert → key selbst.
+    // If neither pluralized nor base exists → the key itself.
     expect(translate("nope.missing", { count: 3 }, ctxDe)).toBe("nope.missing");
   });
 
@@ -113,8 +113,8 @@ describe("translate", () => {
   });
 
   it("treats NaN count as 'other'", () => {
-    // Intl.PluralRules.select(NaN) liefert "other" — der Plural-Pfad
-    // wird genommen, "NaN" wird als Zahl-zu-String interpoliert.
+    // `Intl.PluralRules.select(NaN)` returns "other" — the plural
+    // path is taken, "NaN" is interpolated as number-to-string.
     expect(translate("logs.missed", { count: NaN }, ctxEn)).toBe(
       "NaN new entries while paused",
     );
@@ -132,9 +132,9 @@ describe("translate", () => {
   });
 
   it("leaves malformed placeholder intact (no closing brace)", () => {
-    // `{name` ohne `}` matcht die Regex nicht → bleibt literal stehen.
-    // `{greet}` weiter hinten wird normal ersetzt. Dokumentiert das
-    // Best-Effort-Verhalten gegen kaputte Templates.
+    // `{name` without `}` doesn't match the regex → stays literal.
+    // `{greet}` later on is replaced normally. Documents the
+    // best-effort behavior against broken templates.
     const dict: Dictionary = { g: "Hi {name and {greet}!" };
     expect(
       translate(

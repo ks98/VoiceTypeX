@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Recording-Cues (kurze Beeps bei Aufnahme-Start/-Stopp).
+//! Recording cues (short beeps on recording start/stop).
 //!
-//! WAVs werden via `include_bytes!` ins Binary gebundelt — kein File-IO
-//! zur Laufzeit. `rodio::OutputStream` ist `!Send`, daher laeuft die
-//! Wiedergabe in einem `spawn_blocking`-Task.
+//! WAVs are bundled into the binary via `include_bytes!` — no runtime
+//! file IO. `rodio::OutputStream` is `!Send`, so playback runs in a
+//! `spawn_blocking` task.
 
 use crate::core::error::{Result, VoiceTypeError};
 use std::io::Cursor;

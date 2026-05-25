@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Lokales LLM via Ollama HTTP API (`POST /api/chat`).
+//! Local LLM via the Ollama HTTP API (`POST /api/chat`).
 //!
-//! Ollama-Default-Endpoint ist `http://127.0.0.1:11434`. Konfigurierbar in
-//! Settings (`ollama_url`).
+//! The default Ollama endpoint is `http://127.0.0.1:11434`.
+//! Configurable in settings (`ollama_url`).
 //!
-//! Sampling-Parameter (temperature, top_p, repeat_penalty) kommen aus dem
-//! `Mode`-TOML, durchgereicht via `ProcessOpts`. `keep_alive` ist
-//! Ollama-spezifisch und kommt aus `Settings.ollama_keep_alive` (Default
-//! `"5m"`, `"0"` fuer sofortiges Unload nach jedem Call auf
-//! Memory-Pressure-Profilen).
+//! Sampling parameters (temperature, top_p, repeat_penalty) come from
+//! the `Mode` TOML, forwarded via `ProcessOpts`. `keep_alive` is
+//! Ollama-specific and comes from `Settings.ollama_keep_alive`
+//! (default `"5m"`, `"0"` for immediate unload after every call on
+//! memory-pressure profiles).
 
 use crate::core::error::{Result, VoiceTypeError};
 use crate::processing::{ProcessOpts, Processor};
@@ -29,7 +29,7 @@ impl OllamaProcessor {
             default_model,
             keep_alive,
             client: reqwest::Client::builder()
-                // Lokale Inferenz kann mehr Zeit brauchen als Cloud — 5 min.
+                // Local inference can take longer than cloud — 5 min.
                 .timeout(std::time::Duration::from_secs(300))
                 .build()
                 .expect("reqwest client builder (timeout)"),
@@ -100,8 +100,8 @@ struct OllamaChatRequest {
     model: String,
     messages: Vec<OllamaMessage>,
     stream: bool,
-    /// Ollama-Duration-String: `"5m"`, `"0"`, `"-1"`, etc. Steuert,
-    /// wie lange das Modell nach diesem Call im RAM/VRAM bleibt.
+    /// Ollama duration string: `"5m"`, `"0"`, `"-1"`, etc. Controls
+    /// how long the model stays in RAM/VRAM after this call.
     keep_alive: String,
     options: OllamaOptions,
 }

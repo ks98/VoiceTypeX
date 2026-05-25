@@ -7,18 +7,19 @@ import Banner from "../components/Banner";
 import { useT, type TranslateFn } from "../i18n";
 
 /**
- * Modus-Auswahl-Menü.
+ * Mode-selection menu.
  *
- * Eigenes Tauri-Window (label: "menu"), wird vom Backend per
- * menu.show() + set_focus() sichtbar gemacht, sobald der globale
- * Menue-Hotkey im Idle-State gedrückt wurde.
+ * Its own Tauri window (label: "menu"), made visible by the backend
+ * via `menu.show()` + `set_focus()` as soon as the global menu
+ * hotkey is pressed in the Idle state.
  *
- * - ↑ / ↓ navigieren den Cursor, Home / End springen an die Enden.
- * - Enter ruft start_recording mit dem ausgewählten Modus.
- * - Esc ruft cancel_menu — Backend versteckt das Menü ohne State-Wechsel.
+ * - ↑ / ↓ navigate the cursor, Home / End jump to the ends.
+ * - Enter calls `start_recording` with the selected mode.
+ * - Esc calls `cancel_menu` — the backend hides the menu without a
+ *   state switch.
  *
- * Der Cursor steht initial auf Settings.last_selected_mode_id, sodass
- * die häufigste Aktion ein einzelner Enter-Druck ist.
+ * The cursor initially sits on `Settings.last_selected_mode_id`, so
+ * the most common action is a single Enter press.
  */
 export default function Menu(): JSX.Element {
   const t = useT();
@@ -29,11 +30,11 @@ export default function Menu(): JSX.Element {
 
   const [cursor, setCursor] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  // C9: Wayland-Compositors fokussieren neu eingeblendete Windows nicht
-  // immer automatisch (z.B. sway ohne `focus_on_window_activation`).
-  // Wenn document.hasFocus() beim Mount false ist, blenden wir einen
-  // dezenten Hinweis ein — User klickt einmal ins Fenster, dann gehen
-  // die Tasten. Erster Keydown blendet den Hinweis wieder aus.
+  // C9: Wayland compositors don't always auto-focus newly shown
+  // windows (e.g. sway without `focus_on_window_activation`). If
+  // `document.hasFocus()` is false on mount, we show a discreet
+  // hint — the user clicks once into the window, then the keys
+  // work. The first keydown hides the hint again.
   const [focusWarning, setFocusWarning] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const itemRefs = useRef<Array<HTMLLIElement | null>>([]);
@@ -45,8 +46,8 @@ export default function Menu(): JSX.Element {
   }, [loadModes, loadSettings]);
 
   useEffect(() => {
-    // Initial-Check + verzoegerter Re-Check: Compositors brauchen
-    // manchmal einen Tick, bis das Focus-Event durchlaeuft.
+    // Initial check + delayed re-check: compositors sometimes need
+    // a tick until the focus event propagates.
     const check = () => {
       if (!document.hasFocus()) {
         setFocusWarning(true);
@@ -167,11 +168,11 @@ function EmptyState(): JSX.Element {
   const [busy, setBusy] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
 
-  // `ipcReloadModes` liest die Modi-TOMLs vom Disk neu — wenn dort keine
-  // liegen, kommt eine leere Liste zurueck. Der Bootstrap-Pfad, der die
-  // 6 Default-Modi schreibt, laeuft nur beim App-Start (verifiziert
-  // gegen das Backend). Darum: Versuch via reload — wenn das nichts
-  // bringt, freundlicher Hinweis auf Neustart.
+  // `ipcReloadModes` re-reads the mode TOMLs from disk — if none
+  // are there, an empty list comes back. The bootstrap path that
+  // writes the 6 default modes runs only on app start (verified
+  // against the backend). Hence: try via reload — if that yields
+  // nothing, show a friendly hint to restart.
   const onReset = async () => {
     setBusy(true);
     setHint(null);
@@ -279,10 +280,9 @@ function ModeRow({
 }
 
 /**
- * Ein Modus ist "vollstaendig offline", wenn weder STT noch
- * Post-Processing eine Cloud-Komponente brauchen. processing="none"
- * zaehlt als kein Cloud-Bedarf — der Post-Processing-Step entfaellt
- * dann ganz.
+ * A mode is "fully offline" when neither STT nor post-processing
+ * needs a cloud component. `processing="none"` counts as no cloud
+ * need — the post-processing step is then dropped entirely.
  */
 function isOfflineMode(mode: Mode): boolean {
   return (

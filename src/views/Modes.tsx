@@ -64,7 +64,7 @@ export default function Modes(): JSX.Element {
   const onSaved = async () => {
     setEditing(null);
     setShowNew(false);
-    // Hot-Reload greift in ~200ms, aber expliziter Pull schadet nicht.
+    // Hot-reload kicks in in ~200ms, but an explicit pull doesn't hurt.
     await load();
   };
 
@@ -134,7 +134,9 @@ export default function Modes(): JSX.Element {
             >
               <td className="py-2">
                 <div className="font-medium text-fg">{m.name}</div>
-                {/* ID nur bei Hover sichtbar — der Power-User braucht sie zum Filename-Mapping, der normale User nicht. */}
+                {/* ID visible only on hover — the power user needs
+                    it for filename mapping, the normal user does
+                    not. */}
                 <div className="text-xs text-fg-faint font-mono opacity-0 group-hover:opacity-100 transition-opacity">
                   {t("modes.row.id_label", { id: m.id })}
                 </div>
@@ -152,9 +154,10 @@ export default function Modes(): JSX.Element {
                 {m.injection_method}
               </td>
               <td className="py-2">
-                {/* Trigger isoliert links, Edit + Delete rechts mit grossem Gap.
-                    Klick-Falle vermieden: Delete sitzt nicht direkt neben dem
-                    häufig-benutzten Trigger. */}
+                {/* Trigger isolated on the left, Edit + Delete on
+                    the right with a large gap. Click-trap avoided:
+                    Delete is not directly next to the frequently
+                    used Trigger. */}
                 <div className="flex justify-end items-center gap-2">
                   <Button
                     size="sm"

@@ -6,11 +6,11 @@ import Button from "./Button";
 import Banner from "./Banner";
 import { useT, type TranslateFn } from "../i18n";
 
-// Lokale Input-Klassen — der ModeEditor hat ~17 Sites mit unterschiedlichen
-// Zusatz-Klassen (font-mono, min-h-[120px], ...), die mit der generischen
-// <Input />-Komponente nur via repetitivem Markup ersetzbar waeren. Hier
-// bewusst inline gelassen, mit Focus-Visible-Ring fuer A11y-Paritaet zur
-// Input-Komponente.
+// Local input classes — the ModeEditor has ~17 sites with different
+// extra classes (font-mono, min-h-[120px], ...) that could only be
+// replaced via repetitive markup using the generic `<Input />`
+// component. Deliberately kept inline here, with a focus-visible
+// ring for a11y parity with the Input component.
 const inputCls =
   "bg-surface border border-outline rounded-md px-2 py-1.5 text-sm w-full text-fg placeholder:text-fg-faint focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-1 focus-visible:ring-offset-canvas focus:border-brand transition-colors";
 
@@ -23,9 +23,9 @@ interface ModeEditorProps {
 const STT_PROVIDERS = ["xai", "openai", "groq", "deepgram"];
 const LLM_PROVIDERS = ["xai", "openai", "anthropic"];
 
-// Slot-Listen spiegeln die Backend-Mappings (ModelSlot::from_setting +
-// LlmModelSlot::from_setting). Labels kommen via i18n-Key statt
-// Hardcode, damit Locale-Switch greift.
+// Slot lists mirror the backend mappings (`ModelSlot::from_setting`
+// + `LlmModelSlot::from_setting`). Labels come via i18n key rather
+// than hardcoded strings, so a locale switch takes effect.
 const WHISPER_SLOTS: Array<{ value: string; key: string }> = [
   { value: "large-v3-turbo-q8_0", key: "mode_editor.whisper_slot.large_v3_turbo_q8" },
   { value: "large-v3-turbo-german-q5_0", key: "mode_editor.whisper_slot.large_v3_turbo_german" },

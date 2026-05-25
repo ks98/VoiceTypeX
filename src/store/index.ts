@@ -27,9 +27,8 @@ interface UIState {
 }
 
 export const useUIStore = create<UIState>((set) => ({
-  // Default-Tab "modes": der typische Power-User oeffnet das Hauptfenster
-  // um einen Modus zu triggern oder zu editieren — Konfiguration ist
-  // sekundaer.
+  // Default tab "modes": the typical power user opens the main window
+  // to trigger or edit a mode — configuration is secondary.
   activeTab: "modes",
   setActiveTab: (activeTab) => set({ activeTab }),
   theme: readStoredChoice(),

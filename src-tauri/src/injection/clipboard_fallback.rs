@@ -1,25 +1,28 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Clipboard-Fallback mit Session-Awareness und Keystrokes-Direct-Modus.
+//! Clipboard fallback with session awareness and a keystrokes-direct
+//! mode.
 //!
-//! Default-Pfad — `InjectionStrategy::Clipboard`, auf X11/Windows:
-//!   1. Aktuellen Clipboard-Inhalt sichern
-//!   2. Neuen Text setzen
-//!   3. Paste-Shortcut senden (Ctrl+V / Cmd+V via enigo)
-//!   4. Nach 200 ms vorherigen Inhalt wiederherstellen
+//! Default path — `InjectionStrategy::Clipboard`, on X11/Windows:
+//!   1. Save the current clipboard contents.
+//!   2. Set the new text.
+//!   3. Send the paste shortcut (Ctrl+V / Cmd+V via enigo).
+//!   4. After 200 ms, restore the previous contents.
 //!
-//! Direct-Pfad — `InjectionStrategy::Keystrokes`, X11/Windows:
-//!   - Text wird Zeichen fuer Zeichen via enigo getippt (kein Clipboard).
-//!   - Sinnvoll fuer Terminals (`Ctrl+V` ist dort oft `Ctrl+Shift+V`),
-//!     IME-empfindliche Apps und Eingabefelder mit Clipboard-Blockern.
-//!   - Trade-off: Layout-abhaengig, langsamer als Paste, Unicode-Chars
-//!     ausserhalb des Layouts koennen scheitern.
+//! Direct path — `InjectionStrategy::Keystrokes`, X11/Windows:
+//!   - The text is typed character-by-character via enigo (no
+//!     clipboard).
+//!   - Useful for terminals (`Ctrl+V` is often `Ctrl+Shift+V`),
+//!     IME-sensitive apps and input fields with clipboard blockers.
+//!   - Trade-off: layout-dependent, slower than paste, Unicode chars
+//!     outside the layout can fail.
 //!
-//! Wayland oder andere "auto_paste_supported = false" + Clipboard-Strategy:
-//!   - Setze nur den neuen Text
-//!   - **Kein** Paste-Shortcut (enigo's XTest-Pfad scheitert silent)
-//!   - **Kein** Restore (wuerde den Text nach 200 ms ueberschreiben, bevor
-//!     der User ihn manuell pasten kann)
-//!   - Stattdessen Notification "Druecke Ctrl+V in der Ziel-App"
+//! Wayland or other "auto_paste_supported = false" + clipboard
+//! strategy:
+//!   - Only set the new text.
+//!   - **No** paste shortcut (enigo's XTest path fails silently).
+//!   - **No** restore (would overwrite the text after 200 ms, before
+//!     the user can paste manually).
+//!   - Instead show a notification "Press Ctrl+V in the target app".
 
 use crate::core::error::{Result, VoiceTypeError};
 use crate::core::session::detect_session;
@@ -58,19 +61,20 @@ impl TextInjector for ClipboardFallbackInjector {
         let session = detect_session();
 
         if opts.strategy == InjectionStrategy::Keystrokes {
-            // Auf macOS / unbekannten Sessions hat enigo keinen verlaesslichen
-            // Pfad fuer direkten Text-Inject. Wir versuchen es trotzdem —
-            // bei Fehler bleibt nichts uebrig als der harte Error nach oben.
+            // On macOS / unknown sessions enigo has no reliable path
+            // for direct text injection. We try anyway — on failure
+            // the only option is to bubble the hard error up.
             return inject_keystrokes(text).await;
         }
 
         let clipboard = self.app_handle.clipboard();
 
-        // Reihenfolge wichtig: erst original-Inhalt sichern, dann neuen setzen.
+        // Order matters: first save the original contents, then set
+        // the new value.
         let saved = if session.auto_paste_supported {
             clipboard.read_text().ok()
         } else {
-            // Auf Wayland kein Restore sinnvoll, daher kein Save noetig.
+            // No restore makes sense on Wayland, so no save needed.
             None
         };
 
@@ -93,7 +97,7 @@ impl TextInjector for ClipboardFallbackInjector {
             return Ok(());
         }
 
-        // X11 / Windows: vollstaendiger Save → Set → Paste → Restore-Pfad.
+        // X11 / Windows: full save → set → paste → restore path.
         send_paste_shortcut().await?;
 
         if let Some(prev) = saved {
@@ -110,12 +114,12 @@ impl TextInjector for ClipboardFallbackInjector {
     }
 }
 
-/// Tippt den Text direkt via enigo's `Keyboard::text` — kein Clipboard-Umweg,
-/// kein Paste-Shortcut. enigo waehlt selbst den Plattform-Pfad (Windows
-/// SendInput, X11 XTest, macOS CGEvent). Auf Wayland wuerde der XTest-Pfad
-/// silent scheitern; dieser Code-Pfad wird dort aber nicht erreicht, weil
-/// `make_default_injector` Wayland-Sessions auf `WaylandLibeiInjector`
-/// routet (siehe injection/mod.rs).
+/// Types the text directly via enigo's `Keyboard::text` — no
+/// clipboard detour, no paste shortcut. enigo picks the platform
+/// path itself (Windows SendInput, X11 XTest, macOS CGEvent). On
+/// Wayland the XTest path would fail silently; this code path is
+/// not reached there because `make_default_injector` routes Wayland
+/// sessions to `WaylandLibeiInjector` (see injection/mod.rs).
 async fn inject_keystrokes(text: &str) -> Result<()> {
     let owned = text.to_string();
     tokio::task::spawn_blocking(move || -> Result<()> {
@@ -132,8 +136,8 @@ async fn inject_keystrokes(text: &str) -> Result<()> {
     .map_err(|e| VoiceTypeError::Injection(format!("spawn_blocking: {e}")))?
 }
 
-/// Sende Cmd+V (macOS) oder Ctrl+V (sonst) via enigo. enigo's Initialisierung
-/// kann blockieren, deshalb spawn_blocking.
+/// Send Cmd+V (macOS) or Ctrl+V (otherwise) via enigo. enigo's
+/// initialization can block, hence `spawn_blocking`.
 async fn send_paste_shortcut() -> Result<()> {
     tokio::task::spawn_blocking(move || -> Result<()> {
         use enigo::{Direction, Enigo, Key, Keyboard, Settings};

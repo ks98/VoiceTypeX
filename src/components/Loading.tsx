@@ -2,15 +2,16 @@
 import { useT } from "../i18n";
 
 interface LoadingProps {
-  /** Sichtbarer Text, sonst Default "Loading…" via i18n. */
+  /** Visible text; otherwise the default "Loading…" via i18n. */
   label?: string;
-  /** Inline-Variante (kein Padding, fuer Buttons / Status-Zeilen). */
+  /** Inline variant (no padding, for buttons / status lines). */
   inline?: boolean;
 }
 
 /**
- * Loading-Indikator — zentralisiert das `<div>Lade …</div>`-Muster, das
- * in Modes, Settings, ApiKeysSection mit subtilen Drifts dupliziert war.
+ * Loading indicator — centralizes the `<div>Lade …</div>` pattern
+ * that was duplicated with subtle drifts in Modes, Settings,
+ * ApiKeysSection.
  */
 export default function Loading({ label, inline }: LoadingProps): JSX.Element {
   const t = useT();

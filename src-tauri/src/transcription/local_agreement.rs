@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! LocalAgreement-2 — stabilisiert Whisper-Streaming-Outputs.
+//! LocalAgreement-2 — stabilizes Whisper streaming outputs.
 //!
-//! Idee (Machacek et al., arXiv 2307.14743): wenn zwei aufeinanderfolgende
-//! Decodes des wachsenden Audio-Buffers denselben Wort-Prefix produzieren,
-//! ist dieser Prefix "stabil" und darf committed werden (im Overlay
-//! anzeigen). Der divergierende Schwanz bleibt vorlaeufig, wird beim
-//! naechsten Pass neu bewertet.
+//! Idea (Machacek et al., arXiv 2307.14743): if two consecutive
+//! decodes of the growing audio buffer produce the same word prefix,
+//! that prefix is "stable" and may be committed (shown in the
+//! overlay). The diverging tail remains tentative and is re-evaluated
+//! on the next pass.
 //!
-//! Wir tokenisieren auf Whitespace und vergleichen wort-fuer-wort.
-//! Interpunktion bleibt am Wort haengen, weil Whisper sie eh als Teil des
-//! Tokens emittiert.
+//! We tokenize on whitespace and compare word-by-word. Punctuation
+//! sticks to the word because Whisper emits it as part of the token
+//! anyway.
 
-/// Liefere den laengsten gemeinsamen Wort-Prefix zweier Whisper-Outputs
-/// als ein-Leerzeichen-getrennten String. Bei leerem oder voellig
-/// divergierendem Input: `""`.
+/// Return the longest common word prefix of two Whisper outputs as a
+/// single-space-separated string. For empty or completely diverging
+/// input: `""`.
 pub fn stable_prefix(prev: &str, curr: &str) -> String {
     let prev_tokens = prev.split_whitespace();
     let curr_tokens = curr.split_whitespace();
@@ -59,14 +59,14 @@ mod tests {
 
     #[test]
     fn whitespace_variation_is_tolerated() {
-        // split_whitespace abstrahiert Mehrfach-Leerzeichen + Tabs weg.
+        // split_whitespace collapses multiple spaces + tabs.
         assert_eq!(stable_prefix("a   b\tc", "a b c"), "a b c");
     }
 
     #[test]
     fn punctuation_sticks_to_word() {
-        // "Sonne." != "Sonne," — gewollt, weil Whisper Interpunktion noch
-        // ueberdenken kann; nur "Heute" ist sicher stabil.
+        // "Sonne." != "Sonne," — intentional, because Whisper may
+        // still revise punctuation; only "Heute" is reliably stable.
         let prev = "Heute scheint die Sonne.";
         let curr = "Heute scheint die Sonne,";
         assert_eq!(stable_prefix(prev, curr), "Heute scheint die");

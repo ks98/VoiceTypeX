@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! xAI Grok via OpenAI-kompatible Chat-Completions-API.
-//! Base-URL `https://api.x.ai/v1`, Default-Model `grok-4-fast-non-reasoning`
-//! (gewaehlt fuer schnelle Diktat-Postprocessing-Tasks: 2 M Context,
-//! kein Reasoning-Overhead, ~6x guenstiger als grok-4 — siehe
-//! https://x.ai/news/grok-4-fast). Modi koennen das per
-//! `cloud_llm_model = "..."` in ihrer TOML ueberschreiben.
+//! xAI Grok via the OpenAI-compatible Chat-Completions API.
+//! Base URL `https://api.x.ai/v1`, default model
+//! `grok-4-fast-non-reasoning` (chosen for fast dictation
+//! post-processing: 2 M context, no reasoning overhead, ~6x cheaper
+//! than grok-4 — see https://x.ai/news/grok-4-fast). Modes can
+//! override this via `cloud_llm_model = "..."` in their TOML.
 
 use crate::core::error::Result;
 use crate::processing::cloud::openai_compatible::OpenAICompatibleClient;

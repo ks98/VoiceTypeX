@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Mode-Modell und TOML-Loader.
+//! Mode model and TOML loader.
 //!
-//! Ein **Modus** ist Name, Hotkey, Transkriptions-Ziel, Verarbeitungs-Ziel und
-//! System-Prompt (siehe CLAUDE.md §5). Phase 1.2 stellt nur das Datenmodell
-//! und einen einfachen Loader bereit; das `notify`-basierte Hot-Reload kommt
-//! in Phase 1.4.
+//! A **mode** is name, hotkey, transcription target, processing target
+//! and system prompt (see CLAUDE.md §5). Phase 1.2 provides only the
+//! data model and a simple loader; the `notify`-based hot-reload comes
+//! in phase 1.4.
 
 use crate::core::error::{Result, VoiceTypeError};
 use parking_lot::RwLock;
@@ -36,87 +36,86 @@ pub enum InjectionMethod {
     Keystrokes,
 }
 
-// Eq entfaellt, weil f32-Sampling-Felder (temperature/top_p/repeat_penalty)
-// kein Eq implementieren (NaN != NaN). PartialEq reicht — Mode wird nirgends
-// als HashMap/HashSet-Key benutzt.
+// `Eq` is dropped because the f32 sampling fields (temperature / top_p
+// / repeat_penalty) do not implement `Eq` (NaN != NaN). `PartialEq` is
+// enough — `Mode` is not used as a HashMap/HashSet key anywhere.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Mode {
     pub id: String,
     pub name: String,
     #[serde(default)]
     pub description: String,
-    /// Legacy-Feld. Wird nur noch zur Backward-Compatibility geparst und
-    /// danach ignoriert — seit dem Menue-Hotkey-Umbau gibt es einen
-    /// einzigen globalen Hotkey (Settings.menu_hotkey), der das
-    /// Modus-Auswahl-Menue oeffnet.
+    /// Legacy field. Parsed only for backward compatibility and
+    /// ignored afterwards — since the menu-hotkey rework there is a
+    /// single global hotkey (`Settings.menu_hotkey`) that opens the
+    /// mode-selection menu.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hotkey: Option<String>,
     pub transcription: TranscriptionTarget,
     pub processing: ProcessingTarget,
 
-    // --- STT-Konfiguration ---
+    // --- STT configuration ---
     #[serde(default)]
     pub cloud_stt_provider: Option<String>,
 
-    /// Optionaler Whisper-Modell-Slot-Override fuer diesen Modus.
-    /// `None` (Default) = nutze `Settings.whisper_default_slot`.
-    /// Werte: dieselben Slugs wie in Settings (`large-v3-turbo-q8_0`,
+    /// Optional Whisper model slot override for this mode. `None`
+    /// (default) = use `Settings.whisper_default_slot`. Values: the
+    /// same slugs as in settings (`large-v3-turbo-q8_0`,
     /// `large-v3-turbo-german-q5_0`, `small-q5_1`, …).
     ///
-    /// Pro-Modus-Override braucht eine zweite `LocalTranscriber`-
-    /// Instanz; die Pipeline cached diese in `AppContext.
-    /// extra_transcribers` per Slot-Slug.
+    /// A per-mode override needs a second `LocalTranscriber` instance;
+    /// the pipeline caches these in `AppContext.extra_transcribers`
+    /// per slot slug.
     #[serde(default)]
     pub whisper_model_slot: Option<String>,
 
-    /// Whisper-Glossary: Worte/Phrasen die Whisper als Hinweis
-    /// bekommt (z.B. Eigennamen, Fachbegriffe). Wird als
-    /// `initial_prompt` an die Decode-Stufe gereicht und beeinflusst
-    /// die Token-Wahrscheinlichkeiten. Empfehlung: kurze Liste mit
-    /// Kommas oder Leerzeichen getrennt.
+    /// Whisper glossary: words/phrases passed to Whisper as a hint
+    /// (e.g. proper names, jargon). Forwarded as `initial_prompt` to
+    /// the decode stage and influences token probabilities.
+    /// Recommendation: a short list, comma- or space-separated.
     #[serde(default)]
     pub initial_prompt: Option<String>,
 
-    // --- LLM-Konfiguration ---
+    // --- LLM configuration ---
     #[serde(default)]
     pub cloud_llm_provider: Option<String>,
     #[serde(default)]
     pub cloud_llm_model: Option<String>,
 
-    /// **Deprecated** seit Phase-3b-Refactor: verwende stattdessen
-    /// `ollama_model_tag` oder `embedded_llm_slot` (je nach Engine).
-    /// Wird beim Laden noch geparst und in `ollama_model_tag`
-    /// migriert, wenn dieses None ist — Backward-Compat fuer
-    /// existierende User-TOMLs.
+    /// **Deprecated** since the phase-3b refactor: use
+    /// `ollama_model_tag` or `embedded_llm_slot` instead (depending on
+    /// the engine). Still parsed at load time and migrated into
+    /// `ollama_model_tag` if that is `None` — backward-compat for
+    /// existing user TOMLs.
     #[serde(default)]
     pub local_llm_model: Option<String>,
 
-    /// Welche lokale LLM-Engine soll diesen Modus bedienen, wenn
+    /// Which local LLM engine should serve this mode when
     /// `processing == "local"`?
-    /// - `"embedded"` (Default, seit Mai 2026) — eingebauter
-    ///   llama-cpp-2-Pfad ohne externen Daemon, GGUF aus
-    ///   `Settings.llm_default_slot` bzw. `Mode.embedded_llm_slot`.
-    /// - `"ollama"` — externer Ollama-Daemon (Opt-in fuer User mit
-    ///   eigener Installation).
+    /// - `"embedded"` (default, since May 2026) — built-in llama-cpp-2
+    ///   path without an external daemon, GGUF from
+    ///   `Settings.llm_default_slot` or `Mode.embedded_llm_slot`.
+    /// - `"ollama"` — external Ollama daemon (opt-in for users with
+    ///   their own installation).
     ///
-    /// `None` (Feld weggelassen) faellt in `pipeline/mod.rs` auf
-    /// `"embedded"`. Phase-1/2-TOMLs mit `local_llm_model` aber ohne
-    /// `local_engine` werden in `migrate_deprecated_fields` automatisch
-    /// auf `"ollama"` gesetzt, sonst wuerde der Default-Switch sie auf
-    /// den falschen Engine-Pfad umleiten.
+    /// `None` (field omitted) falls back to `"embedded"` in
+    /// `pipeline/mod.rs`. Phase-1/2 TOMLs with `local_llm_model` but
+    /// without `local_engine` are set to `"ollama"` automatically by
+    /// `migrate_deprecated_fields`, otherwise the default switch would
+    /// route them to the wrong engine path.
     #[serde(default)]
     pub local_engine: Option<String>,
 
-    /// Ollama-Modell-Tag fuer den Opt-in-Pfad (`local_engine =
-    /// "ollama"`). Beispiel: `"gemma3:4b"`, `"qwen2.5:7b"`. Bei
-    /// `engine == "ollama"` Pflicht.
+    /// Ollama model tag for the opt-in path (`local_engine =
+    /// "ollama"`). Example: `"gemma3:4b"`, `"qwen2.5:7b"`. Required
+    /// when `engine == "ollama"`.
     #[serde(default)]
     pub ollama_model_tag: Option<String>,
 
-    /// GGUF-Slot fuer den Embedded-Pfad (`local_engine = "embedded"`).
-    /// `None` = nutze `Settings.llm_default_slot` (Global-Default).
-    /// Werte: `"gemma4-e4b-it-q5_k_m"`, `"gemma4-e2b-it-q5_k_m"`,
-    /// `"gemma3-1b-it-q5_k_m"`, … (siehe `LlmModelSlot::from_setting`).
+    /// GGUF slot for the embedded path (`local_engine = "embedded"`).
+    /// `None` = use `Settings.llm_default_slot` (global default).
+    /// Values: `"gemma4-e4b-it-q5_k_m"`, `"gemma4-e2b-it-q5_k_m"`,
+    /// `"gemma3-1b-it-q5_k_m"`, … (see `LlmModelSlot::from_setting`).
     #[serde(default)]
     pub embedded_llm_slot: Option<String>,
 
@@ -128,13 +127,13 @@ pub struct Mode {
     #[serde(default)]
     pub system_prompt: Option<String>,
 
-    // --- Sampling-Parameter pro Modus ---
-    // Greifen fuer lokales (Ollama/Embedded) UND Cloud-LLM (OpenAI-
-    // Chat-Completions / Anthropic Messages, soweit der Provider die
-    // Parameter respektiert). Bei `None` benutzt der Provider/die
-    // Engine den Server-Default.
+    // --- Per-mode sampling parameters ---
+    // Apply to local (Ollama/embedded) AND cloud LLMs (OpenAI Chat
+    // Completions / Anthropic Messages, as long as the provider
+    // respects the parameter). On `None` the provider/engine uses the
+    // server default.
     //
-    // Empfohlene Defaults fuer "faithful rewrite, do not extend":
+    // Recommended defaults for "faithful rewrite, do not extend":
     //   temperature = 0.2, top_p = 0.8, repeat_penalty = 1.05
     #[serde(default)]
     pub temperature: Option<f32>,
@@ -143,18 +142,18 @@ pub struct Mode {
     #[serde(default)]
     pub repeat_penalty: Option<f32>,
 
-    /// Maximale Output-Token-Zahl fuer LLM-Cleanup. `None` =
-    /// 1024 (Default in `LlamaEmbeddedProcessor`). Slack-Modi
-    /// kommen mit 256 aus, lange E-Mails brauchen 2048+.
+    /// Maximum output token count for LLM cleanup. `None` = 1024
+    /// (default in `LlamaEmbeddedProcessor`). Slack modes get by with
+    /// 256, long emails need 2048+.
     #[serde(default)]
     pub max_tokens: Option<u32>,
 }
 
 impl Mode {
-    /// Konsistenz-Validierung: ein Modus mit `transcription = "cloud"` braucht
-    /// einen `cloud_stt_provider`; analog `processing = "cloud"` →
-    /// `cloud_llm_provider`. Diese Konsistenz ist nicht in TOML kodierbar,
-    /// also pruefen wir sie nach dem Deserialize.
+    /// Consistency validation: a mode with `transcription = "cloud"`
+    /// needs a `cloud_stt_provider`; analogously `processing =
+    /// "cloud"` → `cloud_llm_provider`. This consistency cannot be
+    /// encoded in TOML, so we check it after deserialize.
     pub fn validate(&self) -> Result<()> {
         const MAX_SYSTEM_PROMPT_LEN: usize = 32 * 1024;
         const MAX_DESCRIPTION_LEN: usize = 4 * 1024;
@@ -200,7 +199,7 @@ impl Mode {
                 self.id
             )));
         }
-        // Phase 3b: Engine-Type-Check + Ollama-Tag-Pflicht.
+        // Phase 3b: engine-type check + Ollama-tag requirement.
         if let Some(engine) = self.local_engine.as_deref() {
             match engine {
                 "embedded" | "ollama" => {}
@@ -229,9 +228,8 @@ impl Mode {
                 )));
             }
         }
-        // Sampling-Parameter-Ranges (Best-effort-Check, kein Hard-Fail
-        // bei minimalen Ueberschreitungen — User-Frust vs.
-        // Hilfsbereitschaft).
+        // Sampling parameter ranges (best-effort check, no hard-fail
+        // on minor overruns — user frustration vs. helpfulness).
         if let Some(t) = self.temperature {
             if !(0.0..=2.0).contains(&t) {
                 return Err(VoiceTypeError::Mode(format!(
@@ -310,7 +308,7 @@ impl Mode {
     }
 }
 
-/// Lade einen einzelnen Modus aus einer TOML-Datei.
+/// Load a single mode from a TOML file.
 pub fn load_mode_from_path(path: &Path) -> Result<Mode> {
     let content = std::fs::read_to_string(path)
         .map_err(|e| VoiceTypeError::Mode(format!("{}: {e}", path.display())))?;
@@ -321,8 +319,8 @@ pub fn load_mode_from_path(path: &Path) -> Result<Mode> {
     Ok(mode)
 }
 
-/// Lade alle `*.toml` aus einem Verzeichnis. Doppelte IDs gelten als
-/// Konflikt und produzieren einen Fehler.
+/// Load every `*.toml` from a directory. Duplicate IDs are treated as
+/// a conflict and produce an error.
 pub fn load_modes_from_dir(dir: &Path) -> Result<Vec<Mode>> {
     let mut by_id: std::collections::HashMap<String, Mode> = std::collections::HashMap::new();
 
@@ -353,23 +351,24 @@ pub fn load_modes_from_dir(dir: &Path) -> Result<Vec<Mode>> {
 
 #[derive(Debug, Clone)]
 pub enum ModesEvent {
-    /// Modi wurden erfolgreich neu geladen.
+    /// Modes were reloaded successfully.
     Reloaded,
-    /// Beim Reload trat ein Fehler auf — die zuvor geladenen Modi bleiben aktiv.
+    /// An error occurred during reload — the previously loaded modes
+    /// stay active.
     Error(String),
 }
 
-/// Beobachtbare, in-memory Modi-Liste mit optionalem Hot-Reload.
+/// Observable in-memory mode list with optional hot-reload.
 ///
-/// Verwendung:
+/// Usage:
 ///   let registry = ModesRegistry::load(modes_dir.clone())?;
 ///   registry.start_watching(modes_dir)?;  // optional
 pub struct ModesRegistry {
     modes: Arc<RwLock<Vec<Mode>>>,
     update_tx: broadcast::Sender<ModesEvent>,
-    /// Watcher wird hier gehalten, damit er nicht gedroppt wird (was das
-    /// File-Watching beendet). Der notify-Watcher selbst wird in
-    /// `start_watching` aktualisiert.
+    /// The watcher is held here so it isn't dropped (which would end
+    /// file watching). The notify watcher itself is updated in
+    /// `start_watching`.
     watcher: parking_lot::Mutex<Option<notify::RecommendedWatcher>>,
 }
 
@@ -401,8 +400,8 @@ impl ModesRegistry {
         self.update_tx.subscribe()
     }
 
-    /// Starte File-Watching. Bei Aenderungen an `*.toml` im Verzeichnis wird
-    /// die komplette Modi-Liste neu geladen und Subscriber benachrichtigt.
+    /// Start file watching. On changes to `*.toml` in the directory
+    /// the entire mode list is reloaded and subscribers are notified.
     pub fn start_watching(&self, dir: PathBuf) -> Result<()> {
         use notify::Watcher;
 
@@ -455,8 +454,9 @@ mod tests {
     use super::*;
 
     fn parse(toml_str: &str) -> Result<Mode> {
-        // Spiegelt `load_mode_from_path`: erst Migration, dann Validation.
-        // Sonst greift die Engine-Migration in den Tests nicht.
+        // Mirrors `load_mode_from_path`: migration first, then
+        // validation. Otherwise the engine migration would not apply
+        // in tests.
         let mut mode: Mode =
             toml::from_str(toml_str).map_err(|e| VoiceTypeError::Mode(e.to_string()))?;
         mode.migrate_deprecated_fields();
@@ -485,10 +485,10 @@ mod tests {
 
     #[test]
     fn legacy_hotkey_field_is_accepted_and_ignored() {
-        // Bestehende User-TOMLs (vor dem Menue-Hotkey-Umbau) haben ein
-        // Pflicht-`hotkey`-Feld. Der Parser muss es weiterhin akzeptieren,
-        // damit der erste App-Start nach dem Update nicht alle Modi
-        // verwirft.
+        // Existing user TOMLs (before the menu-hotkey rework) have a
+        // required `hotkey` field. The parser must keep accepting it,
+        // so the first app start after the update doesn't discard all
+        // modes.
         let m = parse(
             r#"
             id = "exakt"
@@ -533,10 +533,10 @@ mod tests {
 
     #[test]
     fn migration_sets_local_engine_ollama_for_deprecated_local_llm_model() {
-        // Phase-1/2-TOML: `local_llm_model` ohne `local_engine` und ohne
-        // `ollama_model_tag`. Nach Migration muessen beide Felder gesetzt
-        // sein, damit der neue Embedded-Default solche Modi nicht in den
-        // falschen Engine-Pfad zwingt.
+        // Phase-1/2 TOML: `local_llm_model` without `local_engine`
+        // and without `ollama_model_tag`. After migration both fields
+        // must be set so the new embedded default doesn't force such
+        // modes onto the wrong engine path.
         let m = parse(
             r#"
             id = "korr-alt"
@@ -554,8 +554,8 @@ mod tests {
 
     #[test]
     fn migration_sets_local_engine_ollama_for_explicit_ollama_tag() {
-        // TOML mit `ollama_model_tag` aber ohne `local_engine` — gleiche
-        // Migration: Engine wird explizit auf "ollama" gesetzt.
+        // TOML with `ollama_model_tag` but without `local_engine` —
+        // same migration: the engine is explicitly set to "ollama".
         let m = parse(
             r#"
             id = "korr-tag"
@@ -572,9 +572,9 @@ mod tests {
 
     #[test]
     fn fresh_local_mode_keeps_engine_none_for_default_embedded() {
-        // Frischer Mode ohne jegliche Ollama-Indizien: `local_engine`
-        // bleibt `None`. Der Code-Default in `run_local_processing`
-        // greift dann auf "embedded".
+        // Fresh mode without any Ollama hints: `local_engine` stays
+        // `None`. The code default in `run_local_processing` then
+        // falls back to "embedded".
         let m = parse(
             r#"
             id = "korr-neu"

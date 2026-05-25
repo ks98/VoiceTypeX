@@ -517,8 +517,8 @@ export default function Settings(): JSX.Element {
 }
 
 /**
- * Sticky-Sub-Nav fuer die Settings-Page. Auf kleinen Fenstern (<1024 px)
- * ausgeblendet — der User scrollt dann linear durch.
+ * Sticky sub-nav for the Settings page. Hidden on small windows
+ * (<1024 px) — the user then scrolls linearly through.
  */
 function SettingsSubNav(): JSX.Element {
   const t = useT();

@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Audio-Recorder via cpal.
+//! Audio recorder via cpal.
 //!
-//! Architektur (CLAUDE.md §4.1, §4.2):
-//! `cpal::Stream` ist `!Send`, daher laeuft die eigentliche Aufnahme in einem
-//! dedizierten OS-Thread. Der hier exportierte `RecorderHandle` ist
-//! `Send + Sync` und kommuniziert per Channel mit dem Worker-Thread.
+//! Architecture (CLAUDE.md §4.1, §4.2):
+//! `cpal::Stream` is `!Send`, so the actual recording runs in a
+//! dedicated OS thread. The `RecorderHandle` exported here is
+//! `Send + Sync` and communicates via channels with the worker thread.
 //!
-//! Pipeline pro Recording:
-//!   Mikrofon (native Rate, Stereo/Mono)
-//!     -> cpal-Callback sammelt f32-Samples in Arc<Mutex<Vec<f32>>>
-//!     -> Stop-Signal: Worker-Thread droppt den Stream, wir bekommen Samples
-//!     -> Stereo->Mono Downmix (L+R)/2 wenn channels > 1
-//!     -> Resampling auf 16 kHz Mono via rubato::SincFixedIn (Sprache-tauglich)
-//!     -> WAV-Encoding (s16le) via hound -> Vec<u8>
+//! Pipeline per recording:
+//!   microphone (native rate, stereo/mono)
+//!     -> cpal callback collects f32 samples into `Arc<Mutex<Vec<f32>>>`
+//!     -> stop signal: worker thread drops the stream, we get the samples
+//!     -> stereo->mono downmix (L+R)/2 if channels > 1
+//!     -> resampling to 16 kHz mono via `rubato::SincFixedIn` (speech-grade)
+//!     -> WAV encoding (s16le) via hound -> `Vec<u8>`
 
 use crate::core::error::{Result, VoiceTypeError};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -26,25 +26,26 @@ use std::sync::Arc;
 use std::thread;
 use tokio::sync::oneshot;
 
-/// Ziel-Samplerate fuer Whisper.
+/// Target sample rate for Whisper.
 pub const WHISPER_SAMPLE_RATE: u32 = 16_000;
 
 #[derive(Debug, Clone, Default)]
 pub struct RecorderConfig {
-    /// Geraete-Name (`Device::name()`). `None` = OS-Default-Eingabegeraet.
+    /// Device name (`Device::name()`). `None` = OS default input
+    /// device.
     pub device_name: Option<String>,
 }
 
-/// Capture-Stream-Metadaten (vom cpal-Worker einmalig nach Geraete-Open
-/// gesendet). `pub` damit der Streaming-Worker in `pipeline/` die
-/// Conversion ohne `RecorderHandle`-Lock machen kann.
+/// Capture stream metadata (sent once by the cpal worker after device
+/// open). `pub` so the streaming worker in `pipeline/` can do the
+/// conversion without a `RecorderHandle` lock.
 #[derive(Debug, Clone, Copy)]
 pub struct StreamMeta {
     pub sample_rate: u32,
     pub channels: u16,
 }
 
-/// Send-fester Handle zum Recorder-Thread.
+/// Send-safe handle to the recorder thread.
 pub struct RecorderHandle {
     samples: Arc<Mutex<Vec<f32>>>,
     is_recording: Arc<AtomicBool>,
@@ -55,8 +56,8 @@ pub struct RecorderHandle {
 }
 
 impl RecorderHandle {
-    /// Starte die Aufnahme. Audio sammelt sich im Buffer; `stop_and_finalize`
-    /// liefert das komplette WAV.
+    /// Start recording. Audio accumulates in the buffer;
+    /// `stop_and_finalize` returns the complete WAV.
     pub fn start(config: RecorderConfig) -> Result<Self> {
         let samples: Arc<Mutex<Vec<f32>>> = Arc::new(Mutex::new(Vec::with_capacity(16_000 * 30)));
         let is_recording = Arc::new(AtomicBool::new(true));
@@ -83,21 +84,21 @@ impl RecorderHandle {
         })
     }
 
-    /// Stoppt die Aufnahme, wartet auf den Worker-Thread und liefert das
-    /// fertige WAV-File (16 kHz Mono PCM s16le) als Byte-Buffer.
+    /// Stop recording, wait for the worker thread, and return the
+    /// finished WAV file (16 kHz mono PCM s16le) as a byte buffer.
     ///
-    /// Async-Konformitaet: drei blockierende Schritte (Worker-Join,
-    /// Sample-Lock, CPU-bound Resampling/Encoding) laufen in
-    /// `spawn_blocking`, damit die tokio-Runtime nicht panickt
-    /// ("Cannot block the current thread from within a runtime").
-    /// Das Meta-Channel wird hingegen mit `await` gelesen.
+    /// Async-conformity: three blocking steps (worker join, sample
+    /// lock, CPU-bound resampling/encoding) run in `spawn_blocking`,
+    /// so the tokio runtime doesn't panic ("Cannot block the current
+    /// thread from within a runtime"). The meta channel is read with
+    /// `await` instead.
     pub async fn stop_and_finalize(mut self) -> Result<Vec<u8>> {
         self.is_recording.store(false, Ordering::SeqCst);
         if let Some(tx) = self.stop_tx.take() {
             let _ = tx.send(());
         }
 
-        // Worker-Thread.join() ist blockierend → blocking-Thread-Pool.
+        // Worker `thread.join()` is blocking → blocking thread pool.
         if let Some(handle) = self.worker.take() {
             tokio::task::spawn_blocking(move || handle.join())
                 .await
@@ -108,8 +109,9 @@ impl RecorderHandle {
         let meta = self.resolve_meta().await?;
         let samples_arc = Arc::clone(&self.samples);
 
-        // Resampling + WAV-Encoding sind CPU-bound (~hundert ms bei 30 s
-        // Audio). Auf den blocking-Pool verlagern, damit der async-Worker frei bleibt.
+        // Resampling + WAV encoding are CPU-bound (~hundreds of ms for
+        // 30 s of audio). Move to the blocking pool so the async
+        // worker stays free.
         tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
             let raw_samples = std::mem::take(&mut *samples_arc.lock());
             if raw_samples.is_empty() {
@@ -140,27 +142,28 @@ impl RecorderHandle {
         Ok(meta)
     }
 
-    /// Cheap-Clone des Sample-Buffer-Arcs fuer Live-Snapshots waehrend der
-    /// Aufnahme. Der Streaming-Worker in `pipeline/` haelt damit nur kurz
-    /// den Buffer-Mutex (Clone der bisherigen Samples), waehrend die
-    /// CPU-Arbeit (Mono-Mix + Resampling + Whisper-Decode) lockfrei laeuft.
+    /// Cheap clone of the sample buffer Arc for live snapshots during
+    /// recording. The streaming worker in `pipeline/` thus holds the
+    /// buffer mutex only briefly (cloning the current samples), while
+    /// the CPU work (mono mix + resampling + Whisper decode) runs
+    /// lock-free.
     pub fn samples_handle(&self) -> Arc<Mutex<Vec<f32>>> {
         Arc::clone(&self.samples)
     }
 
-    /// Warte einmalig auf die `StreamMeta` vom Worker-Thread, cache sie.
-    /// Folgeaufrufe geben den gecachten Wert sofort zurueck. Wird vom
-    /// Streaming-Worker direkt nach `start()` aufgerufen, sodass im Loop
-    /// keine Async-Waits mehr noetig sind.
+    /// Wait once for the `StreamMeta` from the worker thread and
+    /// cache it. Subsequent calls return the cached value
+    /// immediately. The streaming worker calls this right after
+    /// `start()` so the loop needs no further async waits.
     pub async fn await_meta(&mut self) -> Result<StreamMeta> {
         self.resolve_meta().await
     }
 }
 
-/// Konvertiere Roh-Samples (cpal-native: f32, je Channels verschachtelt) auf
-/// die Whisper-Erwartung 16-kHz-Mono-f32. Wird sowohl im Final-Pfad
-/// (`stop_and_finalize`) als auch im Streaming-Worker benutzt, deshalb
-/// hier als freie Funktion exponiert.
+/// Convert raw samples (cpal-native: f32, interleaved per channel) to
+/// Whisper's expectation of 16 kHz mono f32. Used both in the final
+/// path (`stop_and_finalize`) and in the streaming worker, so exposed
+/// here as a free function.
 pub fn to_16k_mono(raw: &[f32], meta: StreamMeta) -> Result<Vec<f32>> {
     if raw.is_empty() {
         return Ok(Vec::new());
@@ -169,8 +172,9 @@ pub fn to_16k_mono(raw: &[f32], meta: StreamMeta) -> Result<Vec<f32>> {
     resample_to_16k(&mono, meta.sample_rate)
 }
 
-/// Worker-Thread: baut den cpal-Stream, fuettert Samples in den Buffer,
-/// wartet auf Stop-Signal, droppt dann den Stream (was die Aufnahme beendet).
+/// Worker thread: builds the cpal stream, feeds samples into the
+/// buffer, waits for the stop signal, then drops the stream (which
+/// ends the recording).
 fn run_recorder_thread(
     config: RecorderConfig,
     samples: Arc<Mutex<Vec<f32>>>,
@@ -260,14 +264,14 @@ fn run_recorder_thread(
         .play()
         .map_err(|e| VoiceTypeError::Audio(format!("stream.play: {e}")))?;
 
-    // Blockiere bis Stop-Signal — Stream wird beim Drop gestoppt.
+    // Block until the stop signal — the stream is stopped on drop.
     let _ = stop_rx.blocking_recv();
     drop(stream);
     Ok(())
 }
 
-/// Liefert die Liste verfuegbarer Eingabegeraete. Gibt nur Geraete zurueck,
-/// die einen Namen haben (anonyme Geraete werden uebersprungen).
+/// Returns the list of available input devices. Returns only devices
+/// that have a name (anonymous devices are skipped).
 pub fn list_input_devices() -> Result<Vec<String>> {
     let host = cpal::default_host();
     let devices = host
@@ -293,7 +297,7 @@ fn stereo_to_mono(samples: &[f32], channels: u16) -> Vec<f32> {
         .collect()
 }
 
-/// Resample f32-Mono auf 16 kHz. Wenn die Quelle bereits 16 kHz ist, kein-op.
+/// Resample f32 mono to 16 kHz. No-op if the source is already 16 kHz.
 fn resample_to_16k(mono: &[f32], source_rate: u32) -> Result<Vec<f32>> {
     if source_rate == WHISPER_SAMPLE_RATE {
         return Ok(mono.to_vec());
@@ -324,7 +328,7 @@ fn resample_to_16k(mono: &[f32], source_rate: u32) -> Result<Vec<f32>> {
         .ok_or_else(|| VoiceTypeError::Audio("Resampler lieferte 0 Channels".into()))
 }
 
-/// Encodiere f32-Mono-Samples (16 kHz) als WAV (PCM s16le).
+/// Encode f32 mono samples (16 kHz) as WAV (PCM s16le).
 fn encode_wav_16k_mono(samples: &[f32]) -> Result<Vec<u8>> {
     let spec = hound::WavSpec {
         channels: 1,
@@ -377,7 +381,7 @@ mod tests {
 
     #[test]
     fn wav_encode_has_header_and_payload() {
-        let samples = vec![0.0; 16_000]; // 1 sec stille
+        let samples = vec![0.0; 16_000]; // 1 sec of silence
         let wav = encode_wav_16k_mono(&samples).unwrap();
         // RIFF-header
         assert_eq!(&wav[0..4], b"RIFF");

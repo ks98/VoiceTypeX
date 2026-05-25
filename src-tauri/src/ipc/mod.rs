@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Tauri-Command-Handler. Frontend ruft diese via `invoke()` auf.
+//! Tauri command handlers. The frontend calls these via `invoke()`.
 
 pub mod cache;
 pub mod diagnostics;

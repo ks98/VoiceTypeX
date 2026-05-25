@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Settings-IPC.
+//! Settings IPC.
 
 use crate::audio;
 use crate::core::config::Settings;
@@ -60,17 +60,16 @@ pub async fn list_audio_devices() -> IpcResult<Vec<String>> {
     audio::list_input_devices().map_err(|e| e.to_string())
 }
 
-/// Liefert den **effektiven** Menue-Hotkey, wie er gerade tatsaechlich
-/// gebunden ist.
+/// Returns the **effective** menu hotkey as it is actually bound
+/// right now.
 ///
-/// - X11/Windows: gibt den Settings-Wert zurueck — die App registriert
-///   den Hotkey direkt, also ist Settings die Wahrheit.
-/// - Wayland: gibt den vom Compositor zurueckgegebenen Trigger zurueck
-///   (oder `None`, falls die Portal-Session noch nicht geantwortet hat
-///   bzw. `list_shortcuts` fehlschlug — Frontend faellt dann auf den
-///   Settings-Wert zurueck). KDE/GNOME duerfen vom Settings-Wert
-///   abweichen, weil der User den Hotkey in den System-Einstellungen
-///   nachjustieren kann.
+/// - X11/Windows: returns the settings value — the app registers the
+///   hotkey directly, so settings is the truth.
+/// - Wayland: returns the trigger reported by the compositor (or
+///   `None` if the portal session has not yet answered or
+///   `list_shortcuts` failed — the frontend then falls back to the
+///   settings value). KDE/GNOME may deviate from the settings value
+///   because the user can adjust the hotkey in system settings.
 #[tauri::command]
 pub async fn get_effective_menu_hotkey(
     state: tauri::State<'_, Arc<AppContext>>,
@@ -87,9 +86,10 @@ pub async fn set_whisper_model_path(
     persist_settings(&state)
 }
 
-/// Lade das im Settings-Slot konfigurierte Default-Whisper-Modell nach
-/// `app_config_dir/models/`. Sendet waehrend des Downloads
-/// `model-download-progress`-Events ans Frontend.
+/// Download the default Whisper model configured in the settings
+/// slot to `app_config_dir/models/`. Emits
+/// `model-download-progress` events to the frontend during the
+/// download.
 #[tauri::command]
 pub async fn download_default_model(
     app: AppHandle,
@@ -105,10 +105,11 @@ pub async fn download_default_model(
 
     let slot = ModelSlot::from_setting(&slot_name);
 
-    // VAD-Modell parallel ziehen (~885 kB, sub-Sekunde). Best-effort —
-    // wenn der Download scheitert, faellt der Whisper-Pfad transparent
-    // auf "ohne VAD" zurueck und der User kriegt im Whisper-Log nur eine
-    // WARN-Zeile. Wir wollen den Whisper-Download deswegen nicht killen.
+    // Pull the VAD model in parallel (~885 kB, sub-second).
+    // Best-effort — if the download fails, the Whisper path
+    // transparently falls back to "no VAD" and the user only gets a
+    // WARN line in the Whisper log. We don't want to kill the
+    // Whisper download because of that.
     if let Err(e) = download_vad(VadModel::SileroV6_2_0, &dest_dir, |_| {}).await {
         tracing::warn!(error = %e, "VAD model download failed, Whisper path will run without VAD");
     }
@@ -128,14 +129,15 @@ pub async fn download_default_model(
 
     let path_str = result.to_string_lossy().into_owned();
     state.settings.write().whisper_model_path = Some(path_str.clone());
-    let _ = persist_settings(&state); // Best-effort, Download-Result trotzdem zurueckgeben
+    let _ = persist_settings(&state); // Best-effort; still return the download result.
     Ok(path_str)
 }
 
-/// **Phase 3b** — Lade das in `Settings.llm_default_slot` konfigurierte
-/// GGUF-LLM-Modell nach `app_config_dir/models/`. Sendet `llm-model-
-/// download-progress`-Events ans Frontend (separate Channel von Whisper,
-/// damit beide Downloads parallel laufen koennen ohne Progress-Mix).
+/// **Phase 3b** — download the GGUF LLM model configured in
+/// `Settings.llm_default_slot` to `app_config_dir/models/`. Emits
+/// `llm-model-download-progress` events to the frontend (a separate
+/// channel from Whisper so both downloads can run in parallel
+/// without progress mixing).
 #[tauri::command]
 pub async fn download_llm_default_model(
     app: AppHandle,
@@ -167,8 +169,8 @@ pub async fn download_llm_default_model(
     Ok(path_str)
 }
 
-/// Schreibt den aktuellen Settings-Snapshot auf Disk. Wird nach jedem
-/// Mutations-IPC aufgerufen, damit User-Aenderungen App-Restart-fest sind.
+/// Writes the current settings snapshot to disk. Called after every
+/// mutating IPC so user changes survive an app restart.
 fn persist_settings(state: &tauri::State<'_, Arc<AppContext>>) -> IpcResult<()> {
     let snapshot = state.settings.read().clone();
     snapshot

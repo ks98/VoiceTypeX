@@ -10,9 +10,10 @@ import { ipcGetSettings } from "./lib/tauri";
 import { pickSupported, useI18nStore } from "./i18n";
 import "./styles/globals.css";
 
-// Theme synchron VOR React-Render setzen — sonst flackert beim Mount
-// kurz das falsche Theme ("FOUC"). subscribeSystemTheme reagiert auf
-// OS-Theme-Wechsel, aber nur wenn die User-Wahl "system" ist.
+// Set the theme synchronously BEFORE React render — otherwise the
+// wrong theme briefly flickers on mount ("FOUC"). subscribeSystemTheme
+// reacts to OS theme changes, but only when the user choice is
+// "system".
 initTheme();
 subscribeSystemTheme(() => {
   // Re-apply already happens in the listener itself; this is just a
@@ -26,10 +27,11 @@ if (!rootEl) {
   );
 }
 
-// Window-Routing: Tauri startet drei Fenster aus derselben index.html
-// (label=main → App, label=overlay → Overlay, label=menu → Menu). Die
-// Unterscheidung erfolgt per URL-Query, da Tauri das `url`-Field der
-// Window-Config sauber an die Renderer-URL weiterreicht.
+// Window routing: Tauri starts three windows from the same
+// index.html (label=main → App, label=overlay → Overlay, label=menu
+// → Menu). The distinction is made via URL query, since Tauri
+// forwards the `url` field of the window config cleanly to the
+// renderer URL.
 const params = new URLSearchParams(window.location.search);
 const win = params.get("window");
 
@@ -58,9 +60,9 @@ void listen<{ locale: string }>("i18n://locale-changed", (event) => {
 ipcGetSettings()
   .then((settings) => {
     const picked = pickSupported(settings.locale);
-    // Sichtbar im Diagnostics-Log: Bug-Reports "App ist auf falscher
-    // Sprache" lassen sich nur debuggen, wenn man den Bootstrap-Pfad
-    // im Log sieht.
+    // Visible in the diagnostics log: bug reports "app is on the
+    // wrong language" can only be debugged when the bootstrap path
+    // shows up in the log.
     console.info(
       `i18n bootstrap: raw="${settings.locale ?? "<null>"}" picked="${picked}"`,
     );

@@ -1,23 +1,25 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Linux-Wayland Text-Injection — Composite-Strategie aus Clipboard + libei.
+//! Linux Wayland text injection — composite strategy of clipboard +
+//! libei.
 //!
-//! Architektur (siehe CLAUDE.md §11 Phase 5 Teil 2):
-//!   1. Text wird auf das System-Clipboard gesetzt.
-//!   2. `Ctrl+V` wird via `xdg-desktop-portal.RemoteDesktop` + libei
-//!      simuliert. Implementiert in den Sub-Iterationen 5.2.A bis 5.2.B.3:
-//!        - 5.2.A: Portal-Session lazy beim ersten Hotkey
-//!        - 5.2.B.1: connect_to_eis() + EIS-FD
-//!        - 5.2.B.2: reis-Worker-Thread + EI-Handshake
-//!        - 5.2.B.3: tatsaechlicher Strg+V-Keystroke
+//! Architecture (see CLAUDE.md §11 phase 5 part 2):
+//!   1. Text is placed on the system clipboard.
+//!   2. `Ctrl+V` is simulated via
+//!      `xdg-desktop-portal.RemoteDesktop` + libei. Implemented in
+//!      sub-iterations 5.2.A through 5.2.B.3:
+//!        - 5.2.A: portal session, lazy on first hotkey
+//!        - 5.2.B.1: connect_to_eis() + EIS FD
+//!        - 5.2.B.2: reis worker thread + EI handshake
+//!        - 5.2.B.3: the actual Ctrl+V keystroke
 //!
-//! Session-Lifecycle: lazy beim ersten Inject (`ensure_session`), danach
-//! gehalten fuer die App-Lebensdauer in einem `Arc<tokio::Mutex<...>>`.
-//! Der libei-Worker laeuft als dedizierter `std::thread` und kommuniziert
-//! ueber einen `mpsc::Sender<KeyCommand>` mit dem tokio-Hauptthread.
+//! Session lifecycle: lazy on the first inject (`ensure_session`),
+//! then held for the app lifetime in an `Arc<tokio::Mutex<...>>`. The
+//! libei worker runs as a dedicated `std::thread` and communicates
+//! with the tokio main thread via an `mpsc::Sender<KeyCommand>`.
 //!
-//! Failure-UX: bei Permission-Ablehnung, Compositor-Unsupport oder
-//! Worker-Setup-Timeout faellt der Injector silent auf Clipboard +
-//! Notification ("Druecke Strg+V") zurueck — kein harter Fehler.
+//! Failure UX: on permission denial, compositor unsupport or worker
+//! setup timeout, the injector silently falls back to clipboard +
+//! notification ("Press Ctrl+V") — no hard error.
 
 use crate::core::error::{Result, VoiceTypeError};
 use crate::injection::libei_worker::{run_libei_worker, KeyCommand};
@@ -30,30 +32,31 @@ use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_notification::NotificationExt;
 use tokio::sync::Mutex;
 
-/// Status der RemoteDesktop-Portal-Session + libei-Worker. Wird lazy
-/// initialisiert; nach erfolgreichem Aufbau bleibt sie fuer die
-/// App-Lebensdauer erhalten. Bei harten Fehlern gehen wir in `Failed`
-/// und loggen das einmal — weitere Inject-Versuche fallen dann silent
-/// auf den Clipboard-Pfad zurueck.
+/// State of the RemoteDesktop portal session + libei worker.
+/// Initialized lazily; after a successful setup it stays alive for the
+/// app lifetime. On hard errors we go into `Failed` and log it once —
+/// further inject attempts then silently fall back to the clipboard
+/// path.
 enum SessionState {
-    /// Noch nicht versucht, Session aufzubauen.
+    /// Session setup not attempted yet.
     Uninitialized,
-    /// Worker laeuft, Keyboard-Device ist ready, Cmds koennen geschickt werden.
+    /// Worker is running, the keyboard device is ready, commands can
+    /// be sent.
     Active {
         cmd_tx: std::sync::mpsc::Sender<KeyCommand>,
     },
-    /// Setup ist gescheitert. Failure-Reason wird einmal geloggt, der
-    /// Inject-Pfad faellt auf reines Clipboard zurueck.
+    /// Setup failed. The failure reason is logged once; the inject
+    /// path falls back to clipboard only.
     Failed { reason: String },
 }
 
 pub struct WaylandLibeiInjector {
     app_handle: tauri::AppHandle,
     session: Arc<Mutex<SessionState>>,
-    /// Pfad fuer den `restore_token` (~/.config/.../wayland_session.json).
-    /// Wird beim ersten erfolgreichen Setup geschrieben und bei naechsten
-    /// App-Starts gelesen — dann fragt das Portal nicht mehr nach
-    /// Permission, weil der Token gueltig ist.
+    /// Path for the `restore_token`
+    /// (`~/.config/.../wayland_session.json`). Written on first
+    /// successful setup and read on subsequent app starts — then the
+    /// portal stops asking for permission because the token is valid.
     token_path: PathBuf,
 }
 
@@ -66,9 +69,8 @@ impl WaylandLibeiInjector {
         }
     }
 
-    /// Stellt sicher, dass die Session entweder Active oder Failed ist.
-    /// Idempotent — nach erstem Erfolg/Failure keine weiteren
-    /// Portal-Aufrufe.
+    /// Ensures the session is either Active or Failed. Idempotent —
+    /// no further portal calls after the first success/failure.
     async fn ensure_session(&self) -> Option<std::sync::mpsc::Sender<KeyCommand>> {
         let mut guard = self.session.lock().await;
         match &*guard {
@@ -80,8 +82,8 @@ impl WaylandLibeiInjector {
             SessionState::Uninitialized => {}
         }
 
-        // Vorhandenen Token laden (kein Permission-Dialog beim Start,
-        // wenn KWin/Mutter den Token akzeptiert).
+        // Load an existing token (no permission dialog on start if
+        // KWin/Mutter accepts the token).
         let prior_token = load_restore_token(&self.token_path);
         if prior_token.is_some() {
             tracing::info!("RemoteDesktop: using stored restore_token");
@@ -102,17 +104,18 @@ impl WaylandLibeiInjector {
             "RemoteDesktop-Session aufgebaut + EIS-FD bezogen"
         );
 
-        // Neuen Token persistieren, falls der Compositor einen geliefert
-        // hat. Best-effort — wenn der Disk-Write fehlschlaegt, laeuft die
-        // App weiter, der User sieht dann beim naechsten Start halt nochmal
-        // den Permission-Dialog.
+        // Persist the new token if the compositor delivered one.
+        // Best-effort — if the disk write fails, the app keeps
+        // running; the user just sees the permission dialog again on
+        // the next start.
         if let Some(token) = &restore_token {
             if let Err(e) = save_restore_token(&self.token_path, token) {
                 tracing::warn!(error = %e, "restore_token could not be persisted");
             }
         }
 
-        // Worker spawnen + warten bis Keyboard ready (oder Timeout/Fail).
+        // Spawn the worker and wait until keyboard is ready (or
+        // timeout/fail).
         let (cmd_tx, cmd_rx) = std::sync::mpsc::channel::<KeyCommand>();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel::<bool>();
 
@@ -128,9 +131,9 @@ impl WaylandLibeiInjector {
             return None;
         }
 
-        // Auf Ready-Signal warten — der Worker meldet `true`, sobald das
-        // Keyboard-Device verfuegbar ist, oder `false` bei Setup-Fehler /
-        // 5s-Timeout.
+        // Wait for the ready signal — the worker reports `true` as
+        // soon as the keyboard device is available, or `false` on
+        // setup error / 5 s timeout.
         match tokio::time::timeout(Duration::from_secs(6), ready_rx).await {
             Ok(Ok(true)) => {
                 *guard = SessionState::Active {
@@ -174,45 +177,45 @@ impl TextInjector for WaylandLibeiInjector {
     }
 
     async fn inject(&self, text: &str, opts: InjectOptions) -> Result<()> {
-        // `Keystrokes`-Strategy ist auf Wayland nicht implementiert. libei
-        // koennte das prinzipiell (KeyCommand::Type{keysyms} im Worker),
-        // braucht aber Char-zu-Keysym-Mapping via xkbcommon. Solange das
-        // nicht da ist, fallen wir auf den Clipboard+Auto-Paste-Pfad zurueck
-        // und loggen den Mismatch — sonst bleibt es fuer den User schwer
-        // nachvollziehbar, warum sein `injection_method = "keystrokes"`
-        // wie Clipboard aussieht.
+        // The `Keystrokes` strategy is not implemented on Wayland.
+        // libei could do it in principle (`KeyCommand::Type{keysyms}`
+        // in the worker), but needs char-to-keysym mapping via
+        // xkbcommon. Until that exists we fall back to the
+        // clipboard+auto-paste path and log the mismatch — otherwise
+        // it would be hard for the user to figure out why their
+        // `injection_method = "keystrokes"` looks like clipboard.
         if opts.strategy == InjectionStrategy::Keystrokes {
             tracing::info!(
                 "Wayland: injection_method=keystrokes nicht unterstuetzt, nutze libei+Clipboard"
             );
         }
 
-        // Schritt 1: Clipboard setzen — passiert immer, unabhaengig vom
-        // Session-Status.
+        // Step 1: set the clipboard — happens always, regardless of
+        // the session state.
         self.app_handle
             .clipboard()
             .write_text(text.to_string())
             .map_err(|e| VoiceTypeError::Injection(format!("clipboard write: {e}")))?;
 
-        // Schritt 2: libei-Session sicherstellen + Strg+V senden.
+        // Step 2: ensure the libei session and send Ctrl+V.
         match self.ensure_session().await {
             Some(cmd_tx) => {
-                // Wayland-Eigenheit: `wl_data_device.set_selection` wird
-                // erst beim naechsten Compositor-Roundtrip wirksam
-                // (~10–30 ms). Ohne Pause hier wuerde Strg+V den alten
-                // Clipboard-Inhalt einfuegen, weil der Compositor unsere
-                // neue Selection noch nicht "hat". 60 ms ist konservativ
-                // genug fuer alle getesteten Compositors, ohne spuerbare
-                // UX-Verzoegerung.
+                // Wayland quirk: `wl_data_device.set_selection` only
+                // takes effect on the next compositor round-trip
+                // (~10–30 ms). Without a pause here Ctrl+V would paste
+                // the old clipboard content, because the compositor
+                // doesn't "have" our new selection yet. 60 ms is
+                // conservative enough for all tested compositors,
+                // without a perceptible UX delay.
                 tokio::time::sleep(Duration::from_millis(60)).await;
 
                 if let Err(e) = cmd_tx.send(KeyCommand::CtrlV) {
                     tracing::warn!(error = %e, "libei-Cmd-Channel zu — Fallback auf Notification");
                     self.notify_manual_paste();
                 } else {
-                    // Kurze Pause, damit der Compositor den Tastendruck
-                    // verarbeiten kann, bevor irgend ein nachfolgender
-                    // Code (z.B. State-Bus auf Idle) wechselt.
+                    // Short pause so the compositor can process the
+                    // keypress before any subsequent code (e.g. the
+                    // state bus switching to Idle) runs.
                     tokio::time::sleep(Duration::from_millis(80)).await;
                     tracing::debug!("libei: Ctrl+V gesendet");
                 }
@@ -238,11 +241,11 @@ impl WaylandLibeiInjector {
     }
 }
 
-/// Baut eine `xdg-desktop-portal.RemoteDesktop`-Session auf. Falls
-/// `prior_token` existiert, wird er in `select_devices` durchgereicht —
-/// dann fragt der Compositor nicht erneut nach Permission, vorausgesetzt
-/// der Token ist noch gueltig (User hat die Erlaubnis nicht widerrufen,
-/// Compositor wurde nicht zwischenzeitlich neu gestartet).
+/// Sets up an `xdg-desktop-portal.RemoteDesktop` session. If
+/// `prior_token` exists, it is forwarded in `select_devices` — then
+/// the compositor doesn't ask for permission again, provided the
+/// token is still valid (the user has not revoked permission and the
+/// compositor was not restarted in the meantime).
 async fn build_remote_desktop_session(
     prior_token: Option<&str>,
 ) -> std::result::Result<(Option<String>, std::os::fd::OwnedFd), String> {
@@ -287,9 +290,9 @@ struct StoredToken {
     restore_token: String,
 }
 
-/// Liest den persistierten `restore_token` aus `path`. Liefert `None`
-/// bei fehlender Datei oder Parse-Fehler — beides ist nicht-fatal,
-/// es kommt halt der Permission-Dialog wieder.
+/// Reads the persisted `restore_token` from `path`. Returns `None`
+/// on a missing file or parse error — both are non-fatal; the
+/// permission dialog just shows up again.
 fn load_restore_token(path: &std::path::Path) -> Option<String> {
     if !path.exists() {
         return None;
@@ -299,12 +302,12 @@ fn load_restore_token(path: &std::path::Path) -> Option<String> {
     Some(stored.restore_token)
 }
 
-/// Schreibt den `restore_token` als JSON nach `path`. Erstellt das
-/// Parent-Verzeichnis bei Bedarf. chmod 0600, weil der Token effektiv
-/// ein persistentes Capability-Token fuer Tastatur-Inject ist: wer ihn
-/// liest, kann ihn gegen denselben Compositor replayen und so dauerhaft
-/// Tastatureingaben ohne weiteren User-Dialog senden. Sollte deshalb
-/// wie ein Authentifizierungs-Geheimnis behandelt werden.
+/// Writes the `restore_token` as JSON to `path`. Creates the parent
+/// directory if needed. chmod 0600, because the token is effectively
+/// a persistent capability token for keyboard injection: anyone who
+/// reads it can replay it against the same compositor and thereby
+/// send keystrokes indefinitely without a further user dialog. It
+/// should therefore be treated as an authentication secret.
 fn save_restore_token(path: &std::path::Path, token: &str) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)

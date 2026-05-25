@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! In-Memory-Ringbuffer fuer `tracing`-Events.
+//! In-memory ring buffer for `tracing` events.
 //!
-//! Ein `LogRingBuffer` haelt die letzten N formatierten Log-Zeilen, ein
-//! `LogHandle` (`Layer`-Impl) fuettert ihn aus dem `tracing-subscriber`-
-//! Stack. Die Logs-View im Frontend pollt per IPC.
+//! A `LogRingBuffer` holds the last N formatted log lines; a
+//! `LogHandle` (`Layer` impl) feeds it from the `tracing-subscriber`
+//! stack. The frontend Logs view polls via IPC.
 //!
-//! WICHTIG (CLAUDE.md §8): Audio-/Transkript-/LLM-Antwort-Daten gehen
-//! standardmaessig NICHT durchs Logging — wir loggen ausschliesslich
-//! Kontrollfluss und Fehlertexte. Eine Diagnose-Logging-Toggle-Erweiterung
-//! waere additive: ein zusaetzlicher Log-Aufruf bei aktivem Toggle.
+//! IMPORTANT (CLAUDE.md §8): audio / transcript / LLM-response data
+//! does NOT go through logging by default — we log only control flow
+//! and error texts. A diagnostic-logging toggle extension would be
+//! additive: one extra log call when the toggle is active.
 
 use parking_lot::Mutex;
 use std::collections::VecDeque;
@@ -17,7 +17,7 @@ use std::sync::Arc;
 use tracing::field::{Field, Visit};
 use tracing_subscriber::Layer;
 
-/// Standard-Kapazitaet des Ringbuffers.
+/// Default capacity of the ring buffer.
 pub const DEFAULT_CAPACITY: usize = 500;
 
 #[derive(Clone)]
@@ -34,7 +34,7 @@ impl LogRingBuffer {
         }
     }
 
-    /// Liefert die letzten `limit` Zeilen, neueste zuletzt.
+    /// Returns the last `limit` lines, newest last.
     pub fn lines(&self, limit: usize) -> Vec<String> {
         let buffer = self.inner.lock();
         let take = limit.min(buffer.len());
@@ -125,8 +125,8 @@ mod tests {
         inner.lock().push_back("c".into());
         assert_eq!(buf.lines(10), vec!["a", "b", "c"]);
 
-        // Simuliere Layer-Schreiben via direkten Push (Layer-Impl
-        // pop_fronts wenn full)
+        // Simulate a layer write via direct push (the Layer impl
+        // pop_fronts when full).
         {
             let mut g = inner.lock();
             if g.len() >= buf.capacity {

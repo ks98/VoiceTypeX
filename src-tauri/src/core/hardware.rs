@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Runtime-Hardware-Detection.
+//! Runtime hardware detection.
 //!
-//! Erkennt zur Laufzeit, welche Beschleunigungs-Backends auf der
-//! User-Hardware verfuegbar **waeren** — auch wenn der aktuelle Build sie
-//! nicht aktiviert hat. Damit kann das Onboarding dem User konkret
-//! empfehlen "Lade die Vulkan-Variante fuer 5x Speedup".
+//! Detects at runtime which acceleration backends **would** be
+//! available on the user's hardware — even when the current build
+//! hasn't enabled them. This lets onboarding concretely recommend
+//! "download the Vulkan variant for 5x speedup".
 //!
-//! Detection-Strategie ist bewusst simpel: wir schauen auf die Anwesenheit
-//! von Bibliotheken und Devices, nicht auf "wuerde es wirklich
-//! funktionieren". Falsche Positives sind akzeptabel — der User merkt das
-//! beim Variant-Download und wechselt zurueck.
+//! The detection strategy is deliberately simple: we look at the
+//! presence of libraries and devices, not at "would it actually work".
+//! False positives are acceptable — the user notices on variant
+//! download and switches back.
 
 use serde::Serialize;
 
@@ -18,33 +18,34 @@ pub struct HardwareReport {
     pub os: &'static str,
     pub cpu_logical_cores: u32,
 
-    /// libopenblas zur Laufzeit verfuegbar? Linux: pruefe Standard-Pfade.
+    /// libopenblas available at runtime? Linux: probe standard paths.
     pub has_openblas: bool,
-    /// libvulkan zur Laufzeit verfuegbar? **Achtung**: das prueft nur ob
-    /// der Loader installiert ist, nicht ob ein physisches Device aktiv
-    /// ist. Eine VM mit virtio-gpu hat libvulkan, fallback aber auf
-    /// llvmpipe (Software-Rendering). Echte Device-Enumeration braucht
-    /// die `ash`-Crate — Phase-3c-Thema.
+    /// libvulkan available at runtime? **Note**: this only checks
+    /// whether the loader is installed, not whether a physical device
+    /// is active. A VM with virtio-gpu has libvulkan but falls back to
+    /// llvmpipe (software rendering). Real device enumeration needs
+    /// the `ash` crate — a phase-3c topic.
     pub has_vulkan: bool,
-    /// NVIDIA-GPU vorhanden? Linux: /dev/nvidia* oder libcuda.so.
+    /// NVIDIA GPU present? Linux: /dev/nvidia* or libcuda.so.
     pub has_nvidia_gpu: bool,
-    /// AMD-GPU vorhanden? Linux: /dev/dri + amdgpu Driver oder libamdhip64.
+    /// AMD GPU present? Linux: /dev/dri + amdgpu driver or
+    /// libamdhip64.
     pub has_amd_gpu: bool,
     /// Apple Silicon (M1/M2/...)?
     pub is_apple_silicon: bool,
 
-    /// Gesamt-RAM in GB (auf 1 Dezimalstelle gerundet). `0.0` =
-    /// Detection nicht implementiert fuer dieses OS (aktuell: Windows).
+    /// Total RAM in GB (rounded to 1 decimal). `0.0` = detection not
+    /// implemented for this OS (currently: Windows).
     pub total_ram_gb: f32,
-    /// Aktuell verfuegbares RAM in GB (MemAvailable auf Linux). `0.0` =
-    /// Detection nicht implementiert.
+    /// Currently available RAM in GB (MemAvailable on Linux). `0.0` =
+    /// detection not implemented.
     pub available_ram_gb: f32,
 
-    /// Welcher Build-Bundle waere optimal fuer diese Hardware?
-    /// Werte: "cpu", "openblas", "vulkan", "cuda", "metal".
+    /// Which build bundle would be optimal for this hardware?
+    /// Values: "cpu", "openblas", "vulkan", "cuda", "metal".
     pub recommended_variant: &'static str,
 
-    /// Erwarteter Speedup-Faktor des recommended_variant gegenueber CPU-only.
+    /// Expected speedup factor of `recommended_variant` over CPU-only.
     pub recommended_speedup: f32,
 }
 
@@ -88,9 +89,9 @@ pub fn detect() -> HardwareReport {
     }
 }
 
-/// RAM-Detection. Linux: `/proc/meminfo`-Parser (MemTotal + MemAvailable).
-/// Auf anderen OS aktuell (0.0, 0.0) — Phase 3c wird `sysinfo`-Crate
-/// einbinden fuer Cross-Platform RAM/VRAM-Detection.
+/// RAM detection. Linux: `/proc/meminfo` parser (MemTotal +
+/// MemAvailable). On other OSes currently (0.0, 0.0) — phase 3c will
+/// pull in the `sysinfo` crate for cross-platform RAM/VRAM detection.
 fn detect_ram_gb() -> (f32, f32) {
     #[cfg(target_os = "linux")]
     {
@@ -135,7 +136,7 @@ fn pick_recommendation(
     has_nvidia: bool,
     is_apple_silicon: bool,
 ) -> (&'static str, f32) {
-    // Priorisiere: Apple Silicon > NVIDIA CUDA > Vulkan > OpenBLAS > CPU.
+    // Priority: Apple Silicon > NVIDIA CUDA > Vulkan > OpenBLAS > CPU.
     if is_apple_silicon {
         return ("metal", 8.0);
     }
@@ -158,13 +159,14 @@ fn detect_openblas() -> bool {
 
 #[cfg(target_os = "windows")]
 fn detect_openblas() -> bool {
-    // OpenBLAS auf Windows kommt mit dem Bundle (statisch oder mitgeliefert).
+    // OpenBLAS on Windows ships with the bundle (statically or
+    // alongside).
     true
 }
 
 #[cfg(target_os = "macos")]
 fn detect_openblas() -> bool {
-    // macOS hat Accelerate.framework — gleichwertig.
+    // macOS has Accelerate.framework — equivalent.
     true
 }
 
@@ -175,14 +177,14 @@ fn detect_vulkan() -> bool {
 
 #[cfg(target_os = "windows")]
 fn detect_vulkan() -> bool {
-    // Vulkan-Runtime kommt mit GPU-Treibern (NVIDIA, AMD, Intel).
-    // Heuristik: pruefe ob vulkan-1.dll im System32 ist.
+    // The Vulkan runtime ships with GPU drivers (NVIDIA, AMD, Intel).
+    // Heuristic: check whether vulkan-1.dll is in System32.
     std::path::Path::new("C:\\Windows\\System32\\vulkan-1.dll").exists()
 }
 
 #[cfg(target_os = "macos")]
 fn detect_vulkan() -> bool {
-    // MoltenVK gibt es zwar, aber Metal ist der bessere Weg.
+    // MoltenVK exists, but Metal is the better path.
     false
 }
 
@@ -199,13 +201,13 @@ fn detect_nvidia_gpu() -> bool {
 
 #[cfg(target_os = "macos")]
 fn detect_nvidia_gpu() -> bool {
-    // Apple verkauft keine Macs mit NVIDIA-GPUs mehr.
+    // Apple no longer sells Macs with NVIDIA GPUs.
     false
 }
 
 #[cfg(target_os = "linux")]
 fn detect_amd_gpu() -> bool {
-    // amdgpu-Treiber-Module geladen?
+    // amdgpu driver module loaded?
     std::fs::read_to_string("/proc/modules")
         .map(|m| m.contains("amdgpu"))
         .unwrap_or(false)
@@ -249,7 +251,7 @@ fn library_present(candidates: &[&str]) -> bool {
 
 #[cfg(target_os = "windows")]
 fn library_present(_candidates: &[&str]) -> bool {
-    // Auf Windows ist DLL-Suche komplexer; oben in detect_openblas/vulkan
-    // sind die spezifischen Pfade hardcoded.
+    // DLL lookup is more involved on Windows; the specific paths are
+    // hardcoded above in `detect_openblas`/`detect_vulkan`.
     false
 }

@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Display-Server-Detection.
+//! Display-server detection.
 //!
-//! Wir entscheiden zur Laufzeit anhand der Standard-Env-Variablen, ob die
-//! App auf Wayland, X11 oder einer anderen Plattform laeuft. Das steuert:
+//! We decide at runtime, based on the standard env vars, whether the
+//! app is running on Wayland, X11 or another platform. This drives:
 //!
-//! - Hotkey-Registrierung: Wayland → xdg-desktop-portal.GlobalShortcuts
-//!   (`hotkey::linux_wayland`), X11/Windows → `tauri-plugin-global-shortcut`
-//!   (XGrabKey/RegisterHotKey).
-//! - Auto-Paste: Wayland → libei via xdg-desktop-portal.RemoteDesktop
+//! - Hotkey registration: Wayland → xdg-desktop-portal.GlobalShortcuts
+//!   (`hotkey::linux_wayland`), X11/Windows →
+//!   `tauri-plugin-global-shortcut` (XGrabKey/RegisterHotKey).
+//! - Auto-paste: Wayland → libei via xdg-desktop-portal.RemoteDesktop
 //!   (`injection::linux_wayland`), X11/Windows → enigo Ctrl+V
 //!   (`injection::clipboard_fallback`).
 
@@ -38,7 +38,7 @@ pub fn detect_session() -> SessionInfo {
             .is_some();
         if wayland {
             // Phase 5-full part 1: GlobalShortcuts via xdg-portal.
-            // Auto-paste (RemoteDesktop-Portal) folgt in part 2.
+            // Auto-paste (RemoteDesktop portal) follows in part 2.
             return SessionInfo {
                 display_server: "wayland".into(),
                 global_hotkeys_supported: true,

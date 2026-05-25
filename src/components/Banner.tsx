@@ -4,23 +4,24 @@ import type { ReactNode } from "react";
 type Tone = "error" | "warning" | "success" | "info";
 
 interface BannerProps {
-  /** Bestimmt Farbe + ARIA-Role (error → alert). */
+  /** Drives color + ARIA role (error → alert). */
   tone: Tone;
-  /** Dichtere Padding-Variante fuer Inline-Use in Listen. */
+  /** Tighter padding variant for inline use in lists. */
   dense?: boolean;
-  /** Optionaler Block am rechten Rand (z.B. Action-Button). */
+  /** Optional block on the right edge (e.g. action button). */
   action?: ReactNode;
   className?: string;
   children: ReactNode;
 }
 
 /**
- * Status-Banner — zentralisiert die `rounded-md bg-status-X/10 border
- * border-status-X/40 px-3 py-2`-Trias, die in der App 9× auftauchte.
+ * Status banner — centralizes the `rounded-md bg-status-X/10 border
+ * border-status-X/40 px-3 py-2` triad that appeared 9 times in the
+ * app.
  *
- * Live-Region-Verhalten: `tone="error"` → `role="alert"`, sonst
- * `role="status"`. Screenreader bekommen damit den Inhalt sofort
- * gemeldet (statt erst beim naechsten Tab-Stop).
+ * Live-region behavior: `tone="error"` → `role="alert"`, otherwise
+ * `role="status"`. Screenreaders thus get the content immediately
+ * (instead of only on the next tab stop).
  */
 export default function Banner({
   tone,

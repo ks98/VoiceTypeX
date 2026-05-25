@@ -1,33 +1,34 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Compile-Zeit-Detektion des aktiven Whisper-Backends.
+//! Compile-time detection of the active Whisper backend.
 //!
-//! Das Backend wird zur Build-Zeit ueber Cargo-Features ausgewaehlt.
-//! Default-Build (`cargo build`) ist `cpu` — kompiliert ohne
-//! System-Abhaengigkeiten auf jedem Setup. Beschleunigte Varianten via
+//! The backend is selected at build time via Cargo features. The
+//! default build (`cargo build`) is `cpu` — compiles without system
+//! dependencies on any setup. Accelerated variants via
 //! `--features fast-cpu | gpu-vulkan | gpu-cuda | gpu-metal | gpu-coreml`.
 //!
-//! Diese Funktion ist die einzige korrekte Quelle fuer "welches Backend
-//! laeuft tatsaechlich" — sie kann nicht luegen, weil sie ueber `cfg!`
-//! die Build-Konfiguration liest.
+//! This function is the only correct source for "which backend is
+//! actually running" — it cannot lie, because it reads the build
+//! configuration via `cfg!`.
 
 use serde::Serialize;
 
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct WhisperBackendInfo {
-    /// Backend-Identifier: "cpu", "openblas", "vulkan", "cuda", "metal", "coreml".
+    /// Backend identifier: "cpu", "openblas", "vulkan", "cuda",
+    /// "metal", "coreml".
     pub backend: &'static str,
-    /// Kurze deutschsprachige Beschreibung fuer die UI.
+    /// Short German-language description for the UI.
     pub description: &'static str,
-    /// Erwarteter Speedup-Faktor gegenueber `cpu`-Default. Konservative
-    /// Schaetzung — echte Werte haengen vom Modell und der Hardware ab.
+    /// Expected speedup factor over the `cpu` default. A conservative
+    /// estimate — real values depend on the model and the hardware.
     pub expected_speedup: f32,
 }
 
 #[allow(clippy::needless_return, unreachable_code)]
 pub fn active_backend() -> WhisperBackendInfo {
-    // Reihenfolge: spezifischere/schnellere Backends zuerst. `return` in
-    // jedem cfg-branch ist noetig, weil bei kombinierten Features mehrere
-    // cfg-blocks aktiv sein koennten — dann waere fall-through falsch.
+    // Order: more specific/faster backends first. `return` in every
+    // `cfg` branch is needed because with combined features several
+    // `cfg` blocks could be active — fall-through would be wrong then.
     #[cfg(feature = "gpu-cuda")]
     {
         return WhisperBackendInfo {

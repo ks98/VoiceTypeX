@@ -1,32 +1,33 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Embedded LLM via llama-cpp-2 — Phase 3b.
+//! Embedded LLM via llama-cpp-2 — phase 3b.
 //!
-//! Ersetzt den `OllamaProcessor` als Default fuer `processing = "local"`.
-//! Vorteile:
-//! - Keine externe Daemon-Dependency (kein `ollama serve` mehr noetig).
-//! - Modell-Lifecycle (Load/Unload, Speicher-Druck) liegt in der App,
-//!   nicht im Daemon — wichtig fuer Memory-Pressure-Profile auf
-//!   8-GB-Geraeten.
-//! - Gemeinsamer Compute-Backend mit Whisper (Vulkan oder
-//!   dynamic-backends-CUDA in einer Folge-Iteration) — eine Inferenz-
-//!   Stack, konsistente Hardware-Anforderungen.
+//! Replaces the `OllamaProcessor` as the default for
+//! `processing = "local"`. Advantages:
+//! - No external daemon dependency (no more `ollama serve` needed).
+//! - The model lifecycle (load/unload, memory pressure) sits in the
+//!   app, not in the daemon — important for memory-pressure profiles
+//!   on 8 GB devices.
+//! - Shared compute backend with Whisper (Vulkan, or dynamic-backends
+//!   CUDA in a follow-up iteration) — one inference stack, consistent
+//!   hardware requirements.
 //!
-//! Pipeline pro `process()`-Aufruf:
-//! 1. `LlamaBackend::init()` via `OnceLock` — einmaliger Singleton-
-//!    Setup beim ersten Call.
-//! 2. `LlamaModel::load_from_file` — gecacht hinter `RwLock<Option<_>>`,
-//!    analog zu `LocalTranscriber`.
-//! 3. Chat-Template aus dem GGUF-Modell ziehen (`model.chat_template
-//!    (None)`), Messages formatieren.
-//! 4. `model.str_to_token` → Vec<LlamaToken>.
-//! 5. Frischer `LlamaContext` + `LlamaBatch` pro Inferenz.
-//! 6. `LlamaSampler::chain_simple` mit penalties + top_p + temp + dist.
-//! 7. Decode-Loop bis EOG-Token oder `max_tokens`.
+//! Pipeline per `process()` call:
+//! 1. `LlamaBackend::init()` via `OnceLock` — one-time singleton setup
+//!    on the first call.
+//! 2. `LlamaModel::load_from_file` — cached behind
+//!    `RwLock<Option<_>>`, analogous to `LocalTranscriber`.
+//! 3. Pull the chat template from the GGUF model
+//!    (`model.chat_template(None)`), format messages.
+//! 4. `model.str_to_token` → `Vec<LlamaToken>`.
+//! 5. A fresh `LlamaContext` + `LlamaBatch` per inference.
+//! 6. `LlamaSampler::chain_simple` with penalties + top_p + temp +
+//!    dist.
+//! 7. Decode loop until the EOG token or `max_tokens`.
 
-// `Special::Plaintext` und `token_to_str` sind in llama-cpp-2 0.1.146
-// als deprecated markiert (zukuenftig → `token_to_piece`). Fuer Phase 3b
-// nutzen wir die einfachere API; Migration auf `token_to_piece` ist
-// Polish-Task. Bis dahin allow(deprecated) auf Modul-Ebene.
+// `Special::Plaintext` and `token_to_str` are marked deprecated in
+// llama-cpp-2 0.1.146 (going forward: `token_to_piece`). For phase 3b
+// we use the simpler API; migration to `token_to_piece` is a polish
+// task. Until then `allow(deprecated)` at module level.
 #![allow(deprecated)]
 
 use crate::core::error::{Result, VoiceTypeError};
@@ -42,9 +43,9 @@ use parking_lot::RwLock;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 
-/// Backend-Singleton. `LlamaBackend::init()` darf nur einmal pro Prozess
-/// laufen — sonst gibt es `BackendAlreadyInitialized`. `OnceLock`
-/// garantiert Thread-Safety und idempotenten Init.
+/// Backend singleton. `LlamaBackend::init()` may only run once per
+/// process — otherwise it returns `BackendAlreadyInitialized`.
+/// `OnceLock` guarantees thread safety and idempotent init.
 static LLAMA_BACKEND: OnceLock<LlamaBackend> = OnceLock::new();
 
 fn ensure_backend() -> Result<&'static LlamaBackend> {
@@ -53,16 +54,17 @@ fn ensure_backend() -> Result<&'static LlamaBackend> {
     }
     let backend = LlamaBackend::init()
         .map_err(|e| VoiceTypeError::Processing(format!("LlamaBackend::init failed: {e}")))?;
-    // Race ist OK: get_or_init verliert, der erste setzt den Wert.
+    // Races are fine: `get_or_init` drops the loser, the first one
+    // sets the value.
     Ok(LLAMA_BACKEND.get_or_init(|| backend))
 }
 
 pub struct LlamaEmbeddedProcessor {
     model_path: PathBuf,
-    /// Modell-Cache — geladen beim ersten `process()`-Aufruf, gehalten
-    /// fuer die Lebenszeit des Processors. Read-Lock ueber den ganzen
-    /// Inferenz-Block, weil `LlamaContext` per `<'a>` an die Model-
-    /// Referenz gebunden ist.
+    /// Model cache — loaded on the first `process()` call, held for
+    /// the processor's lifetime. Read lock over the entire inference
+    /// block, because `LlamaContext` is bound to the model reference
+    /// via `<'a>`.
     model: Arc<RwLock<Option<LlamaModel>>>,
 }
 
@@ -142,9 +144,9 @@ impl Processor for LlamaEmbeddedProcessor {
     }
 }
 
-/// 7 Argumente sind hier vertretbar, weil sie verschiedene Concerns
-/// kapseln (Modell, Prompt-Teile, Sampling). Eine Konfig-Struct waere
-/// nur "7 Argumente in einer anderen Verpackung".
+/// 7 arguments are acceptable here because they encapsulate different
+/// concerns (model, prompt parts, sampling). A config struct would
+/// just be "7 arguments in different packaging".
 #[allow(clippy::too_many_arguments)]
 fn run_llama_blocking(
     model_arc: &Arc<RwLock<Option<LlamaModel>>>,
@@ -163,9 +165,9 @@ fn run_llama_blocking(
         .get()
         .ok_or_else(|| VoiceTypeError::Processing("LlamaBackend not initialised".into()))?;
 
-    // Chat-Template aus dem GGUF holen. Fast alle modernen Modelle
-    // (gemma3, llama3, qwen3, mistral-nemo) haben ein passendes
-    // bundled. None = nutze den vom Modell gespeicherten Default.
+    // Pull the chat template from the GGUF. Almost all modern models
+    // (gemma3, llama3, qwen3, mistral-nemo) bundle a suitable one.
+    // `None` = use the default stored in the model.
     let template = model
         .chat_template(None)
         .map_err(|e| VoiceTypeError::Processing(format!("chat_template: {e}")))?;
@@ -176,8 +178,9 @@ fn run_llama_blocking(
         LlamaChatMessage::new("user".to_string(), transcript)
             .map_err(|e| VoiceTypeError::Processing(format!("LlamaChatMessage user: {e}")))?,
     ];
-    // add_ass=true: Template endet mit dem assistant-Opening-Tag, das
-    // Modell muss nicht selbst einen "assistant:"-Header generieren.
+    // add_ass=true: the template ends with the assistant opening tag,
+    // so the model doesn't have to generate an "assistant:" header
+    // itself.
     let prompt = model
         .apply_chat_template(&template, &messages, true)
         .map_err(|e| VoiceTypeError::Processing(format!("apply_chat_template: {e}")))?;
@@ -188,9 +191,9 @@ fn run_llama_blocking(
 
     let prompt_len = tokens.len() as i32;
     if prompt_len > 4000 {
-        // Default-ctx 4096; ueber 4000 Prompt-Tokens haben wir <100
-        // Tokens fuer die Antwort. Diktat-Use-Case sollte das nie
-        // erreichen, aber defensiv pruefen.
+        // Default ctx 4096; over 4000 prompt tokens leaves <100
+        // tokens for the answer. The dictation use case should never
+        // hit this, but we check defensively.
         return Err(VoiceTypeError::Processing(format!(
             "Prompt zu lang ({prompt_len} Tokens) — Diktat verkuerzen oder ctx_size erhoehen"
         )));
@@ -201,8 +204,8 @@ fn run_llama_blocking(
         .new_context(backend, ctx_params)
         .map_err(|e| VoiceTypeError::Processing(format!("new_context: {e}")))?;
 
-    // Batch fuer den Prompt aufbauen. Logits nur fuer das letzte Token,
-    // weil wir nur die naechste Token-Vorhersage brauchen.
+    // Build the batch for the prompt. Logits only for the last token,
+    // because we only need the next token's prediction.
     let mut batch = LlamaBatch::new(prompt_len as usize + max_tokens as usize, 1);
     let last_idx = prompt_len - 1;
     for (i, &token) in tokens.iter().enumerate() {
@@ -214,9 +217,9 @@ fn run_llama_blocking(
     ctx.decode(&mut batch)
         .map_err(|e| VoiceTypeError::Processing(format!("decode prompt: {e}")))?;
 
-    // Sampler-Kette: penalties → top_p → temperature → dist.
-    // Bei temperature == 0 nutzen wir greedy statt dist, fuer
-    // strict deterministische Outputs (Rewriting-Use-Case).
+    // Sampler chain: penalties → top_p → temperature → dist. At
+    // temperature == 0 we use greedy instead of dist, for strictly
+    // deterministic outputs (rewriting use case).
     let mut sampler = if temperature <= 0.0 {
         LlamaSampler::chain_simple([
             LlamaSampler::penalties(64, repeat_penalty, 0.0, 0.0),
@@ -227,9 +230,9 @@ fn run_llama_blocking(
             LlamaSampler::penalties(64, repeat_penalty, 0.0, 0.0),
             LlamaSampler::top_p(top_p, 1),
             LlamaSampler::temp(temperature),
-            // Deterministischer Seed (0): mit temp>0 immer noch
-            // stochastisch *innerhalb* der reduzierten Distribution,
-            // aber zwischen App-Starts reproduzierbar.
+            // Deterministic seed (0): with temp > 0 still stochastic
+            // *within* the reduced distribution, but reproducible
+            // across app starts.
             LlamaSampler::dist(0),
         ])
     };
@@ -237,19 +240,19 @@ fn run_llama_blocking(
     let mut output = String::new();
     let mut cursor = prompt_len;
     for _ in 0..max_tokens {
-        // -1 = letztes Token im Batch (das mit logits=true gesetzt war).
+        // -1 = last token in the batch (the one set with logits=true).
         let token = sampler.sample(&ctx, -1);
         if model.is_eog_token(token) {
             break;
         }
-        // Special::Plaintext = Sonder-Tokens (chat-Tags etc.) werden
-        // weggelassen, nur "sichtbarer" Text kommt raus.
+        // Special::Plaintext = special tokens (chat tags etc.) are
+        // dropped; only "visible" text comes out.
         let piece = model
             .token_to_str(token, Special::Plaintext)
             .map_err(|e| VoiceTypeError::Processing(format!("token_to_str: {e}")))?;
         output.push_str(&piece);
 
-        // Naechstes Decode mit dem gesamplten Token fuettern.
+        // Feed the next decode with the sampled token.
         batch.clear();
         batch
             .add(token, cursor, &[0], true)

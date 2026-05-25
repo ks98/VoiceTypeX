@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Linux Wayland: globaler Hotkey via `xdg-desktop-portal.GlobalShortcuts`.
+//! Linux Wayland: global hotkey via
+//! `xdg-desktop-portal.GlobalShortcuts`.
 //!
-//! Anders als X11/Windows kann die App auf Wayland NICHT die Tasten
-//! selbst greifen. Sie meldet eine Aktion beim Portal an
-//! (id + Beschreibung + Wunsch-Trigger); der Compositor zeigt dem User
-//! einen Dialog, in dem er die finale Tastenkombination zuweist. Der
-//! `Settings.menu_hotkey`-Wert ist auf Wayland also nur ein **Vorschlag**.
+//! Unlike X11/Windows, the app CANNOT grab the keys itself on Wayland.
+//! It registers an action with the portal (id + description +
+//! preferred trigger); the compositor shows the user a dialog where
+//! they assign the final key combination. The `Settings.menu_hotkey`
+//! value is therefore only a **suggestion** on Wayland.
 
 use crate::core::error::{Result, VoiceTypeError};
 use crate::hotkey::{HotkeyEvent, HotkeyEventKind};
@@ -14,7 +15,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 
-/// Beschreibung einer App-Action, die als Wayland-Shortcut registriert wird.
+/// Description of an app action registered as a Wayland shortcut.
 #[derive(Debug, Clone)]
 pub struct WaylandShortcutSpec {
     pub id: String,
@@ -22,18 +23,17 @@ pub struct WaylandShortcutSpec {
     pub preferred_trigger: String,
 }
 
-/// Verbinde mit dem GlobalShortcuts-Portal, registriere die uebergebenen
-/// Actions, und starte einen Listener, der jede Activation als
-/// `HotkeyEvent` ueber den Sender weitergibt. Diese Funktion gibt
-/// nicht zurueck — sie ist als langlebige Task gedacht (in
-/// `tokio::spawn`).
+/// Connects to the GlobalShortcuts portal, registers the passed
+/// actions, and starts a listener that forwards every activation as a
+/// `HotkeyEvent` via the sender. This function does not return — it
+/// is meant as a long-lived task (in `tokio::spawn`).
 ///
-/// `effective_trigger_cache`: optionaler Cache, in den der nach
-/// `bind_shortcuts` vom Compositor zurueckgegebene `trigger_description`
-/// des ersten Shortcuts geschrieben wird. KDE/GNOME duerfen vom
-/// `preferred_trigger` abweichen (User kann den Hotkey in den System-
-/// Settings umstellen) — das Frontend liest diesen Cache, um den
-/// tatsaechlichen Trigger anzuzeigen.
+/// `effective_trigger_cache`: optional cache that receives the
+/// `trigger_description` of the first shortcut returned by the
+/// compositor after `bind_shortcuts`. KDE/GNOME may deviate from the
+/// `preferred_trigger` (the user can change the hotkey in system
+/// settings) — the frontend reads this cache to show the actual
+/// trigger.
 pub async fn run_global_shortcuts_session(
     shortcuts: Vec<WaylandShortcutSpec>,
     sender: broadcast::Sender<HotkeyEvent>,
@@ -66,13 +66,13 @@ pub async fn run_global_shortcuts_session(
 
     tracing::info!(count = shortcuts.len(), "Wayland hotkeys registered");
 
-    // Nach bind_shortcuts list_shortcuts aufrufen, um den tatsaechlich
-    // gebundenen Trigger zu lernen. Das ist eigenes Portal-Verhalten:
-    // beim allerersten bind_shortcuts wird der preferred_trigger
-    // uebernommen, danach merkt sich KDE die User-Zuweisung und meldet
-    // sie ueber list_shortcuts zurueck. Wir scheitern hier nicht hart —
-    // wenn list_shortcuts fehlschlaegt oder leer ist, bleibt der Cache
-    // einfach None und die UI faellt auf den Settings-Wert zurueck.
+    // Call `list_shortcuts` after `bind_shortcuts` to learn the
+    // actually bound trigger. This is portal behavior: on the very
+    // first `bind_shortcuts` the preferred trigger is taken,
+    // afterwards KDE remembers the user assignment and reports it via
+    // `list_shortcuts`. We don't fail hard here — if `list_shortcuts`
+    // fails or returns empty, the cache just stays None and the UI
+    // falls back to the settings value.
     if let Some(cache) = effective_trigger_cache.as_ref() {
         match proxy.list_shortcuts(&session).await {
             Ok(req) => match req.response() {
@@ -99,12 +99,12 @@ pub async fn run_global_shortcuts_session(
         }
     }
 
-    // Beide Streams parallel: Activated (Press) + Deactivated (Release).
-    // Activated kommt sofort beim Hotkey-Druck; Deactivated ist
-    // Compositor-abhaengig — KDE Plasma 5.27+ und GNOME 45+ liefern
-    // zuverlaessig, manche wlroots-Compositors weniger. Falls Deactivated
-    // ausbleibt, faellt der User-Pfad zurueck auf das Toggle-Verhalten,
-    // konfigurierbar via Settings.ptt_mode.
+    // Both streams in parallel: Activated (press) + Deactivated
+    // (release). Activated arrives immediately on hotkey press;
+    // Deactivated is compositor-dependent — KDE Plasma 5.27+ and
+    // GNOME 45+ deliver reliably, some wlroots compositors less so. If
+    // Deactivated doesn't arrive, the user path falls back to toggle
+    // behavior, configurable via `Settings.ptt_mode`.
     let mut activations = proxy
         .receive_activated()
         .await
@@ -114,12 +114,12 @@ pub async fn run_global_shortcuts_session(
         .await
         .map_err(|e| VoiceTypeError::Hotkey(format!("receive_deactivated: {e}")))?;
 
-    // Auto-Repeat-Dedup: KDE Plasma (und einige andere Compositors) liefern
-    // ueber `Activated` kontinuierliche Tastatur-Auto-Repeats waehrend die
-    // Taste gedrueckt bleibt — ~25/Sekunde. Ohne Dedup floodet das Log und
-    // verschleiert echte Pressed/Released-Zyklen. Wir tracken pro
-    // shortcut_id den aktuellen Zustand und reichen Pressed nur beim
-    // Uebergang Released->Pressed durch.
+    // Auto-repeat dedup: KDE Plasma (and some other compositors)
+    // deliver continuous keyboard auto-repeats via `Activated` while
+    // the key stays pressed — ~25/sec. Without dedup, the log floods
+    // and obscures real Pressed/Released cycles. We track the current
+    // state per `shortcut_id` and only forward Pressed on the
+    // Released->Pressed transition.
     let mut pressed_state: HashMap<String, bool> = HashMap::new();
 
     loop {
@@ -129,7 +129,7 @@ pub async fn run_global_shortcuts_session(
                     let shortcut_id = ev.shortcut_id().to_string();
                     let was_pressed = pressed_state.get(&shortcut_id).copied().unwrap_or(false);
                     if was_pressed {
-                        // Auto-Repeat — silent ignorieren.
+                        // Auto-repeat — silently ignore.
                         continue;
                     }
                     pressed_state.insert(shortcut_id.clone(), true);

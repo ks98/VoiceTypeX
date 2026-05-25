@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! `AppContext` — der Singleton-Zustand der Anwendung, in Tauri-State gemanagt.
+//! `AppContext` — the application's singleton state, managed in
+//! Tauri state.
 //!
-//! Alle Felder sind `Send + Sync + 'static`, damit Tauri-Commands sie via
-//! `tauri::State<'_, AppContext>` aus jedem Async-Kontext lesen koennen.
+//! All fields are `Send + Sync + 'static` so Tauri commands can read
+//! them via `tauri::State<'_, AppContext>` from any async context.
 
 use crate::audio::recorder::RecorderHandle;
 use crate::core::config::Settings;
@@ -22,53 +23,54 @@ pub struct AppContext {
     pub state_bus: StateBus,
     pub modes: Arc<ModesRegistry>,
     pub recorder_slot: Arc<Mutex<Option<RecorderHandle>>>,
-    /// Der Modus, mit dem das gerade laufende Recording gestartet wurde.
-    /// Wird in `start_recording` gesetzt, in `finish_recording_and_inject`
-    /// genutzt und beim Abschluss wieder geleert. Der Menue-Hotkey im
-    /// Recording-State liest hier den Modus, der die Pipeline finalisieren
-    /// soll — ohne dass er ihn explizit mitschicken muss.
+    /// The mode the currently running recording was started with.
+    /// Set in `start_recording`, used in `finish_recording_and_inject`
+    /// and cleared on completion. The menu hotkey in the Recording
+    /// state reads the mode that should finalize the pipeline here —
+    /// without having to pass it along explicitly.
     pub active_mode: Arc<Mutex<Option<Mode>>>,
-    /// Auf Wayland: der effektive Hotkey-Trigger, wie ihn der Compositor
-    /// nach `bind_shortcuts` zurueckliefert (z.B. "Meta+Space"). Der
-    /// `preferred_trigger` aus `Settings.menu_hotkey` ist nur ein
-    /// Vorschlag — KDE/GNOME koennen davon abweichen, und der User
-    /// kann den Hotkey in den System-Settings nachjustieren. `None` bis
-    /// die Wayland-Portal-Session ihre erste Antwort geliefert hat;
-    /// auf X11/Windows bleibt der Wert `None`, dort ist
-    /// `Settings.menu_hotkey` die Wahrheit.
+    /// On Wayland: the effective hotkey trigger as returned by the
+    /// compositor after `bind_shortcuts` (e.g. "Meta+Space"). The
+    /// `preferred_trigger` from `Settings.menu_hotkey` is only a
+    /// suggestion — KDE/GNOME may deviate, and the user can adjust
+    /// the hotkey in system settings. `None` until the Wayland portal
+    /// session has delivered its first response; on X11/Windows the
+    /// value stays `None` — there `Settings.menu_hotkey` is the truth.
     pub effective_menu_hotkey: Arc<RwLock<Option<String>>>,
     pub transcriber: Arc<dyn Transcriber>,
-    /// Direkter Handle auf den `LocalTranscriber` — wird vom Streaming-
-    /// Worker (Phase 2) gebraucht, der die nicht-trait-Methode
-    /// `transcribe_streaming_pass` aufruft. Zeigt auf die gleiche
-    /// Instanz wie `transcriber`, wenn der App-Default lokal ist;
-    /// sonst eigene LocalTranscriber-Instanz parallel.
+    /// Direct handle on the `LocalTranscriber` — needed by the
+    /// streaming worker (phase 2), which calls the non-trait method
+    /// `transcribe_streaming_pass`. Points to the same instance as
+    /// `transcriber` if the app default is local; otherwise to a
+    /// separate `LocalTranscriber` instance in parallel.
     pub local_transcriber: Arc<LocalTranscriber>,
-    /// **Phase 3b** — Embedded-LLM-Processor. Lazy-Modell-Load beim ersten
-    /// `process()`-Call; danach gehalten fuer die App-Lebenszeit. Wird
-    /// nur dann benutzt, wenn ein Modus `local_engine = "embedded"`
-    /// setzt; sonst bleibt der Modell-Cache leer und das File auf Disk
-    /// muss noch nicht existieren.
+    /// **Phase 3b** — embedded LLM processor. Lazy model load on the
+    /// first `process()` call; afterwards held for the app's lifetime.
+    /// Only used when a mode sets `local_engine = "embedded"`;
+    /// otherwise the model cache stays empty and the file on disk
+    /// doesn't have to exist yet.
     pub local_llm_processor: Arc<LlamaEmbeddedProcessor>,
-    /// Phase-3b-Refactor: Cache von Override-LocalTranscribers pro
-    /// Whisper-Modell-Slot. Pro-Modus `mode.whisper_model_slot`
-    /// triggert lazy-Load eines neuen LocalTranscribers fuer diesen
-    /// Slot; alle weiteren Aufrufe nutzen den gecachten. Key ist der
-    /// Slot-Slug, Value der Transcriber.
+    /// Phase-3b refactor: cache of override `LocalTranscriber`s per
+    /// Whisper model slot. A per-mode `mode.whisper_model_slot`
+    /// triggers lazy load of a new `LocalTranscriber` for that slot;
+    /// all further calls use the cached one. Key is the slot slug,
+    /// value is the transcriber.
     pub extra_transcribers: Arc<Mutex<HashMap<String, Arc<LocalTranscriber>>>>,
-    /// Analog fuer `mode.embedded_llm_slot` — Cache von Override-
-    /// LlamaEmbeddedProcessors pro GGUF-Slot.
+    /// Analogously for `mode.embedded_llm_slot` — cache of override
+    /// `LlamaEmbeddedProcessor`s per GGUF slot.
     pub extra_llm_processors: Arc<Mutex<HashMap<String, Arc<LlamaEmbeddedProcessor>>>>,
-    /// Handle des aktuell laufenden Streaming-Decode-Workers (Phase 2,
-    /// nur bei `transcription = "local"`). Wird in `start_recording`
-    /// gespawnt, in `finish_recording_and_inject` abortet, bevor der
-    /// Final-Pass laeuft. `None` = kein Streaming aktiv. Typ matched die
-    /// projektweite Konvention `tauri::async_runtime::spawn(...)`.
+    /// Handle of the currently running streaming decode worker
+    /// (phase 2, only when `transcription = "local"`). Spawned in
+    /// `start_recording`, aborted in `finish_recording_and_inject`
+    /// before the final pass runs. `None` = no streaming active. The
+    /// type matches the project-wide convention
+    /// `tauri::async_runtime::spawn(...)`.
     pub active_streaming_handle: Arc<Mutex<Option<tauri::async_runtime::JoinHandle<()>>>>,
     pub injector: Arc<dyn TextInjector>,
     pub settings: Arc<RwLock<Settings>>,
-    /// Persistenz-Pfad fuer Settings (`~/.config/.../settings.json`).
-    /// Nach jedem Mutations-IPC `Settings::save(&settings_path)` aufrufen.
+    /// Persistence path for the settings
+    /// (`~/.config/.../settings.json`). After each mutating IPC call,
+    /// invoke `Settings::save(&settings_path)`.
     pub settings_path: PathBuf,
     pub log_buffer: LogRingBuffer,
     pub model_dir: PathBuf,

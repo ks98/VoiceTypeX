@@ -46,7 +46,7 @@ function formatRelative(t: TranslateFn, from: number, now: number): string {
 }
 
 function EyeIcon({ open }: { open: boolean }): JSX.Element {
-  // Inline-SVG vermeidet eine Icon-Lib-Abhaengigkeit fuer einen Single-Use.
+  // Inline SVG avoids an icon-lib dependency for a single use.
   if (open) {
     return (
       <svg

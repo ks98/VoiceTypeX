@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Exponential-Backoff-Retry fuer Operationen, die transient fehlschlagen
-//! koennen (HTTP-Calls gegen Cloud-Provider).
+//! Exponential-backoff retry for operations that can fail transiently
+//! (HTTP calls against cloud providers).
 //!
-//! Konvention:
-//! - Nur retryable Errors (siehe `VoiceTypeError::is_retryable`) werden
-//!   wiederholt; alles andere (4xx Auth, InvalidInput, Internal) gibt
-//!   sofort auf.
-//! - Backoff verdoppelt sich pro Versuch: 100 → 400 → 1600 ms.
-//! - Default: 3 Versuche. Verwende `with_retry_n` fuer abweichende Werte.
+//! Convention:
+//! - Only retryable errors (see `VoiceTypeError::is_retryable`) are
+//!   retried; everything else (4xx auth, InvalidInput, Internal)
+//!   gives up immediately.
+//! - Backoff doubles per attempt: 100 → 400 → 1600 ms.
+//! - Default: 3 attempts. Use `with_retry_n` for different values.
 
 use crate::core::error::{Result, VoiceTypeError};
 use std::future::Future;
@@ -57,7 +57,7 @@ where
         }
     }
 
-    // Nur erreichbar wenn alle Versuche retryable waren und scheiterten.
+    // Only reachable when all attempts were retryable and failed.
     Err(last_err.unwrap_or_else(|| {
         VoiceTypeError::Other(anyhow::anyhow!("Retry-Loop ohne Erfolgs- oder Fehler-Pfad"))
     }))

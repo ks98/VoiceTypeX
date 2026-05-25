@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Globale State-Machine.
+//! Global state machine.
 //!
-//! Ein einziger `StateBus` haelt den aktuellen Pipeline-Zustand und broadcastet
-//! jede Aenderung an alle Subscriber (Tray, Frontend via IPC, Logs-View, ...).
-//! Modelliert mit `tokio::sync::watch`, weil:
-//! 1) **Letzter Wert reicht** — neue Subscriber sehen sofort den aktuellen
-//!    Zustand, kein "Replay" alter Events noetig.
-//! 2) **Kein Backpressure-Drama** — wenn ein Subscriber nicht schnell genug
-//!    liest, geht der State nicht verloren, der Subscriber sieht beim naechsten
-//!    Read einfach den neuesten Wert.
-//! 3) **Cheap clone** — Sender ist intern Arc, mehrere Producer moeglich falls
-//!    spaeter mehrere Pipelines parallel laufen sollen.
+//! A single `StateBus` holds the current pipeline state and
+//! broadcasts every change to all subscribers (tray, frontend via
+//! IPC, logs view, ...). Modeled with `tokio::sync::watch` because:
+//! 1) **Last value suffices** — new subscribers see the current state
+//!    immediately, no "replay" of old events needed.
+//! 2) **No backpressure drama** — if a subscriber doesn't read fast
+//!    enough, the state isn't lost; on the next read the subscriber
+//!    just sees the newest value.
+//! 3) **Cheap clone** — the sender is internally an Arc; multiple
+//!    producers are possible should several pipelines later run in
+//!    parallel.
 
 use crate::core::error::{Result, VoiceTypeError};
 use std::sync::Arc;
@@ -38,17 +39,17 @@ impl AppState {
         }
     }
 
-    /// Erlaubte Uebergaenge laut CLAUDE.md §4.1 (zzgl. Error als Sink).
+    /// Allowed transitions per CLAUDE.md §4.1 (plus Error as a sink).
     pub fn can_transition_to(&self, next: &AppState) -> bool {
         match (self, next) {
             (Self::Idle, Self::Recording) => true,
             (Self::Recording, Self::Transcribing) => true,
             (Self::Transcribing, Self::Postprocessing) => true,
-            (Self::Transcribing, Self::Injecting) => true, // Modus ohne Postprocessing
+            (Self::Transcribing, Self::Injecting) => true, // Mode without postprocessing
             (Self::Postprocessing, Self::Injecting) => true,
             (Self::Injecting, Self::Idle) => true,
             (Self::Error(_), Self::Idle) => true,
-            (_, Self::Error(_)) => true, // Error ist von ueberall erreichbar
+            (_, Self::Error(_)) => true, // Error is reachable from anywhere
             _ => false,
         }
     }
@@ -75,7 +76,7 @@ impl StateBus {
         self.sender.subscribe()
     }
 
-    /// Validiere und setze den naechsten State. Loggt jeden Uebergang.
+    /// Validate and set the next state. Logs every transition.
     pub fn transition(&self, next: AppState) -> Result<()> {
         let current = self.current();
         if !current.can_transition_to(&next) {
@@ -85,9 +86,9 @@ impl StateBus {
             });
         }
         tracing::info!(from = %current.label(), to = %next.label(), "State transition");
-        // `send_replace` schreibt den Wert immer, auch ohne aktive Receiver —
-        // entscheidend, weil Subscriber sich erst spaeter ueber `subscribe()`
-        // anhaengen koennen und der State trotzdem korrekt sein muss.
+        // `send_replace` writes the value always, even without active
+        // receivers — crucial because subscribers can attach later via
+        // `subscribe()` and the state must still be correct.
         self.sender.send_replace(next);
         Ok(())
     }

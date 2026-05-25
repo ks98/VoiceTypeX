@@ -5,9 +5,10 @@ import type { InputHTMLAttributes, TextareaHTMLAttributes } from "react";
 type Density = "default" | "compact";
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
-  /** "default" (px-3 py-2, fuer Settings/Wizard) | "compact" (px-2 py-1.5, fuer Modal-Editor). */
+  /** "default" (px-3 py-2, for Settings/Wizard) | "compact"
+   * (px-2 py-1.5, for the modal editor). */
   density?: Density;
-  /** Zusaetzliche Visuelle Markierung fuer Validierungs-Fehler. */
+  /** Additional visual marker for validation errors. */
   invalid?: boolean;
 }
 
@@ -25,17 +26,16 @@ const BASE =
   "bg-surface border rounded-md text-sm w-full text-fg placeholder:text-fg-faint focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-1 focus-visible:ring-offset-canvas focus:border-brand transition-colors disabled:opacity-50";
 
 /**
- * Konsolidiertes Input-Element. Ersetzt das 3× duplizierte `inputCls`-
- * Pattern aus Settings.tsx, OnboardingWizard.tsx und ModeEditor.tsx
- * (mit subtil unterschiedlichen Paddings).
+ * Consolidated input element. Replaces the 3× duplicated `inputCls`
+ * pattern from Settings.tsx, OnboardingWizard.tsx and ModeEditor.tsx
+ * (with subtly different paddings).
  *
  * Density:
- * - `default` — fuer Settings, Onboarding, normale Formulare.
- * - `compact` — fuer Modal-Editor mit hoher Feldzahl.
+ * - `default` — for Settings, Onboarding, normal forms.
+ * - `compact` — for the modal editor with many fields.
  *
- * `invalid` rendert eine rote Border + roten Focus-Ring; ergaenze fuer
- * volle A11y zusaetzlich `aria-invalid` und einen sichtbaren Hilfetext
- * (z.B. via Field-hint).
+ * `invalid` renders a red border + red focus ring; for full a11y also
+ * add `aria-invalid` and a visible help text (e.g. via Field hint).
  */
 const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   { density = "default", invalid, className = "", ...rest },

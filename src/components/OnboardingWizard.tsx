@@ -29,8 +29,8 @@ interface OnboardingWizardProps {
 }
 
 /**
- * Sichtbarkeit eines abgeschlossenen Download-Häkchens in Millisekunden,
- * bevor die Mini-Progressbar ganz ausgeblendet wird.
+ * Visibility of a completed-download check mark in milliseconds,
+ * before the mini progress bar is hidden entirely.
  */
 const DONE_FLASH_MS = 2000;
 
@@ -582,13 +582,13 @@ interface MiniProgressStackProps {
 }
 
 /**
- * Sticky Mini-Progressbar-Stack im Wizard-Header. Zeigt pro laufendem
- * Download eine dünne Bar mit Provider-Tag + Prozent rechts; nach Abschluss
- * kurz ein grünes Häkchen, dann ausblenden. Fehler-Zustand ersetzt die Bar
- * durch ein {@link Banner}.
+ * Sticky mini progress-bar stack in the wizard header. Per running
+ * download it shows a thin bar with a provider tag + percent on the
+ * right; on completion a brief green check, then hidden. The error
+ * state replaces the bar with a {@link Banner}.
  *
- * TODO: Download-Cancellation ist Backend-seitig nicht verfügbar — sobald
- * `ipcCancelModelDownload` existiert, hier einen ×-Button pro Zeile ergänzen.
+ * TODO: Download cancellation is not available backend-side — once
+ * `ipcCancelModelDownload` exists, add a × button per line here.
  */
 function MiniProgressStack({
   whisperStatus,

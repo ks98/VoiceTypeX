@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! VoiceTypeX — Bibliotheks-Einstiegspunkt.
+//! VoiceTypeX — library entry point.
 //!
-//! Setzt App-State, Plugins, Tray und Hotkey-Registrierung auf.
-//! Pipeline-Details siehe [`pipeline`].
+//! Sets up app state, plugins, tray and hotkey registration. Pipeline
+//! details see [`pipeline`].
 
 pub mod audio;
 pub mod core;
@@ -156,12 +156,12 @@ pub fn run() {
                 .start_watching(modes_dir.clone())
                 .map_err(|e| format!("start_watching: {e}"))?;
 
-            // Pipeline-Komponenten
+            // Pipeline components
             let state_bus = StateBus::new();
 
-            // Modell-Pfad: Vorrang hat ein explizit gesetzter Custom-Pfad
-            // (settings.whisper_model_path). Sonst Slot-basierter Default-
-            // Name im model_dir.
+            // Model path: an explicitly set custom path takes
+            // precedence (`settings.whisper_model_path`). Otherwise
+            // the slot-based default name inside `model_dir`.
             let model_path: PathBuf = initial_settings
                 .whisper_model_path
                 .as_ref()
@@ -171,25 +171,28 @@ pub fn run() {
                     model_dir.join(slot.filename())
                 });
 
-            // VAD-Pfad zeigt auf die Standard-Silero-Datei. LocalTranscriber
-            // prueft selbst, ob sie existiert — wenn nicht (z.B. weil der
-            // VAD-Download noch nicht lief), laeuft Whisper transparent
-            // ohne VAD, mit einer WARN-Log-Zeile pro Aufruf.
+            // The VAD path points to the standard Silero file.
+            // `LocalTranscriber` itself checks whether it exists — if
+            // not (e.g. because the VAD download has not run yet),
+            // Whisper transparently runs without VAD, with one WARN
+            // log line per call.
             let vad_model_path = Some(model_dir.join("ggml-silero-v6.2.0.bin"));
-            // Phase 2: zwei Arcs auf dieselbe LocalTranscriber-Instanz. Der
-            // dyn-Trait-Arc geht an die Trait-basierten Pipeline-Stellen,
-            // der konkrete Arc an den Streaming-Worker (braucht die nicht-
-            // trait-Methode transcribe_streaming_pass).
+            // Phase 2: two Arcs onto the same `LocalTranscriber`
+            // instance. The dyn-trait Arc goes to the trait-based
+            // pipeline sites, the concrete Arc to the streaming
+            // worker (which needs the non-trait method
+            // `transcribe_streaming_pass`).
             let local_transcriber = Arc::new(LocalTranscriber::new(
                 model_path.clone(),
                 vad_model_path,
             ));
             let transcriber: Arc<dyn Transcriber> = local_transcriber.clone();
 
-            // Phase 3b: Embedded-LLM-Processor. Pfad: User-Override hat
-            // Vorrang, sonst Slot-basierter Default. Modell wird LAZY beim
-            // ersten `process()`-Aufruf geladen — wenn der User Embedded
-            // nicht benutzt, bleibt die Datei optional.
+            // Phase 3b: embedded LLM processor. Path: user override
+            // takes precedence, otherwise the slot-based default. The
+            // model is loaded LAZILY on the first `process()` call —
+            // if the user doesn't use embedded, the file stays
+            // optional.
             let llm_model_path: PathBuf = initial_settings
                 .llm_model_path
                 .as_ref()
@@ -225,15 +228,15 @@ pub fn run() {
 
             app.manage(Arc::clone(&ctx));
 
-            // Tray, Hotkeys, State-Listener
+            // Tray, hotkeys, state listeners
             let tray_locale = ctx.settings.read().locale.clone();
             tray::setup_tray(&app_handle, tray_locale.as_deref())
                 .map_err(|e| format!("setup_tray: {e}"))?;
 
-            // Hauptfenster X-Knopf soll verstecken statt beenden — sonst
-            // hat der User nach Close nur noch das Tray-Icon. App laeuft
-            // weiter, ueber Tray-Linksklick oder "Einstellungen oeffnen"
-            // wieder erreichbar.
+            // The main window X button should hide instead of quit —
+            // otherwise the user is left with only the tray icon
+            // after close. The app keeps running and is reachable
+            // again via tray left-click or "Open settings".
             if let Some(main_window) = app.get_webview_window("main") {
                 let main_clone = main_window.clone();
                 main_window.on_window_event(move |event| {
@@ -244,22 +247,24 @@ pub fn run() {
                 });
             }
 
-            // Overlay-Window: kein set_ignore_cursor_events — das
-            // verursacht einen tao-Panic bei initial-hidden Windows
-            // (`visible: false`) auf Linux/GTK. Stattdessen Backend-
-            // show/hide-Pattern: Overlay ist initial unsichtbar, wird
-            // bei Menue-Open (Fokus erwuenscht, fuer Pfeil-/Enter-
-            // Navigation) und Recording-Start sichtbar gemacht und vor
-            // dem libei-Inject explizit wieder versteckt — siehe
-            // pipeline/mod.rs::handle_menu_hotkey und
-            // finish_recording_and_inject. Im Recording-Render-Modus
-            // hat der StatusView zusaetzlich `pointer-events-none` als
-            // CSS-Sicherheit; der Menue-Render-Modus laesst Eingaben zu.
+            // Overlay window: no `set_ignore_cursor_events` — that
+            // causes a tao panic on initially-hidden windows
+            // (`visible: false`) on Linux/GTK. Instead, backend
+            // show/hide pattern: the overlay is initially invisible,
+            // shown on menu-open (focus desired, for arrow/enter
+            // navigation) and recording start, and explicitly hidden
+            // again before the libei inject — see
+            // `pipeline/mod.rs::handle_menu_hotkey` and
+            // `finish_recording_and_inject`. In recording render mode
+            // the `StatusView` additionally has `pointer-events-none`
+            // as a CSS safety net; the menu render mode allows input.
 
-            // Hotkey-Registrierung dispatch je nach Display-Server:
-            //   - X11/Windows: tauri-plugin-global-shortcut (XGrabKey/RegisterHotKey)
-            //   - Wayland: xdg-desktop-portal.GlobalShortcuts via ashpd
-            //   - andere: Skip mit Warn-Log + UI-Trigger als Fallback
+            // Hotkey registration dispatch per display server:
+            //   - X11/Windows: tauri-plugin-global-shortcut
+            //     (XGrabKey/RegisterHotKey)
+            //   - Wayland: xdg-desktop-portal.GlobalShortcuts via
+            //     ashpd
+            //   - other: skip with WARN log + UI triggers as fallback
             let session = crate::core::session::detect_session();
             match session.display_server.as_str() {
                 #[cfg(target_os = "linux")]

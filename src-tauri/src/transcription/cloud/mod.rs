@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Cloud-STT Provider.
+//! Cloud STT providers.
 //!
-//! Wichtig (CLAUDE.md §4.6): es gibt **keinen** gemeinsamen Wrapper, weil die
-//! APIs unterschiedlich sind. xAI hat eigenes Format; OpenAI/Groq sind
-//! Whisper-API-kompatibel, aber Deepgram ist wieder eigen.
+//! Important (CLAUDE.md §4.6): there is **no** shared wrapper because
+//! the APIs differ. xAI has its own format; OpenAI/Groq are
+//! Whisper-API-compatible, but Deepgram is again distinct.
 
 pub mod deepgram;
 pub mod groq;
