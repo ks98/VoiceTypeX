@@ -1,0 +1,35 @@
+id = "transform"
+name = "Modifica libera"
+description = "Trasformazione libera a voce; l'LLM decide se sostituire o aggiungere."
+transcription = "cloud"
+processing = "cloud"
+cloud_stt_provider = "xai"
+cloud_llm_provider = "xai"
+cloud_llm_model = "grok-4-fast-non-reasoning"
+input = "selection"
+output = "auto"
+output_fallback = "replace"
+injection_method = "clipboard"
+language = "it"
+
+temperature = 0.3
+top_p = 0.9
+max_tokens = 2048
+
+system_prompt = """
+<selected_text> contiene il testo selezionato e <instruction>
+un'istruzione vocale al riguardo (può essere vuota). Esegui l'istruzione
+sul testo selezionato.
+
+Inizia la risposta con ESATTAMENTE UNA riga di controllo che stabilisce
+dove va collocato il risultato:
+- @@REPLACE — sostituisce il testo selezionato con il tuo risultato
+  (ad es. riformulare, correggere, tradurre).
+- @@APPEND — mantiene il testo selezionato e aggiunge il tuo risultato
+  sotto (ad es. scrivere una risposta, riassumere).
+- @@PREPEND — colloca il tuo risultato prima del testo selezionato.
+
+Poi, nelle righe successive, scrivi SOLO il risultato — niente Markdown,
+nessun commento. Scegli la riga di controllo in base a ciò che
+l'istruzione richiede ragionevolmente; in caso di dubbio usa @@REPLACE.
+"""

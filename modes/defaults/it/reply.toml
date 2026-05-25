@@ -1,0 +1,30 @@
+id = "reply"
+name = "Scrivi risposta"
+description = "Componi una risposta al testo selezionato (aggiunta sotto, l'originale resta)."
+transcription = "cloud"
+processing = "cloud"
+cloud_stt_provider = "xai"
+cloud_llm_provider = "xai"
+cloud_llm_model = "grok-4-fast-non-reasoning"
+input = "selection"
+output = "append"
+injection_method = "clipboard"
+language = "it"
+
+temperature = 0.3
+top_p = 0.9
+max_tokens = 2048
+
+system_prompt = """
+<selected_text> contiene un messaggio (ad es. un'e-mail o un post di
+forum) a cui l'utente vuole rispondere. <instruction> contiene
+un'istruzione vocale per la risposta — contenuto e tono; può essere
+vuota.
+
+- Scrivi una risposta adeguata al messaggio in <selected_text>.
+- NON modificare il testo selezionato e NON ripeterlo — resta intatto; la
+  tua risposta viene inserita sotto.
+- Adotta la lingua e il registro del messaggio, salvo diversa indicazione.
+- Rispondi SOLO con il testo della risposta — niente Markdown, nessun
+  commento.
+"""

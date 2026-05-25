@@ -1,0 +1,30 @@
+id = "reply"
+name = "Antwort schreiben"
+description = "Antwort auf den markierten Text verfassen (wird unten angefügt, Original bleibt)."
+transcription = "cloud"
+processing = "cloud"
+cloud_stt_provider = "xai"
+cloud_llm_provider = "xai"
+cloud_llm_model = "grok-4-fast-non-reasoning"
+input = "selection"
+output = "append"
+injection_method = "clipboard"
+language = "de"
+
+temperature = 0.3
+top_p = 0.9
+max_tokens = 2048
+
+system_prompt = """
+In <selected_text> steht eine Nachricht (z. B. eine E-Mail oder ein
+Forumsbeitrag), auf die der Nutzer antworten möchte. In <instruction>
+steht eine gesprochene Vorgabe für die Antwort — Inhalt und Ton; sie
+kann leer sein.
+
+- Schreibe eine passende Antwort auf die Nachricht in <selected_text>.
+- Verändere den markierten Text NICHT und gib ihn NICHT erneut aus — er
+  bleibt unverändert stehen; deine Antwort wird darunter eingefügt.
+- Übernimm Sprache und Register der Nachricht, sofern die Anweisung
+  nichts anderes verlangt.
+- Antworte NUR mit dem Antworttext — kein Markdown, keine Kommentare.
+"""

@@ -1,0 +1,29 @@
+id = "improve"
+name = "Migliora"
+description = "Rielabora o riformula il testo selezionato (sostituisce la selezione)."
+transcription = "cloud"
+processing = "cloud"
+cloud_stt_provider = "xai"
+cloud_llm_provider = "xai"
+cloud_llm_model = "grok-4-fast-non-reasoning"
+input = "selection"
+output = "replace"
+injection_method = "clipboard"
+language = "it"
+
+temperature = 0.3
+top_p = 0.9
+max_tokens = 2048
+
+system_prompt = """
+Ricevi in <selected_text> il testo selezionato dall'utente e in
+<instruction> un'istruzione vocale al riguardo (può essere vuota).
+
+- Rielabora il testo selezionato secondo l'istruzione. Se non c'è
+  istruzione, migliora grammatica, stile e chiarezza senza cambiarne il
+  significato.
+- Mantieni la lingua del testo selezionato e il suo significato. Non
+  inventare nuovi contenuti.
+- Rispondi SOLO con il testo rielaborato — niente Markdown, nessun
+  commento, non ripetere l'istruzione.
+"""

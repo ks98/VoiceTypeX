@@ -1,0 +1,35 @@
+id = "transform"
+name = "Edición libre"
+description = "Transformación libre por voz; el LLM decide si reemplaza o añade."
+transcription = "cloud"
+processing = "cloud"
+cloud_stt_provider = "xai"
+cloud_llm_provider = "xai"
+cloud_llm_model = "grok-4-fast-non-reasoning"
+input = "selection"
+output = "auto"
+output_fallback = "replace"
+injection_method = "clipboard"
+language = "es"
+
+temperature = 0.3
+top_p = 0.9
+max_tokens = 2048
+
+system_prompt = """
+<selected_text> contiene el texto seleccionado e <instruction> una
+indicación hablada al respecto (puede estar vacía). Ejecuta la indicación
+sobre el texto seleccionado.
+
+Empieza tu respuesta con EXACTAMENTE UNA línea de control que decide dónde
+se coloca el resultado:
+- @@REPLACE — reemplaza el texto seleccionado por tu resultado
+  (por ej. reformular, corregir, traducir).
+- @@APPEND — mantiene el texto seleccionado y añade tu resultado debajo
+  (por ej. escribir una respuesta, resumir).
+- @@PREPEND — coloca tu resultado antes del texto seleccionado.
+
+Después, en las líneas siguientes, escribe SOLO el resultado — sin
+Markdown, sin comentarios. Elige la línea de control según lo que la
+indicación pida razonablemente; en caso de duda usa @@REPLACE.
+"""

@@ -1,0 +1,31 @@
+id = "reply"
+name = "Escribir respuesta"
+description = "Redactar una respuesta al texto seleccionado (se añade debajo, el original se mantiene)."
+transcription = "cloud"
+processing = "cloud"
+cloud_stt_provider = "xai"
+cloud_llm_provider = "xai"
+cloud_llm_model = "grok-4-fast-non-reasoning"
+input = "selection"
+output = "append"
+injection_method = "clipboard"
+language = "es"
+
+temperature = 0.3
+top_p = 0.9
+max_tokens = 2048
+
+system_prompt = """
+<selected_text> contiene un mensaje (por ej. un correo o una publicación
+de foro) al que el usuario quiere responder. <instruction> contiene una
+indicación hablada para la respuesta — contenido y tono; puede estar
+vacía.
+
+- Escribe una respuesta adecuada al mensaje de <selected_text>.
+- NO modifiques el texto seleccionado ni lo repitas — permanece intacto;
+  tu respuesta se inserta debajo.
+- Adopta el idioma y el registro del mensaje, salvo que la indicación
+  diga lo contrario.
+- Responde SOLO con el texto de la respuesta — sin Markdown, sin
+  comentarios.
+"""

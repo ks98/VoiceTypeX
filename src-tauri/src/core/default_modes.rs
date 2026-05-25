@@ -5,7 +5,8 @@
 //! watcher observes the user directory.
 //!
 //! Per-locale defaults: each supported UI language ships its own set
-//! of 6 mode TOMLs under `modes/defaults/<locale>/`. Bootstrap copies
+//! of 9 mode TOMLs under `modes/defaults/<locale>/` (6 dictation modes
+//! plus 3 edit modes — improve/reply/transform). Bootstrap copies
 //! the locale-matching set when the user's `modes/` dir is empty.
 //! User edits never get overwritten — the function bails as soon as
 //! it finds any `.toml`.
@@ -42,6 +43,18 @@ const DEFAULTS_DE: DefaultSet = &[
         "claude_code_anweisung.toml",
         include_str!("../../../modes/defaults/de/claude_code_anweisung.toml"),
     ),
+    (
+        "improve.toml",
+        include_str!("../../../modes/defaults/de/improve.toml"),
+    ),
+    (
+        "reply.toml",
+        include_str!("../../../modes/defaults/de/reply.toml"),
+    ),
+    (
+        "transform.toml",
+        include_str!("../../../modes/defaults/de/transform.toml"),
+    ),
 ];
 
 const DEFAULTS_EN: DefaultSet = &[
@@ -68,6 +81,18 @@ const DEFAULTS_EN: DefaultSet = &[
     (
         "claude_code_anweisung.toml",
         include_str!("../../../modes/defaults/en/claude_code_anweisung.toml"),
+    ),
+    (
+        "improve.toml",
+        include_str!("../../../modes/defaults/en/improve.toml"),
+    ),
+    (
+        "reply.toml",
+        include_str!("../../../modes/defaults/en/reply.toml"),
+    ),
+    (
+        "transform.toml",
+        include_str!("../../../modes/defaults/en/transform.toml"),
     ),
 ];
 
@@ -96,6 +121,18 @@ const DEFAULTS_FR: DefaultSet = &[
         "claude_code_anweisung.toml",
         include_str!("../../../modes/defaults/fr/claude_code_anweisung.toml"),
     ),
+    (
+        "improve.toml",
+        include_str!("../../../modes/defaults/fr/improve.toml"),
+    ),
+    (
+        "reply.toml",
+        include_str!("../../../modes/defaults/fr/reply.toml"),
+    ),
+    (
+        "transform.toml",
+        include_str!("../../../modes/defaults/fr/transform.toml"),
+    ),
 ];
 
 const DEFAULTS_ES: DefaultSet = &[
@@ -123,6 +160,18 @@ const DEFAULTS_ES: DefaultSet = &[
         "claude_code_anweisung.toml",
         include_str!("../../../modes/defaults/es/claude_code_anweisung.toml"),
     ),
+    (
+        "improve.toml",
+        include_str!("../../../modes/defaults/es/improve.toml"),
+    ),
+    (
+        "reply.toml",
+        include_str!("../../../modes/defaults/es/reply.toml"),
+    ),
+    (
+        "transform.toml",
+        include_str!("../../../modes/defaults/es/transform.toml"),
+    ),
 ];
 
 const DEFAULTS_IT: DefaultSet = &[
@@ -149,6 +198,18 @@ const DEFAULTS_IT: DefaultSet = &[
     (
         "claude_code_anweisung.toml",
         include_str!("../../../modes/defaults/it/claude_code_anweisung.toml"),
+    ),
+    (
+        "improve.toml",
+        include_str!("../../../modes/defaults/it/improve.toml"),
+    ),
+    (
+        "reply.toml",
+        include_str!("../../../modes/defaults/it/reply.toml"),
+    ),
+    (
+        "transform.toml",
+        include_str!("../../../modes/defaults/it/transform.toml"),
     ),
 ];
 
@@ -201,4 +262,44 @@ pub fn bootstrap_defaults_if_empty(dir: &Path, locale: Option<&str>) -> Result<(
         tracing::info!(file = %path.display(), locale = ?locale, "Default mode created");
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::modes::Mode;
+
+    fn all_sets() -> [(&'static str, DefaultSet); 5] {
+        [
+            ("de", DEFAULTS_DE),
+            ("en", DEFAULTS_EN),
+            ("fr", DEFAULTS_FR),
+            ("es", DEFAULTS_ES),
+            ("it", DEFAULTS_IT),
+        ]
+    }
+
+    /// Every embedded default TOML must parse and pass `Mode::validate`,
+    /// and every locale must ship the three edit modes. Guards against a
+    /// broken default shipping in the binary (the bootstrap would
+    /// otherwise fail at first run, discarding the whole set).
+    #[test]
+    fn embedded_defaults_parse_validate_and_include_edit_modes() {
+        for (locale, set) in all_sets() {
+            let mut ids = Vec::new();
+            for &(name, content) in set {
+                let mode: Mode = toml::from_str(content)
+                    .unwrap_or_else(|e| panic!("{locale}/{name}: TOML parse failed: {e}"));
+                mode.validate()
+                    .unwrap_or_else(|e| panic!("{locale}/{name}: validate failed: {e}"));
+                ids.push(mode.id);
+            }
+            for id in ["improve", "reply", "transform"] {
+                assert!(
+                    ids.iter().any(|i| i == id),
+                    "{locale}: edit mode '{id}' missing from default set"
+                );
+            }
+        }
+    }
 }

@@ -1,0 +1,29 @@
+id = "reply"
+name = "Write reply"
+description = "Compose a reply to the selected message (appended below, original kept)."
+transcription = "cloud"
+processing = "cloud"
+cloud_stt_provider = "xai"
+cloud_llm_provider = "xai"
+cloud_llm_model = "grok-4-fast-non-reasoning"
+input = "selection"
+output = "append"
+injection_method = "clipboard"
+language = "en"
+
+temperature = 0.3
+top_p = 0.9
+max_tokens = 2048
+
+system_prompt = """
+<selected_text> holds a message (e.g. an email or a forum post) the user
+wants to reply to. <instruction> holds a spoken brief for the reply —
+content and tone; it may be empty.
+
+- Write a fitting reply to the message in <selected_text>.
+- Do NOT modify the selected text and do NOT repeat it — it stays
+  untouched; your reply is inserted below it.
+- Match the language and register of the message unless the instruction
+  says otherwise.
+- Reply with ONLY the reply text — no Markdown, no commentary.
+"""

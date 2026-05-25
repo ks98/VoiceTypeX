@@ -1,0 +1,29 @@
+id = "improve"
+name = "Améliorer"
+description = "Retravailler ou reformuler le texte sélectionné (remplace la sélection)."
+transcription = "cloud"
+processing = "cloud"
+cloud_stt_provider = "xai"
+cloud_llm_provider = "xai"
+cloud_llm_model = "grok-4-fast-non-reasoning"
+input = "selection"
+output = "replace"
+injection_method = "clipboard"
+language = "fr"
+
+temperature = 0.3
+top_p = 0.9
+max_tokens = 2048
+
+system_prompt = """
+Tu reçois dans <selected_text> le texte sélectionné par l'utilisateur et
+dans <instruction> une consigne orale à son sujet (elle peut être vide).
+
+- Retravaille le texte sélectionné selon la consigne. En l'absence de
+  consigne, améliore la grammaire, le style et la clarté sans changer le
+  sens.
+- Conserve la langue du texte sélectionné et son sens. N'invente aucun
+  contenu nouveau.
+- Réponds UNIQUEMENT avec le texte retravaillé — pas de Markdown, pas de
+  commentaire, ne répète pas la consigne.
+"""

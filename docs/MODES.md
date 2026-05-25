@@ -1,7 +1,7 @@
 # Modi schreiben
 
 Ein **Modus** ist eine TOML-Datei in `app_config_dir/modes/`. Beim ersten
-Start kopiert VoiceTypeX die 6 mitgelieferten Defaults dort hin —
+Start kopiert VoiceTypeX die 9 mitgelieferten Defaults dort hin —
 **locale-passend**: wenn deine UI-Sprache beim ersten Start `fr` ist,
 bekommst du französische Defaults inklusive übersetzter
 `system_prompt`s. Sprachen-Sets liegen unter
@@ -27,6 +27,9 @@ vorher sichern.)
 | Slack/Teams Nachricht | xAI | xAI Grok-fast | `slack_teams.toml` |
 | GitHub Issue | xAI | xAI Grok-fast | `github_issue.toml` |
 | Anweisung an Coding-Agent | xAI (Auto-Sprache) | xAI Grok-fast | `claude_code_anweisung.toml` |
+| Verbessern *(Bearbeiten)* | xAI | xAI Grok-fast | `improve.toml` |
+| Antwort schreiben *(Bearbeiten)* | xAI | xAI Grok-fast | `reply.toml` |
+| Frei bearbeiten *(Bearbeiten)* | xAI | xAI Grok-fast | `transform.toml` |
 
 Die Filenames sind über alle Locales identisch (historisch deutsch
 gewählt). `id`/`name`/`description`/`system_prompt`/`language` und
@@ -50,6 +53,41 @@ weiter unten.
   Modus verzichtet bewusst auf `language`, damit Whisper bei sprach-
   gemischten Diktaten („die Funktion `parseConfig` returnt…")
   auto-detect macht.
+
+## Bearbeiten-Modi (Text markieren → transformieren)
+
+Ein Modus mit `input = "selection"` arbeitet nicht auf neuem Diktat,
+sondern auf dem **gerade markierten Text** in der fokussierten App.
+Ablauf: Text markieren → Hotkey → im Menü einen Bearbeiten-Modus wählen
+→ optionale Anweisung sprechen → Stop-Hotkey. Die Selektion wird beim
+Hotkey-Druck (vor dem Menü, solange die Ziel-App noch fokussiert ist)
+über die Zwischenablage gelesen; das gesprochene Diktat wird zur
+Anweisung. Das LLM bekommt beides als:
+
+```
+<selected_text>
+… der markierte Text …
+</selected_text>
+
+<instruction>
+… das gesprochene Diktat (kann leer sein) …
+</instruction>
+```
+
+Der `system_prompt` erklärt dem Modell, wie es die beiden Blöcke
+behandelt. Das Ergebnis wird je nach `output` platziert.
+
+**`output = "auto"`** überlässt die Platzierung dem LLM: Es beginnt seine
+Antwort mit **genau einer** Steuerzeile — `@@REPLACE`, `@@APPEND` oder
+`@@PREPEND` — gefolgt vom eigentlichen Text. VoiceTypeX zieht die
+Steuerzeile ab und platziert entsprechend. Fehlt sie, greift
+`output_fallback`.
+
+**Eager-Capture-Kosten:** Die Selektion wird nur gelesen, wenn überhaupt
+ein Bearbeiten-Modus existiert. Reine Diktier-Setups merken nichts davon.
+
+Plattform-Details und Grenzen (z. B. Wayland-Zwischenablage,
+`append`/`prepend`) stehen in [`PLATFORMS.md`](PLATFORMS.md).
 
 ## Speicherort
 
@@ -79,6 +117,21 @@ es wird beim Laden akzeptiert und ignoriert.
 description = "Kurze Beschreibung was der Modus tut."
 language = "de"                # ISO-Code, Hint für STT
 injection_method = "clipboard" # "clipboard" (Default) | "keystrokes"
+
+# --- Bearbeiten-Modi (markierten Text transformieren) ---
+input = "voice"        # "voice" (Default, Diktat) | "selection"
+                       # "selection": liest den markierten Text aus der
+                       # fokussierten App und nutzt das Diktat als
+                       # (optionale) Anweisung darauf. Erfordert
+                       # processing != "none".
+output = "insert"      # "insert" (Default, an Cursor-Position)
+                       # Nur bei input="selection" sinnvoll:
+                       #   "replace" – ersetzt die Auswahl
+                       #   "append"  – behält die Auswahl, hängt darunter an
+                       #   "prepend" – stellt das Ergebnis davor
+                       #   "auto"    – das LLM entscheidet (siehe unten)
+output_fallback = "replace"  # nur bei output="auto": Aktion, wenn das
+                             # LLM keine Steuerzeile liefert. Nicht "auto".
 
 # Nur wenn transcription = "cloud":
 cloud_stt_provider = "xai"     # "xai" | "openai" | "groq" | "deepgram"
@@ -134,6 +187,12 @@ VoiceTypeX prüft beim Laden:
 - **`transcription = "cloud"`**: erfordert `cloud_stt_provider`.
 - **`processing = "cloud"`**: erfordert `cloud_llm_provider`.
 - **`processing != "none"`**: erfordert `system_prompt`.
+- **`input = "selection"`**: erfordert `processing != "none"` (ohne LLM
+  gibt es nichts, womit die Auswahl transformiert würde).
+- **`output ∈ {replace, append, prepend, auto}`**: nur bei
+  `input = "selection"` (Voice-Modi fügen immer an der Cursor-Position
+  ein → `output = "insert"`).
+- **`output_fallback`**: darf nicht `"auto"` sein.
 - **`local_engine`**: nur `"embedded"` oder `"ollama"`.
 - **`processing = "local"` + `local_engine = "ollama"`**: erfordert
   `ollama_model_tag` (oder Deprecated-`local_llm_model`).

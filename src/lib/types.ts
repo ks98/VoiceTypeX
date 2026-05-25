@@ -5,6 +5,10 @@
 export type TranscriptionTarget = "local" | "cloud";
 export type ProcessingTarget = "none" | "local" | "cloud";
 export type InjectionMethod = "clipboard" | "keystrokes";
+/** Where the text a mode operates on comes from. */
+export type InputSource = "voice" | "selection";
+/** What happens with the LLM result relative to the selection. */
+export type OutputAction = "insert" | "replace" | "append" | "prepend" | "auto";
 
 export interface Mode {
   id: string;
@@ -42,6 +46,15 @@ export interface Mode {
   /** Phase 3b: Whisper initial prompt (glossary / proper-name hints). */
   initial_prompt: string | null;
   injection_method: InjectionMethod;
+  /** Input side of edit modes: "voice" (dictation) or "selection"
+   * (read the focused app's selection and transform it). */
+  input: InputSource;
+  /** Where the LLM result lands relative to the selection. Only
+   * meaningful when input="selection". */
+  output: OutputAction;
+  /** Fallback action when output="auto" and the LLM emits no
+   * @@REPLACE/@@APPEND/@@PREPEND sentinel. Must not be "auto". */
+  output_fallback: OutputAction;
   language: string | null;
   system_prompt: string | null;
   /** Phase 1: per-mode sampling params. */

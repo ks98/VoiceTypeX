@@ -120,6 +120,36 @@ Anfang geleert.
 UI-Trigger-Buttons in der Modi-Liste rufen `execute_mode` direkt — die
 Toggle-Logik ist dieselbe wie beim Hotkey.
 
+## Bearbeiten-Modi (Selektion → LLM → ersetzen/einfügen)
+
+Modi mit `Mode.input == Selection` transformieren markierten Text statt
+neues Diktat zu erzeugen. Die Pipeline ändert sich dafür minimal — kein
+neuer State:
+
+1. **Eager-Capture:** `handle_menu_hotkey` liest im `Idle`-Zweig die
+   Selektion *vor* `menu.show()` (das Menü klaut den Fokus, das Lesen
+   braucht aber die fokussierte Ziel-App). Gated auf Edit-Modus-Präsenz
+   (`capture_selection_if_edit_modes`) — reine Diktier-Setups zahlen
+   nichts. Das Ergebnis liegt in `AppContext.selection_buffer`.
+2. **Lesen** geschieht über `TextInjector::read_selection()`: Clipboard
+   sichern → Copy-Shortcut simulieren (enigo bzw. libei `Ctrl+C`) →
+   nach kurzer Wartezeit lesen → Clipboard wiederherstellen. „Nichts
+   markiert" wird über Vergleich mit dem gesicherten Inhalt erkannt.
+3. **Komposition** (`core::edit::compose_edit_input`): in
+   `finish_recording_and_inject` wird bei `input == Selection` die
+   Selektion + das transkribierte Diktat zu *einem* User-String
+   (`<selected_text>…</selected_text>\n<instruction>…</instruction>`)
+   gerahmt und als „transcript" an den `Processor` gegeben — der
+   `Processor`-Trait bleibt unverändert.
+4. **Output-Resolution** (`core::edit::resolve_output_action`): nach dem
+   LLM wird `Mode.output` angewandt. Bei `Auto` parst der Sentinel
+   (`@@REPLACE`/`@@APPEND`/`@@PREPEND` in Zeile 1) die Aktion, sonst
+   greift `Mode.output_fallback`. Die Aktion fließt als
+   `InjectOptions.action` in die Injection; `Append`/`Prepend` lassen den
+   Injector vor dem Paste die Selektion kollabieren (Pfeiltaste).
+
+Plattform-Reichweite und bekannte Grenzen: [`PLATFORMS.md`](PLATFORMS.md).
+
 ## Trait-Schichten
 
 Provider- und Inject-kritische Funktionalität ist hinter Traits
@@ -130,7 +160,7 @@ abstrahiert. Plattform-Selektion zur Laufzeit (Linux nutzt
 |---|---|---|
 | `Transcriber` | `transcription/mod.rs` | `LocalTranscriber` (whisper-rs), `XaiTranscriber`, `OpenAITranscriber`, `GroqTranscriber`, `DeepgramTranscriber` |
 | `Processor` | `processing/mod.rs` | `LlamaEmbeddedProcessor` (embedded llama-cpp-2, **Default-Engine**), `OllamaProcessor` (lokaler Ollama-Daemon, Opt-in), `XaiProcessor`/`OpenAIProcessor` (via gemeinsamer `OpenAICompatibleClient`), `AnthropicProcessor` |
-| `TextInjector` | `injection/mod.rs` | `ClipboardFallbackInjector` (X11/Windows: enigo Ctrl+V), `WaylandLibeiInjector` (Wayland: libei via xdg-desktop-portal.RemoteDesktop) |
+| `TextInjector` | `injection/mod.rs` | `ClipboardFallbackInjector` (X11/Windows: enigo Ctrl+V), `WaylandLibeiInjector` (Wayland: libei via xdg-desktop-portal.RemoteDesktop) — der Trait trägt zusätzlich `read_selection()` (Eingangsseite der Bearbeiten-Modi, siehe unten) |
 
 **Hotkey-Registrierung** ist plattform-direkt (kein Trait, siehe
 [CLAUDE.md §4.2](../CLAUDE.md)) und registriert **genau einen**
@@ -165,6 +195,7 @@ pub struct AppContext {
     pub extra_llm_processors: Arc<Mutex<HashMap<String, Arc<LlamaEmbeddedProcessor>>>>, // Per-Mode-LLM-Slot-Cache
     pub active_streaming_handle: Arc<Mutex<Option<JoinHandle<()>>>>, // Phase-2-Streaming-Worker-Handle
     pub injector: Arc<dyn TextInjector>,
+    pub selection_buffer: Arc<Mutex<Option<String>>>,  // eager-captured Selektion für Bearbeiten-Modi
     pub settings: Arc<RwLock<Settings>>,
     pub settings_path: PathBuf,
     pub log_buffer: LogRingBuffer,

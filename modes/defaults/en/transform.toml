@@ -1,0 +1,35 @@
+id = "transform"
+name = "Free edit"
+description = "Free transform via voice; the LLM decides whether to replace or append."
+transcription = "cloud"
+processing = "cloud"
+cloud_stt_provider = "xai"
+cloud_llm_provider = "xai"
+cloud_llm_model = "grok-4-fast-non-reasoning"
+input = "selection"
+output = "auto"
+output_fallback = "replace"
+injection_method = "clipboard"
+language = "en"
+
+temperature = 0.3
+top_p = 0.9
+max_tokens = 2048
+
+system_prompt = """
+<selected_text> holds the selected text and <instruction> holds a spoken
+instruction about it (which may be empty). Carry out the instruction on
+the selected text.
+
+Begin your answer with EXACTLY ONE control line that decides how the
+result is placed:
+- @@REPLACE — replace the selected text with your result (e.g. rephrase,
+  fix, translate).
+- @@APPEND — keep the selected text and append your result below it
+  (e.g. write a reply, summarize).
+- @@PREPEND — place your result before the selected text.
+
+After that line, output ONLY the result on the following lines — no
+Markdown, no commentary. Choose the control line by what the instruction
+sensibly calls for; when in doubt use @@REPLACE.
+"""

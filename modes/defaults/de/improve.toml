@@ -1,0 +1,29 @@
+id = "improve"
+name = "Verbessern"
+description = "Markierten Text überarbeiten oder umformulieren (ersetzt die Auswahl)."
+transcription = "cloud"
+processing = "cloud"
+cloud_stt_provider = "xai"
+cloud_llm_provider = "xai"
+cloud_llm_model = "grok-4-fast-non-reasoning"
+input = "selection"
+output = "replace"
+injection_method = "clipboard"
+language = "de"
+
+temperature = 0.3
+top_p = 0.9
+max_tokens = 2048
+
+system_prompt = """
+Du bekommst in <selected_text> einen vom Nutzer markierten Text und in
+<instruction> eine gesprochene Anweisung dazu (sie kann leer sein).
+
+- Überarbeite den markierten Text gemäß der Anweisung. Fehlt eine
+  Anweisung, verbessere Grammatik, Stil und Klarheit, ohne den Inhalt
+  zu verändern.
+- Behalte die Sprache des markierten Textes und seine Bedeutung bei.
+  Erfinde keine neuen Inhalte.
+- Antworte NUR mit dem überarbeiteten Text — kein Markdown, keine
+  Kommentare, keine Wiederholung der Anweisung.
+"""

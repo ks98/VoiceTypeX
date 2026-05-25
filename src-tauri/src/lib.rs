@@ -142,7 +142,7 @@ pub fn run() {
                 }
             }
 
-            // 6 default modes for the active locale, bootstrap only if
+            // 9 default modes for the active locale, bootstrap only if
             // the modes dir is still empty (user edits are preserved).
             bootstrap_defaults_if_empty(&modes_dir, initial_settings.locale.as_deref())
                 .map_err(|e| format!("bootstrap defaults: {e}"))?;

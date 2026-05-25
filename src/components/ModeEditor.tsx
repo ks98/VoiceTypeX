@@ -27,11 +27,23 @@ const LLM_PROVIDERS = ["xai", "openai", "anthropic"];
 // + `LlmModelSlot::from_setting`). Labels come via i18n key rather
 // than hardcoded strings, so a locale switch takes effect.
 const WHISPER_SLOTS: Array<{ value: string; key: string }> = [
-  { value: "large-v3-turbo-q8_0", key: "mode_editor.whisper_slot.large_v3_turbo_q8" },
-  { value: "large-v3-turbo-german-q5_0", key: "mode_editor.whisper_slot.large_v3_turbo_german" },
-  { value: "large-v3-turbo-q5_0", key: "mode_editor.whisper_slot.large_v3_turbo_q5" },
+  {
+    value: "large-v3-turbo-q8_0",
+    key: "mode_editor.whisper_slot.large_v3_turbo_q8",
+  },
+  {
+    value: "large-v3-turbo-german-q5_0",
+    key: "mode_editor.whisper_slot.large_v3_turbo_german",
+  },
+  {
+    value: "large-v3-turbo-q5_0",
+    key: "mode_editor.whisper_slot.large_v3_turbo_q5",
+  },
   { value: "small-q5_1", key: "mode_editor.whisper_slot.small_q5_1" },
-  { value: "large-v3-turbo", key: "mode_editor.whisper_slot.large_v3_turbo_f16" },
+  {
+    value: "large-v3-turbo",
+    key: "mode_editor.whisper_slot.large_v3_turbo_f16",
+  },
 ];
 
 const LLM_SLOTS: Array<{ value: string; key: string }> = [
@@ -39,8 +51,14 @@ const LLM_SLOTS: Array<{ value: string; key: string }> = [
   { value: "gemma4-e2b-it-q5_k_m", key: "mode_editor.llm_slot.gemma4_e2b" },
   { value: "gemma3-1b-it-q5_k_m", key: "mode_editor.llm_slot.gemma3_1b" },
   { value: "gemma3-4b-it-q5_k_m", key: "mode_editor.llm_slot.gemma3_4b" },
-  { value: "llama3.2-1b-instruct-q5_k_m", key: "mode_editor.llm_slot.llama32_1b" },
-  { value: "qwen2.5-1.5b-instruct-q5_k_m", key: "mode_editor.llm_slot.qwen25_15b" },
+  {
+    value: "llama3.2-1b-instruct-q5_k_m",
+    key: "mode_editor.llm_slot.llama32_1b",
+  },
+  {
+    value: "qwen2.5-1.5b-instruct-q5_k_m",
+    key: "mode_editor.llm_slot.qwen25_15b",
+  },
 ];
 
 function emptyMode(): Mode {
@@ -60,6 +78,9 @@ function emptyMode(): Mode {
     whisper_model_slot: null,
     initial_prompt: null,
     injection_method: "clipboard",
+    input: "voice",
+    output: "insert",
+    output_fallback: "replace",
     language: "de",
     system_prompt: null,
     temperature: null,
@@ -102,6 +123,7 @@ export default function ModeEditor({
   const isLocalLLM = draft.processing === "local";
   const isCloudLLM = draft.processing === "cloud";
   const needsSystemPrompt = draft.processing !== "none";
+  const isSelectionInput = draft.input === "selection";
   const localEngine: "embedded" | "ollama" =
     draft.local_engine === "ollama" ? "ollama" : "embedded";
   const needsOllamaTag = isLocalLLM && localEngine === "ollama";
@@ -113,22 +135,25 @@ export default function ModeEditor({
     inRange(draft.max_tokens, 1, 8192);
 
   const blockingReasons: string[] = [];
-  if (draft.id.length === 0) blockingReasons.push(t("mode_editor.reason.id_missing"));
+  if (draft.id.length === 0)
+    blockingReasons.push(t("mode_editor.reason.id_missing"));
   else if (!idValid) blockingReasons.push(t("mode_editor.reason.id_invalid"));
-  if (draft.name.length === 0) blockingReasons.push(t("mode_editor.reason.name_missing"));
+  if (draft.name.length === 0)
+    blockingReasons.push(t("mode_editor.reason.name_missing"));
   if (isCloudSTT && !draft.cloud_stt_provider)
     blockingReasons.push(t("mode_editor.reason.cloud_stt_provider"));
   if (isCloudLLM && !draft.cloud_llm_provider)
     blockingReasons.push(t("mode_editor.reason.cloud_llm_provider"));
   if (needsOllamaTag && !draft.ollama_model_tag)
     blockingReasons.push(t("mode_editor.reason.ollama_tag"));
+  if (isSelectionInput && draft.processing === "none")
+    blockingReasons.push(t("mode_editor.reason.selection_needs_llm"));
   if (
     needsSystemPrompt &&
     (draft.system_prompt === null || draft.system_prompt.length === 0)
   )
     blockingReasons.push(t("mode_editor.reason.system_prompt"));
-  if (!samplingValid)
-    blockingReasons.push(t("mode_editor.reason.sampling"));
+  if (!samplingValid) blockingReasons.push(t("mode_editor.reason.sampling"));
   const canSave = blockingReasons.length === 0;
 
   const baseline = JSON.stringify(initial ?? emptyMode());
@@ -175,6 +200,9 @@ export default function ModeEditor({
         whisper_model_slot: isLocalSTT ? draft.whisper_model_slot : null,
         initial_prompt: isLocalSTT ? draft.initial_prompt : null,
         system_prompt: needsSystemPrompt ? draft.system_prompt : null,
+        // A voice mode always injects at the cursor; only selection
+        // modes carry replace/append/prepend/auto.
+        output: isSelectionInput ? draft.output : "insert",
       };
       if (isEdit) {
         await ipcUpdateMode(cleaned);
@@ -241,6 +269,36 @@ export default function ModeEditor({
                 onChange={(e) => update("description", e.target.value)}
               />
             </Field>
+            <Field
+              label={t("mode_editor.input.label")}
+              hint={t("mode_editor.input.hint")}
+            >
+              <select
+                className={inputCls}
+                value={draft.input}
+                onChange={(e) => {
+                  const v = e.target.value as "voice" | "selection";
+                  // A selection mode must not stay on "insert" — that is
+                  // the voice default and is hidden from the action
+                  // picker. Bump it to "replace" on switch.
+                  setDraft((d) => ({
+                    ...d,
+                    input: v,
+                    output:
+                      v === "selection" && d.output === "insert"
+                        ? "replace"
+                        : d.output,
+                  }));
+                }}
+              >
+                <option value="voice">
+                  {t("mode_editor.input.opt_voice")}
+                </option>
+                <option value="selection">
+                  {t("mode_editor.input.opt_selection")}
+                </option>
+              </select>
+            </Field>
           </Section>
 
           <Section title={t("mode_editor.section.stt")}>
@@ -250,14 +308,15 @@ export default function ModeEditor({
                   className={inputCls}
                   value={draft.transcription}
                   onChange={(e) =>
-                    update(
-                      "transcription",
-                      e.target.value as "local" | "cloud",
-                    )
+                    update("transcription", e.target.value as "local" | "cloud")
                   }
                 >
-                  <option value="local">{t("mode_editor.stt.opt_local")}</option>
-                  <option value="cloud">{t("mode_editor.stt.opt_cloud")}</option>
+                  <option value="local">
+                    {t("mode_editor.stt.opt_local")}
+                  </option>
+                  <option value="cloud">
+                    {t("mode_editor.stt.opt_cloud")}
+                  </option>
                 </select>
               </Field>
               <Field
@@ -267,9 +326,7 @@ export default function ModeEditor({
                 <input
                   className={inputCls}
                   value={draft.language ?? ""}
-                  onChange={(e) =>
-                    update("language", e.target.value || null)
-                  }
+                  onChange={(e) => update("language", e.target.value || null)}
                   placeholder="de"
                 />
               </Field>
@@ -304,10 +361,7 @@ export default function ModeEditor({
                     className={inputCls}
                     value={draft.whisper_model_slot ?? ""}
                     onChange={(e) =>
-                      update(
-                        "whisper_model_slot",
-                        e.target.value || null,
-                      )
+                      update("whisper_model_slot", e.target.value || null)
                     }
                   >
                     <option value="">
@@ -326,7 +380,9 @@ export default function ModeEditor({
                 >
                   <textarea
                     className={`${inputCls} min-h-[60px]`}
-                    placeholder={t("mode_editor.stt.initial_prompt.placeholder")}
+                    placeholder={t(
+                      "mode_editor.stt.initial_prompt.placeholder",
+                    )}
                     value={draft.initial_prompt ?? ""}
                     onChange={(e) =>
                       update("initial_prompt", e.target.value || null)
@@ -543,6 +599,63 @@ export default function ModeEditor({
                 </option>
               </select>
             </Field>
+
+            {isSelectionInput ? (
+              <>
+                <Field
+                  label={t("mode_editor.output.action.label")}
+                  hint={t("mode_editor.output.action.hint")}
+                >
+                  <select
+                    className={inputCls}
+                    value={draft.output}
+                    onChange={(e) =>
+                      update("output", e.target.value as Mode["output"])
+                    }
+                  >
+                    <option value="replace">
+                      {t("mode_editor.output.action.opt_replace")}
+                    </option>
+                    <option value="append">
+                      {t("mode_editor.output.action.opt_append")}
+                    </option>
+                    <option value="prepend">
+                      {t("mode_editor.output.action.opt_prepend")}
+                    </option>
+                    <option value="auto">
+                      {t("mode_editor.output.action.opt_auto")}
+                    </option>
+                  </select>
+                </Field>
+                {draft.output === "auto" ? (
+                  <Field
+                    label={t("mode_editor.output.fallback.label")}
+                    hint={t("mode_editor.output.fallback.hint")}
+                  >
+                    <select
+                      className={inputCls}
+                      value={draft.output_fallback}
+                      onChange={(e) =>
+                        update(
+                          "output_fallback",
+                          e.target.value as Mode["output_fallback"],
+                        )
+                      }
+                    >
+                      <option value="replace">
+                        {t("mode_editor.output.action.opt_replace")}
+                      </option>
+                      <option value="append">
+                        {t("mode_editor.output.action.opt_append")}
+                      </option>
+                      <option value="prepend">
+                        {t("mode_editor.output.action.opt_prepend")}
+                      </option>
+                    </select>
+                  </Field>
+                ) : null}
+              </>
+            ) : null}
           </Section>
         </div>
 

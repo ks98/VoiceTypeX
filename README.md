@@ -32,9 +32,15 @@ Beta-spezifische Hinweise: siehe Abschnitt
    nach dem gewählten **Modus** nachbearbeitet (lokal via Ollama
    **oder** Cloud-LLM), und an der Cursor-Position eingefügt.
 
-Sechs Modi sind vorinstalliert: *Exaktes Diktat*, *Korrigierendes
-Diktat*, *Förmliche E-Mail*, *Slack/Teams Nachricht*, *GitHub Issue*,
-*Anweisung an Coding-Agent*. Die Defaults werden **locale-passend**
+Neun Modi sind vorinstalliert. Sechs **Diktier**-Modi (neuer Text):
+*Exaktes Diktat*, *Korrigierendes Diktat*, *Förmliche E-Mail*,
+*Slack/Teams Nachricht*, *GitHub Issue*, *Anweisung an Coding-Agent*.
+Dazu drei **Bearbeiten**-Modi, die *markierten* Text transformieren:
+*Verbessern* (überarbeitet/ersetzt die Auswahl), *Antwort schreiben*
+(verfasst eine Antwort darunter, Original bleibt) und *Frei bearbeiten*
+(per Sprachbefehl, das LLM entscheidet über das Platzieren). Workflow:
+markieren → Hotkey → Bearbeiten-Modus wählen → Anweisung sprechen.
+Die Defaults werden **locale-passend**
 ausgeliefert: bei englischer UI-Locale bekommst du englische Modi
 mit englischen `system_prompt`s, bei französischer/spanischer/
 italienischer Locale die jeweiligen kulturellen Entsprechungen

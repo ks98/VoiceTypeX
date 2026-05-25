@@ -245,6 +245,67 @@ LLM-Aufruf droht *„llama.dll not found"*.
      nach erstem realen Test (Doku-Stand zum Zeitpunkt der Notiz: Hook-
      API in Tauri 2.x in Bewegung).
 
+## Bearbeiten-Modi: Selektion lesen & zurückschreiben
+
+Modi mit `input = "selection"` lesen den markierten Text der fokussierten
+Fremd-App und schreiben das Ergebnis zurück. Beides ist plattformabhängig
+und gehört zu den manuell zu verifizierenden Pfaden.
+
+**Lesen** (`TextInjector::read_selection`) nutzt überall denselben
+Ansatz: Clipboard sichern → Copy-Shortcut simulieren → kurz warten →
+Clipboard lesen → Clipboard wiederherstellen.
+
+| Plattform | Copy-Mechanismus | Status |
+|---|---|---|
+| Windows | `enigo` Ctrl+C (SendInput) | sollte zuverlässig sein, **manuell zu verifizieren** |
+| Linux X11 | `enigo` Ctrl+C (XTest) | sollte zuverlässig sein, **manuell zu verifizieren** |
+| Linux Wayland | libei Ctrl+C (RemoteDesktop-Portal) | **fragil**, compositor-abhängig (s. u.) |
+
+**Zurückschreiben** richtet sich nach `output`: `replace`/`insert` fügen
+direkt ein (Paste über eine aktive Selektion überschreibt sie);
+`append`/`prepend` kollabieren die Selektion vorher per Pfeiltaste
+(rechts/links) und fügen dann ein.
+
+### Manuelle Verifikation (pro Plattform durchführen)
+
+1. Text in einer Fremd-App markieren (Editor **und** Browser-Textfeld —
+   die sind am unterschiedlichsten).
+2. Hotkey → Bearbeiten-Modus „Verbessern" wählen → Anweisung sprechen →
+   Stop. Erwartung: markierter Text wird durch das Ergebnis ersetzt.
+3. „Antwort schreiben" auf einen markierten Absatz: Original bleibt
+   stehen, Antwort erscheint darunter.
+4. „Frei bearbeiten": je nach Anweisung ersetzen vs. anhängen
+   (`@@`-Steuerzeile).
+5. Nichts markieren, Hotkey, Bearbeiten-Modus: darf nicht den alten
+   Clipboard-Inhalt als Selektion missdeuten (Log: „no captured
+   selection").
+
+### Bekannte Grenzen & Risiken
+
+- **Selektion muss den Fokuswechsel überleben.** Beim Lesen vor dem Menü
+  ist die Ziel-App noch fokussiert; beim Zurückschreiben springt der
+  Fokus nach dem Menü zurück. Apps, die die Selektion beim Fokusverlust
+  verwerfen, brechen `append`/`prepend` (das Kollabieren findet dann
+  nichts vor). Editoren/Browser halten die Selektion i. d. R.
+- **„Keine Selektion"-Heuristik:** Erkennung über „Clipboard unverändert
+  oder leer nach Copy". Falsch-negativ, wenn der markierte Text zufällig
+  dem vorherigen Clipboard-Inhalt entspricht — seltener Edge-Case.
+- **Clipboard-Pollution:** War das Clipboard vorher leer, bleibt nach dem
+  Lesen die Selektion darin (kein Restore-Ziel). Nicht-Text-Inhalte
+  (Bild/Datei) überleben den Sicher-/Restore-Zyklus nicht — bewusst
+  akzeptiert.
+- **Wayland — Clipboard-Lesen ohne Fokus:** Das Lesen passiert, während
+  VoiceTypeX **nicht** die fokussierte Surface ist. Auf Compositors, die
+  Clipboard-Zugriff an den Fokus koppeln und deren Clipboard-Backend
+  keinen `ext-data-control`-Pfad hat, kann das fehlschlagen →
+  `read_selection` liefert `None`, Edit-Modi degradieren auf eine leere
+  Selektion (kein Fehler). Auf KDE Plasma 6 / GNOME 49+ erwartet
+  funktionsfähig; **pro Compositor zu verifizieren.**
+- **Wayland — `append`/`prepend`:** Die Kollaps-Pfeiltaste wird auf
+  Wayland noch nicht über libei gesendet; dort landen diese Aktionen am
+  Cursor (wie `replace`). `replace`/`insert` funktionieren. Offener
+  Folgeschritt: Einzeltasten-`KeyCommand` im libei-Worker.
+
 ## macOS — nicht im Scope
 
 Alle macOS-Implementierungen sind Stubs hinter

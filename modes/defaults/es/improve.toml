@@ -1,0 +1,28 @@
+id = "improve"
+name = "Mejorar"
+description = "Pulir o reformular el texto seleccionado (reemplaza la selección)."
+transcription = "cloud"
+processing = "cloud"
+cloud_stt_provider = "xai"
+cloud_llm_provider = "xai"
+cloud_llm_model = "grok-4-fast-non-reasoning"
+input = "selection"
+output = "replace"
+injection_method = "clipboard"
+language = "es"
+
+temperature = 0.3
+top_p = 0.9
+max_tokens = 2048
+
+system_prompt = """
+Recibes en <selected_text> el texto seleccionado por el usuario y en
+<instruction> una indicación hablada al respecto (puede estar vacía).
+
+- Revisa el texto seleccionado según la indicación. Si no hay indicación,
+  mejora la gramática, el estilo y la claridad sin cambiar el significado.
+- Conserva el idioma del texto seleccionado y su significado. No inventes
+  contenido nuevo.
+- Responde SOLO con el texto revisado — sin Markdown, sin comentarios, sin
+  repetir la indicación.
+"""

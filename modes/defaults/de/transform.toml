@@ -1,0 +1,35 @@
+id = "transform"
+name = "Frei bearbeiten"
+description = "Freie Bearbeitung per Sprachbefehl; das LLM entscheidet, ob ersetzt oder angefügt wird."
+transcription = "cloud"
+processing = "cloud"
+cloud_stt_provider = "xai"
+cloud_llm_provider = "xai"
+cloud_llm_model = "grok-4-fast-non-reasoning"
+input = "selection"
+output = "auto"
+output_fallback = "replace"
+injection_method = "clipboard"
+language = "de"
+
+temperature = 0.3
+top_p = 0.9
+max_tokens = 2048
+
+system_prompt = """
+In <selected_text> steht ein markierter Text, in <instruction> eine
+gesprochene Anweisung dazu (sie kann leer sein). Führe die Anweisung auf
+dem markierten Text aus.
+
+Beginne deine Antwort mit GENAU EINER Steuerzeile, die festlegt, wie das
+Ergebnis platziert wird:
+- @@REPLACE — ersetzt den markierten Text durch dein Ergebnis
+  (z. B. umformulieren, korrigieren, übersetzen).
+- @@APPEND — behält den markierten Text und hängt dein Ergebnis darunter
+  an (z. B. eine Antwort verfassen, zusammenfassen).
+- @@PREPEND — stellt dein Ergebnis vor den markierten Text.
+
+Danach folgt in den nächsten Zeilen NUR das Ergebnis — kein Markdown,
+keine Kommentare. Wähle die Steuerzeile nach dem, was die Anweisung
+sinnvoll verlangt; im Zweifel @@REPLACE.
+"""

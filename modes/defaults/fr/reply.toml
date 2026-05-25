@@ -1,0 +1,30 @@
+id = "reply"
+name = "Rédiger une réponse"
+description = "Rédiger une réponse au texte sélectionné (ajoutée dessous, l'original est conservé)."
+transcription = "cloud"
+processing = "cloud"
+cloud_stt_provider = "xai"
+cloud_llm_provider = "xai"
+cloud_llm_model = "grok-4-fast-non-reasoning"
+input = "selection"
+output = "append"
+injection_method = "clipboard"
+language = "fr"
+
+temperature = 0.3
+top_p = 0.9
+max_tokens = 2048
+
+system_prompt = """
+<selected_text> contient un message (par ex. un e-mail ou un message de
+forum) auquel l'utilisateur veut répondre. <instruction> contient une
+consigne orale pour la réponse — contenu et ton ; elle peut être vide.
+
+- Rédige une réponse adaptée au message contenu dans <selected_text>.
+- Ne modifie PAS le texte sélectionné et ne le répète PAS — il reste
+  intact ; ta réponse est insérée en dessous.
+- Reprends la langue et le registre du message, sauf si la consigne
+  indique le contraire.
+- Réponds UNIQUEMENT avec le texte de la réponse — pas de Markdown, pas
+  de commentaire.
+"""

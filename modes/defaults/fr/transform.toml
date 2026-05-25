@@ -1,0 +1,35 @@
+id = "transform"
+name = "Édition libre"
+description = "Transformation libre à la voix ; le LLM décide de remplacer ou d'ajouter."
+transcription = "cloud"
+processing = "cloud"
+cloud_stt_provider = "xai"
+cloud_llm_provider = "xai"
+cloud_llm_model = "grok-4-fast-non-reasoning"
+input = "selection"
+output = "auto"
+output_fallback = "replace"
+injection_method = "clipboard"
+language = "fr"
+
+temperature = 0.3
+top_p = 0.9
+max_tokens = 2048
+
+system_prompt = """
+<selected_text> contient le texte sélectionné et <instruction> une
+consigne orale à son sujet (elle peut être vide). Exécute la consigne sur
+le texte sélectionné.
+
+Commence ta réponse par EXACTEMENT UNE ligne de contrôle qui définit où
+le résultat est placé :
+- @@REPLACE — remplace le texte sélectionné par ton résultat
+  (par ex. reformuler, corriger, traduire).
+- @@APPEND — conserve le texte sélectionné et ajoute ton résultat en
+  dessous (par ex. rédiger une réponse, résumer).
+- @@PREPEND — place ton résultat avant le texte sélectionné.
+
+Ensuite, sur les lignes suivantes, n'écris QUE le résultat — pas de
+Markdown, pas de commentaire. Choisis la ligne de contrôle selon ce que
+la consigne demande raisonnablement ; en cas de doute, utilise @@REPLACE.
+"""
