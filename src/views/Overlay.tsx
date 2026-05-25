@@ -17,20 +17,21 @@ type StatePayload = { state: Phase; error?: string };
 type PartialTranscriptPayload = { text: string };
 
 /**
- * Live-Overlay-Fenster — zeigt während Recording/Transcribe/… den
- * Pipeline-Phasen-Indikator. Sichtbarkeit wird vom Backend gesteuert.
+ * Live overlay window — displays the pipeline-phase indicator during
+ * recording/transcribe/… Visibility is driven by the backend.
  *
- * Phase-Default ist "recording", weil das Window vom Backend nur
- * sichtbar gemacht wird, wenn die Pipeline gerade in Recording wechselt.
- * Damit ist der erste sichtbare Frame schon "Höre zu …" statt leer.
+ * The phase default is "recording" because the backend only makes the
+ * window visible when the pipeline transitions into recording. That way
+ * the first visible frame already shows "Listening…" instead of being
+ * empty.
  *
- * Phase 2: Während Recording mit lokalem STT emittiert das Backend
- * `app://partial-transcript`-Events mit stabilen Wort-Prefixen aus
- * LocalAgreement-2. Wir zeigen den jeweils letzten Stand in einer
- * zweiten Zeile unter dem Status-Header. Bei Phasen-Wechsel weg von
- * Recording (Transcribing/Postprocessing/Injecting/Idle) wird der
- * Partial implizit geleert — entweder durch einen leeren Event vom
- * Backend oder durch unseren lokalen Phase-Reset.
+ * Phase 2: while recording with local STT, the backend emits
+ * `app://partial-transcript` events carrying stable word prefixes from
+ * LocalAgreement-2. We show the latest snapshot in a second line below
+ * the status header. On a phase change away from recording
+ * (transcribing/postprocessing/injecting/idle) the partial is cleared
+ * implicitly — either by an empty event from the backend or by our
+ * local phase reset.
  */
 export default function Overlay(): JSX.Element {
   const t = useT();
@@ -43,8 +44,8 @@ export default function Overlay(): JSX.Element {
     listen<StatePayload>("app://state", (event) => {
       setPhase(event.payload.state);
       setErrorMsg(event.payload.error ?? null);
-      // Phase verlaesst Recording → Partial loeschen, damit der naechste
-      // Recording-Zyklus mit leerer Anzeige startet.
+      // Phase leaves recording → clear partial so the next recording
+      // cycle starts with an empty display.
       if (event.payload.state !== "recording") {
         setPartial("");
       }

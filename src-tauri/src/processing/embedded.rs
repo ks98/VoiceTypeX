@@ -67,6 +67,9 @@ pub struct LlamaEmbeddedProcessor {
 }
 
 impl LlamaEmbeddedProcessor {
+    /// Constructs a processor pointing at `model_path`. The model is
+    /// not opened here — the first `process()` call triggers the lazy
+    /// load via `ensure_loaded`.
     pub fn new(model_path: PathBuf) -> Self {
         Self {
             model_path,
@@ -74,7 +77,9 @@ impl LlamaEmbeddedProcessor {
         }
     }
 
-    /// Modell laden, wenn noch nicht geschehen. Idempotent.
+    /// Lazily loads the GGUF model into the llama-cpp-2 context.
+    /// Subsequent calls are no-ops thanks to the inner double-checked
+    /// lock — idempotent and safe to call before every `process()`.
     fn ensure_loaded(&self) -> Result<()> {
         if self.model.read().is_some() {
             return Ok(());

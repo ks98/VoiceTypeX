@@ -1,24 +1,24 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// React-Bindings fuer das i18n-System.
+// React bindings for the i18n system.
 //
-// - `useT()` liefert die Translation-Function, gebunden an die aktuelle
-//   Locale aus dem Zustand-Store. Re-rendert Consumer beim Locale-Wechsel.
-// - `useLocale()` liest die aktuelle Locale.
-// - `useI18nStore` ist der Zustand-Store — direkt fuer non-React-Code
-//   (z.B. Format-Helpers) oder fuer den Bootstrap-Setter in main.tsx.
+// - `useT()` returns the translation function, bound to the current
+//   locale from the Zustand store. Re-renders consumers on locale change.
+// - `useLocale()` reads the current locale.
+// - `useI18nStore` is the Zustand store — used directly from non-React
+//   code (e.g. format helpers) or for the bootstrap setter in main.tsx.
 //
-// Dictionaries werden eager geladen (5 Locales × ~5 KB → vernachlaessigbar).
-// Lazy-Loading bringt erst bei vielen Sprachen mit grossen Translations
-// einen Vorteil und macht den Bootstrap-Pfad komplizierter.
+// Dictionaries are loaded eagerly (5 locales × ~5 KB → negligible).
+// Lazy-loading only pays off with many languages and large translation
+// files, and it complicates the bootstrap path.
 //
-// **Bootstrap-Hinweis (Phase-6-Fallstrick):** `useI18nStore.setLocale()`
-// aendert nur den lokalen Webview-State. Beim User-sichtbaren Locale-
-// Switcher in Phase 6 muss zusaetzlich (a) `ipcSetSettings` mit dem
-// neuen Wert laufen und (b) ein Tauri-Event an die anderen Webviews
-// (overlay, menu) emittiert werden, die ihren Store ebenfalls
-// aktualisieren — sonst bleiben sie auf der Bootstrap-Locale bis zum
-// Neustart, weil Zustand-Stores nicht cross-Window geteilt sind.
+// **Bootstrap note (phase-6 pitfall):** `useI18nStore.setLocale()` only
+// changes the local webview state. For the user-facing locale switcher
+// in phase 6 we additionally need to (a) call `ipcSetSettings` with the
+// new value and (b) emit a Tauri event to the other webviews (overlay,
+// menu) so their stores update as well — otherwise they stay on the
+// bootstrap locale until restart, because Zustand stores are not shared
+// across windows.
 
 import { useCallback } from "react";
 import { create } from "zustand";
@@ -39,9 +39,9 @@ import fr from "./locales/fr.json";
 import es from "./locales/es.json";
 import it from "./locales/it.json";
 
-// JSON-Imports werden von TS mit den konkreten Key-Typen aus der Datei
-// inferiert. Wir widen explizit auf `Dictionary` — die echte
-// Key-Konsistenz prueft `scripts/i18n-check.mjs` (Build-Gate).
+// TS infers JSON imports with the concrete key types from the file. We
+// explicitly widen to `Dictionary` — actual key consistency is
+// verified by `scripts/i18n-check.mjs` (build gate).
 const DICTIONARIES: Record<SupportedLocale, Dictionary> = {
   en: en as Dictionary,
   de: de as Dictionary,
@@ -58,8 +58,8 @@ interface I18nState {
 }
 
 export const useI18nStore = create<I18nState>((set) => ({
-  // DEFAULT_LOCALE als Initial-Wert — der echte Wert wird im Bootstrap
-  // (main.tsx) aus Settings gesetzt, bevor App rendert.
+  // DEFAULT_LOCALE as initial value — the real value is set during
+  // bootstrap (main.tsx) from settings before the app renders.
   locale: DEFAULT_LOCALE,
   setLocale: (locale) => set({ locale }),
 }));
@@ -70,15 +70,15 @@ export type TranslateFn = (
 ) => string;
 
 /**
- * React-Hook fuer Translations. Re-rendert die Consumer-Component, wenn
- * die Locale wechselt; die zurueckgegebene Function ist via `useCallback`
- * stabil pro Locale.
+ * React hook for translations. Re-renders the consuming component when
+ * the locale changes; the returned function is stable per locale via
+ * `useCallback`.
  *
- * Konvention: NICHT als Prop weiterreichen. Stattdessen in jeder
- * uebersetzenden Component erneut `useT()` aufrufen — der Hook ist
- * trivial teuer, und so bleibt die Locale-Abhaengigkeit explizit. Sonst
- * wuerde z.B. ein `React.memo`-Wrapper auf der Consumer-Component
- * Locale-Wechsel verschlucken, weil `t` als Prop referenz-stabil bleibt.
+ * Convention: do NOT pass it down as a prop. Instead, call `useT()`
+ * again in every translating component — the hook is trivially cheap
+ * and this keeps the locale dependency explicit. Otherwise a
+ * `React.memo` wrapper on the consumer would swallow locale changes,
+ * because `t` would stay reference-stable as a prop.
  */
 export function useT(): TranslateFn {
   const locale = useI18nStore((s) => s.locale);
@@ -98,9 +98,8 @@ export function useLocale(): SupportedLocale {
 }
 
 /**
- * Non-React-Zugriff auf die aktuelle Locale. Fuer Module wie
- * `format.ts`, die ausserhalb von Hooks formatieren, oder fuer
- * Test-/Debug-Pfade.
+ * Non-React access to the current locale. For modules like `format.ts`
+ * that format outside of hooks, or for test/debug paths.
  */
 export function getCurrentLocale(): SupportedLocale {
   return useI18nStore.getState().locale;

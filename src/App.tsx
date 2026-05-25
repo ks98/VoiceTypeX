@@ -34,19 +34,20 @@ export default function App(): JSX.Element {
     };
   }, [setActiveTab]);
 
-  // Wizard-Visibility ist seit dem Settings-Re-Trigger-Refactor reine
-  // Settings-Funktion: `update({ onboarding_done: false })` öffnet ihn,
-  // `update({ onboarding_done: true })` beim Wizard-Finish schließt ihn.
+  // Wizard visibility has been a pure settings concern since the
+  // settings re-trigger refactor: `update({ onboarding_done: false })`
+  // opens it, `update({ onboarding_done: true })` on wizard finish
+  // closes it.
   const showOnboarding =
     settings !== null && settings.onboarding_done === false;
 
   return (
-    // `h-screen` statt `min-h-screen`: bei langen Views (Settings hat
-    // ~1100 Zeilen) wuerde min-h-screen den aeusseren Container mit dem
-    // Inhalt wachsen lassen — dann scrollt die ganze Seite statt nur
-    // `<main>`, und die Sidebar inkl. ThemeToggle (mt-auto ans Sidebar-
-    // Ende) verschwindet aus dem Viewport. Mit fixer Hoehe greift
-    // `overflow-auto` auf `<main>`, Sidebar bleibt sichtbar.
+    // `h-screen` instead of `min-h-screen`: with long views (Settings
+    // has ~1100 lines) min-h-screen would let the outer container grow
+    // with the content — then the whole page scrolls instead of just
+    // `<main>`, and the sidebar including ThemeToggle (mt-auto at the
+    // sidebar's end) disappears from the viewport. With a fixed height
+    // `overflow-auto` applies to `<main>` and the sidebar stays visible.
     <div className="h-screen flex bg-canvas text-fg">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">

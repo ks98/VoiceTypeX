@@ -49,20 +49,20 @@ export default function OnboardingWizard({
 
   const [step, setStep] = useState<Step>(1);
 
-  // Whisper-Download — Background, persistent über Step-Wechsel.
+  // Whisper download — background, persistent across step changes.
   const [whisperStatus, setWhisperStatus] = useState<DownloadStatus>({
     kind: "idle",
   });
   const [whisperProgress, setWhisperProgress] =
     useState<ModelDownloadProgress | null>(null);
 
-  // LLM-Download — analog.
+  // LLM download — analogous.
   const [llmStatus, setLlmStatus] = useState<DownloadStatus>({ kind: "idle" });
   const [llmProgress, setLlmProgress] =
     useState<ModelDownloadProgress | null>(null);
 
-  // Done-Flashes nach DONE_FLASH_MS automatisch ausblenden. Mit Refs, damit
-  // ein neuer Download den vorigen Timer canceln kann.
+  // Auto-hide done flashes after DONE_FLASH_MS. Refs let a new download
+  // cancel the previous timer.
   const [whisperFlashVisible, setWhisperFlashVisible] = useState(false);
   const [llmFlashVisible, setLlmFlashVisible] = useState(false);
   const whisperFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -97,8 +97,9 @@ export default function OnboardingWizard({
     };
   }, []);
 
-  // Whisper-Download startet im Hintergrund; Wizard springt sofort zum nächsten
-  // Step weiter. Progress-Events füllen die sticky Mini-Bar im Header.
+  // Whisper download starts in the background; the wizard jumps straight
+  // to the next step. Progress events populate the sticky mini bar in
+  // the header.
   const onDownload = () => {
     setWhisperStatus({ kind: "running" });
     setWhisperProgress(null);

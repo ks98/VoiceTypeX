@@ -557,11 +557,10 @@ function SectionHeader({ id, title }: SectionHeaderProps): JSX.Element {
 }
 
 /**
- * Sprach-Switcher. Liest die aktuell *aktive* (resolved) Locale aus
- * useLocale, schreibt die *rohe* Locale (= konkreter SupportedLocale-
- * Code) zurueck in Settings und emittiert ein Tauri-Event, damit die
- * anderen Webview-Fenster (overlay, menu) ihren useI18nStore
- * mitziehen koennen.
+ * Language switcher. Reads the currently *active* (resolved) locale
+ * from useLocale, writes the *raw* locale (= concrete SupportedLocale
+ * code) back into settings, and emits a Tauri event so the other
+ * webview windows (overlay, menu) can update their useI18nStore.
  */
 function LanguageField({
   currentLocale,
@@ -583,15 +582,15 @@ function LanguageField({
         value={resolved}
         onChange={(e) => {
           const next = e.target.value as SupportedLocale;
-          // Persist FIRST, dann UI updaten + Event broadcasten.
-          // Wenn ipcSetSettings fehlschlaegt, vermeiden wir den
-          // inkonsistenten Zustand "UI ist auf neuer Sprache, aber
-          // Settings sind nicht persistiert". Der Settings-Store
-          // setzt im Fehlerfall `error`, das via Banner sichtbar wird.
+          // Persist FIRST, then update the UI and broadcast the event.
+          // If ipcSetSettings fails we avoid the inconsistent state
+          // "UI is on the new language but settings are not persisted".
+          // The settings store sets `error` on failure, which becomes
+          // visible via the banner.
           void onPick(next).then(() => {
             useI18nStore.setState({ locale: next });
-            // Cross-window-sync: overlay + menu hoeren auf dieses
-            // Event in main.tsx und ziehen ihren Store nach.
+            // Cross-window sync: overlay + menu listen for this event
+            // in main.tsx and update their store accordingly.
             void emit("i18n://locale-changed", { locale: next });
           });
         }}
@@ -603,10 +602,10 @@ function LanguageField({
         ))}
       </select>
       {activeLocale !== resolved ? (
-        // Defensive — sollte nach erfolgreichem Persist nie auftreten.
-        // Beim seltenen Race (mehrere Switcher gleichzeitig in parallel-
-        // geoeffneten Settings) hilft es zumindest, den Drift sichtbar
-        // zu machen.
+        // Defensive — should never trigger after a successful persist.
+        // For the rare race (multiple switchers used simultaneously in
+        // parallel-opened settings windows) it at least surfaces the
+        // drift.
         <div className="text-xs text-status-error">
           UI: {activeLocale} ≠ Settings: {resolved}
         </div>
