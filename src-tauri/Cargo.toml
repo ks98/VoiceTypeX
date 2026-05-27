@@ -48,8 +48,18 @@ thiserror = "2.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# OS-Keychain (BYOK API-Keys, niemals im Klartext)
-keyring = "3"
+# OS-Keychain (BYOK API-Keys, niemals im Klartext).
+# Ohne Backend-Feature faellt keyring 3.x auf einen RAM-Mock-Store
+# zurueck (keine Persistenz) — der KEK ueberlebt dann keinen Neustart
+# und secrets.json wird unentschluesselbar. Die Plattform-Backends sind
+# target-gated, daher koennen alle drei Features parallel gesetzt werden.
+# `crypto-rust` vermeidet eine System-libssl-Build-Abhaengigkeit.
+keyring = { version = "3", features = [
+    "sync-secret-service",
+    "crypto-rust",
+    "windows-native",
+    "apple-native",
+] }
 
 # Encryption-at-rest fuer die secrets.json. AES-256-GCM auf Linux mit
 # einem Random-KEK aus dem OS-Keyring (libsecret/kwallet). Windows nutzt

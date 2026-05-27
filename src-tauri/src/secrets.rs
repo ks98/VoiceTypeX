@@ -409,7 +409,18 @@ fn load_v2(json: serde_json::Value, cipher: &Cipher) -> Result<HashMap<String, S
             cipher.method_name()
         )));
     }
-    let plaintext_bytes = cipher.decrypt(&ct)?;
+    // Same method but decryption fails → the KEK is gone or changed
+    // (e.g. OS keyring locked/unavailable, or a pre-fix mock-store KEK
+    // that never persisted). Surface this as actionable instead of
+    // letting the raw GCM error bubble up and read like "no key was
+    // ever set".
+    let plaintext_bytes = cipher.decrypt(&ct).map_err(|e| {
+        VoiceTypeError::Secrets(format!(
+            "secrets file is encrypted with '{}' but could not be decrypted ({e}) — \
+             the encryption key (OS keyring) is unavailable or changed; re-enter your API keys",
+            stored_method
+        ))
+    })?;
     let entries: HashMap<String, String> = serde_json::from_slice(&plaintext_bytes)
         .map_err(|e| VoiceTypeError::Secrets(format!("decrypted JSON parse: {e}")))?;
     Ok(entries)

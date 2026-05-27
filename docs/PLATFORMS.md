@@ -50,6 +50,7 @@ sudo apt-get install -y \
     libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev \
     libayatana-appindicator3-dev librsvg2-dev \
     libssl-dev \
+    libdbus-1-dev                # keyring -> dbus-secret-service (KEK fuer secrets.json at-rest) \
     libasound2-dev               # cpal (Audio-Aufnahme) \
     libxdo-dev                   # enigo (X11-Keystroke; auf Wayland nicht runtime-relevant) \
     libclang-dev cmake           # whisper-rs (bindgen + whisper.cpp-Build) \
