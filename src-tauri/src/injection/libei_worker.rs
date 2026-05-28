@@ -48,9 +48,6 @@ use xkbcommon::xkb;
 pub enum KeyCommand {
     /// Send Ctrl+V (press Ctrl, press V, release V, release Ctrl).
     CtrlV,
-    /// Send Ctrl+C — copies the focused app's selection so the
-    /// "Bearbeiten" feature can read it from the clipboard.
-    CtrlC,
     /// Shut down the worker cleanly.
     Shutdown,
 }
@@ -471,7 +468,6 @@ pub fn run_libei_worker(
         loop {
             match cmd_rx.try_recv() {
                 Ok(KeyCommand::CtrlV) => state.pending_key = Some(xkb::Keysym::v),
-                Ok(KeyCommand::CtrlC) => state.pending_key = Some(xkb::Keysym::c),
                 Ok(KeyCommand::Shutdown) => state.running = false,
                 Err(mpsc::TryRecvError::Empty) => break,
                 Err(mpsc::TryRecvError::Disconnected) => {

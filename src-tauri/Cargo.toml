@@ -138,6 +138,12 @@ reis = { version = "=0.6.1", features = ["tokio"] }
 # (z.B. Strg+V auf QWERTZ vs. QWERTY). Wird vom reis-Beispiel genutzt
 # und ist die kanonische Wahl.
 xkbcommon = "0.7"
+# arboard: liest die PRIMARY-Selection (markierter Text) fuer die
+# Bearbeiten-Modi direkt aus — auf X11 nativ, auf Wayland via
+# wlr/ext-data-control (Feature `wayland-data-control`), fokus-unabhaengig
+# und ohne Ctrl+C-Simulation. Bereits transitiv via
+# tauri-plugin-clipboard-manager im Baum; hier direkt nutzbar gemacht.
+arboard = { version = "3", features = ["wayland-data-control"] }
 
 [features]
 # Default ab Phase 3a: 'gpu-vulkan' — Vulkan deckt iGPU + AMD + Intel

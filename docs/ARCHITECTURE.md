@@ -131,10 +131,13 @@ neuer State:
    braucht aber die fokussierte Ziel-App). Gated auf Edit-Modus-Präsenz
    (`capture_selection_if_edit_modes`) — reine Diktier-Setups zahlen
    nichts. Das Ergebnis liegt in `AppContext.selection_buffer`.
-2. **Lesen** geschieht über `TextInjector::read_selection()`: Clipboard
-   sichern → Copy-Shortcut simulieren (enigo bzw. libei `Ctrl+C`) →
-   nach kurzer Wartezeit lesen → Clipboard wiederherstellen. „Nichts
-   markiert" wird über Vergleich mit dem gesicherten Inhalt erkannt.
+2. **Lesen** geschieht über `TextInjector::read_selection()`. Auf Linux
+   (X11 **und** Wayland) wird die **PRIMARY-Selection** direkt gelesen
+   (`injection::read_primary_selection_linux` via arboard; X11 nativ,
+   Wayland über wlr/ext-data-control) — fokus-unabhängig, ohne Ctrl+C,
+   ohne die CLIPBOARD-Zwischenablage anzufassen. Auf Windows (keine
+   PRIMARY-Selection) simuliert `ClipboardFallbackInjector` Ctrl+C und
+   liest die Zwischenablage (sichern → Copy → lesen → wiederherstellen).
 3. **Komposition** (`core::edit::compose_edit_input`): in
    `finish_recording_and_inject` wird bei `input == Selection` die
    Selektion + das transkribierte Diktat zu *einem* User-String

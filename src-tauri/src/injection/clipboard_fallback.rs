@@ -36,10 +36,10 @@ use tauri_plugin_notification::NotificationExt;
 const RESTORE_DELAY_MS: u64 = 200;
 
 /// How long to wait after the simulated copy shortcut before reading
-/// the clipboard. The target app needs a moment to service Ctrl+C and
-/// update the clipboard. Coarse fixed delay (matches the project's
-/// existing timing approach); a clipboard sequence-number poll would be
-/// a later refinement.
+/// the clipboard (Windows only — Linux reads PRIMARY directly). The
+/// target app needs a moment to service Ctrl+C and update the
+/// clipboard.
+#[cfg(target_os = "windows")]
 const COPY_SETTLE_MS: u64 = 120;
 
 pub struct ClipboardFallbackInjector {
@@ -125,48 +125,46 @@ impl TextInjector for ClipboardFallbackInjector {
     }
 
     async fn read_selection(&self) -> Result<Option<String>> {
-        let session = detect_session();
-
-        // We can only simulate the copy shortcut reliably where enigo's
-        // key path works (X11/Windows). On "auto_paste_supported =
-        // false" sessions (Wayland is routed to WaylandLibeiInjector;
-        // this covers unknown/headless) we cannot read the selection
-        // here.
-        if !session.auto_paste_supported {
-            tracing::debug!(
-                display_server = %session.display_server,
-                "read_selection: session has no key-simulation path, returning None"
-            );
-            return Ok(None);
+        // Linux (X11 via this injector): the highlighted text is in the
+        // PRIMARY selection — read it directly, focus-independent, no
+        // Ctrl+C simulation. Shared with the Wayland injector.
+        #[cfg(target_os = "linux")]
+        {
+            Ok(crate::injection::read_primary_selection_linux().await)
         }
 
-        let clipboard = self.app_handle.clipboard();
+        // Windows: no PRIMARY selection — simulate Ctrl+C and read the
+        // clipboard (save → copy → settle → read → restore), with a
+        // "nothing selected" heuristic (clipboard unchanged or empty).
+        // A false negative is possible if the selection equals the prior
+        // clipboard content — accepted edge case (see docs/PLATFORMS.md).
+        #[cfg(target_os = "windows")]
+        {
+            let clipboard = self.app_handle.clipboard();
+            let saved = clipboard.read_text().ok();
 
-        // Save the current clipboard so the user's content survives the
-        // copy round-trip — and so we can detect "nothing was selected"
-        // (Ctrl+C then leaves the clipboard unchanged).
-        let saved = clipboard.read_text().ok();
+            send_copy_shortcut().await?;
+            tokio::time::sleep(Duration::from_millis(COPY_SETTLE_MS)).await;
+            let after = clipboard.read_text().ok();
 
-        send_copy_shortcut().await?;
-        tokio::time::sleep(Duration::from_millis(COPY_SETTLE_MS)).await;
-        let after = clipboard.read_text().ok();
+            // We already read `after`, so restoring immediately is safe.
+            if let Some(prev) = &saved {
+                if let Err(e) = clipboard.write_text(prev.clone()) {
+                    tracing::warn!(error = %e, "Clipboard restore after selection read failed");
+                }
+            }
 
-        // Restore the original clipboard. We already read `after`, so
-        // restoring immediately is safe (unlike the paste path, which
-        // must keep the text long enough for Ctrl+V).
-        if let Some(prev) = &saved {
-            if let Err(e) = clipboard.write_text(prev.clone()) {
-                tracing::warn!(error = %e, "Clipboard restore after selection read failed");
+            match after {
+                Some(text) if !text.is_empty() && saved.as_ref() != Some(&text) => Ok(Some(text)),
+                _ => Ok(None),
             }
         }
 
-        // "Nothing selected" heuristic: the copy left the clipboard
-        // empty or unchanged. A false negative is possible if the
-        // selection text equals the prior clipboard content — accepted
-        // edge case (see docs/PLATFORMS.md).
-        match after {
-            Some(text) if !text.is_empty() && saved.as_ref() != Some(&text) => Ok(Some(text)),
-            _ => Ok(None),
+        // macOS: not implemented (would need the Accessibility API).
+        #[cfg(target_os = "macos")]
+        {
+            tracing::debug!("read_selection: not implemented on macOS");
+            Ok(None)
         }
     }
 }
@@ -224,9 +222,11 @@ async fn collapse_selection_for_action(action: OutputAction) -> Result<()> {
     .map_err(|e| VoiceTypeError::Injection(format!("spawn_blocking: {e}")))?
 }
 
-/// Send Cmd+C (macOS) or Ctrl+C (otherwise) via enigo to copy the
-/// current selection of the focused app. Mirror of
-/// `send_paste_shortcut`; enigo init can block, hence `spawn_blocking`.
+/// Send Ctrl+C via enigo to copy the current selection of the focused
+/// app (Windows only — Linux reads PRIMARY directly, see
+/// `read_primary_selection_linux`). enigo init can block, hence
+/// `spawn_blocking`.
+#[cfg(target_os = "windows")]
 async fn send_copy_shortcut() -> Result<()> {
     tokio::task::spawn_blocking(move || -> Result<()> {
         use enigo::{Direction, Enigo, Key, Keyboard, Settings};

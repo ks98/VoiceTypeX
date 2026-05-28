@@ -33,12 +33,6 @@ use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_notification::NotificationExt;
 use tokio::sync::Mutex;
 
-/// How long to wait after the libei Ctrl+C before reading the
-/// clipboard. libei adds compositor round-trip latency on top of the
-/// target app servicing the copy, so this is a touch longer than the
-/// enigo path's settle.
-const SELECTION_COPY_SETTLE_MS: u64 = 150;
-
 /// State of the RemoteDesktop portal session + libei worker.
 /// Initialized lazily; after a successful setup it stays alive for the
 /// app lifetime. On hard errors we go into `Failed` and log it once —
@@ -242,45 +236,13 @@ impl TextInjector for WaylandLibeiInjector {
     }
 
     async fn read_selection(&self) -> Result<Option<String>> {
-        // Copy the focused app's selection via libei Ctrl+C, then read
-        // it from the clipboard.
-        //
-        // Wayland caveat (needs manual verification, see
-        // docs/PLATFORMS.md): reading the clipboard while VoiceTypeX is
-        // not the focused surface can fail on compositors that gate
-        // clipboard access on focus and lack an ext-data-control path
-        // in the clipboard backend. On such setups this returns None
-        // and edit modes degrade to an empty selection rather than
-        // erroring.
-        let clipboard = self.app_handle.clipboard();
-        let saved = clipboard.read_text().ok();
-
-        let Some(cmd_tx) = self.ensure_session().await else {
-            tracing::debug!("read_selection: libei session unavailable, returning None");
-            return Ok(None);
-        };
-        if cmd_tx.send(KeyCommand::CtrlC).is_err() {
-            tracing::warn!("read_selection: libei cmd channel closed");
-            return Ok(None);
-        }
-
-        tokio::time::sleep(Duration::from_millis(SELECTION_COPY_SETTLE_MS)).await;
-        let after = clipboard.read_text().ok();
-
-        // Restore the original clipboard — `after` is already read.
-        if let Some(prev) = &saved {
-            if let Err(e) = clipboard.write_text(prev.clone()) {
-                tracing::warn!(error = %e, "Clipboard restore after selection read failed");
-            }
-        }
-
-        // "Nothing selected": copy left the clipboard empty or
-        // unchanged (same heuristic + false-negative edge as the X11
-        // path).
-        match after {
-            Some(text) if !text.is_empty() && saved.as_ref() != Some(&text) => Ok(Some(text)),
-            _ => Ok(None),
-        }
+        // Read the PRIMARY selection (the highlighted text) directly via
+        // wlr/ext-data-control. No libei Ctrl+C, no clipboard
+        // save/restore, no focus dependency, no settle timing — the
+        // highlighted text is in PRIMARY automatically. This sidesteps
+        // the fragile keystroke-injection path entirely (verified:
+        // arboard reads PRIMARY unfocused on KWin).
+        Ok(crate::injection::read_primary_selection_linux().await)
     }
 }
 

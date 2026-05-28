@@ -97,3 +97,40 @@ pub fn make_default_injector(
         app_handle,
     ))
 }
+
+/// Read the current PRIMARY selection (the highlighted text) on Linux.
+///
+/// Used by the edit-mode input side on both X11 and Wayland: the
+/// highlighted text lands in the PRIMARY selection automatically, so we
+/// read it directly — no Ctrl+C simulation, no clipboard save/restore,
+/// no keyboard focus needed. arboard reads PRIMARY natively on X11 and
+/// via wlr/ext-data-control on Wayland (`wayland-data-control` feature).
+/// Returns `None` when nothing is selected or PRIMARY is unavailable
+/// (some apps — certain Electron builds, terminals — do not populate it).
+///
+/// arboard's calls block (X11/Wayland round-trip), hence `spawn_blocking`.
+#[cfg(target_os = "linux")]
+pub(crate) async fn read_primary_selection_linux() -> Option<String> {
+    let joined = tokio::task::spawn_blocking(|| -> Option<String> {
+        use arboard::{Clipboard, GetExtLinux, LinuxClipboardKind};
+        let mut clipboard = Clipboard::new().ok()?;
+        let text = clipboard
+            .get()
+            .clipboard(LinuxClipboardKind::Primary)
+            .text()
+            .ok()?;
+        if text.is_empty() {
+            None
+        } else {
+            Some(text)
+        }
+    })
+    .await;
+    match joined {
+        Ok(opt) => opt,
+        Err(e) => {
+            tracing::warn!(error = %e, "read_primary_selection spawn_blocking failed");
+            None
+        }
+    }
+}

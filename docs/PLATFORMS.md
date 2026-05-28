@@ -252,15 +252,19 @@ Modi mit `input = "selection"` lesen den markierten Text der fokussierten
 Fremd-App und schreiben das Ergebnis zurück. Beides ist plattformabhängig
 und gehört zu den manuell zu verifizierenden Pfaden.
 
-**Lesen** (`TextInjector::read_selection`) nutzt überall denselben
-Ansatz: Clipboard sichern → Copy-Shortcut simulieren → kurz warten →
-Clipboard lesen → Clipboard wiederherstellen.
+**Lesen** (`TextInjector::read_selection`):
 
-| Plattform | Copy-Mechanismus | Status |
+| Plattform | Lese-Mechanismus | Status |
 |---|---|---|
-| Windows | `enigo` Ctrl+C (SendInput) | sollte zuverlässig sein, **manuell zu verifizieren** |
-| Linux X11 | `enigo` Ctrl+C (XTest) | sollte zuverlässig sein, **manuell zu verifizieren** |
-| Linux Wayland | libei Ctrl+C (RemoteDesktop-Portal) | **fragil**, compositor-abhängig (s. u.) |
+| Linux X11 | **PRIMARY-Selection** direkt (arboard, nativ) | fokus-unabhängig, ohne Ctrl+C |
+| Linux Wayland | **PRIMARY-Selection** via wlr/ext-data-control (arboard, Feature `wayland-data-control`) | verifiziert lesbar auf KWin (auch unfokussiert) |
+| Windows | `enigo` Ctrl+C → Clipboard sichern/lesen/wiederherstellen | **manuell zu verifizieren** |
+
+Auf Linux liegt der markierte Text automatisch in der PRIMARY-Selection
+(dem „Middle-Click-Paste"-Puffer) — er wird direkt gelesen, ohne
+Tastatur-Simulation, ohne Fokus, ohne die normale Zwischenablage
+(CLIPBOARD) anzufassen. Windows kennt keine PRIMARY-Selection, daher dort
+weiterhin der simulierte Ctrl+C-Weg.
 
 **Zurückschreiben** richtet sich nach `output`: `replace`/`insert` fügen
 direkt ein (Paste über eine aktive Selektion überschreibt sie);
@@ -277,31 +281,27 @@ direkt ein (Paste über eine aktive Selektion überschreibt sie);
    stehen, Antwort erscheint darunter.
 4. „Frei bearbeiten": je nach Anweisung ersetzen vs. anhängen
    (`@@`-Steuerzeile).
-5. Nichts markieren, Hotkey, Bearbeiten-Modus: darf nicht den alten
-   Clipboard-Inhalt als Selektion missdeuten (Log: „no captured
-   selection").
+5. Nichts markieren, Hotkey, Bearbeiten-Modus: PRIMARY ist leer → leere
+   Selektion (Log: `Eager selection capture captured=false`).
 
 ### Bekannte Grenzen & Risiken
 
-- **Selektion muss den Fokuswechsel überleben.** Beim Lesen vor dem Menü
-  ist die Ziel-App noch fokussiert; beim Zurückschreiben springt der
-  Fokus nach dem Menü zurück. Apps, die die Selektion beim Fokusverlust
-  verwerfen, brechen `append`/`prepend` (das Kollabieren findet dann
-  nichts vor). Editoren/Browser halten die Selektion i. d. R.
-- **„Keine Selektion"-Heuristik:** Erkennung über „Clipboard unverändert
-  oder leer nach Copy". Falsch-negativ, wenn der markierte Text zufällig
-  dem vorherigen Clipboard-Inhalt entspricht — seltener Edge-Case.
-- **Clipboard-Pollution:** War das Clipboard vorher leer, bleibt nach dem
-  Lesen die Selektion darin (kein Restore-Ziel). Nicht-Text-Inhalte
-  (Bild/Datei) überleben den Sicher-/Restore-Zyklus nicht — bewusst
-  akzeptiert.
-- **Wayland — Clipboard-Lesen ohne Fokus:** Das Lesen passiert, während
-  VoiceTypeX **nicht** die fokussierte Surface ist. Auf Compositors, die
-  Clipboard-Zugriff an den Fokus koppeln und deren Clipboard-Backend
-  keinen `ext-data-control`-Pfad hat, kann das fehlschlagen →
-  `read_selection` liefert `None`, Edit-Modi degradieren auf eine leere
-  Selektion (kein Fehler). Auf KDE Plasma 6 / GNOME 49+ erwartet
-  funktionsfähig; **pro Compositor zu verifizieren.**
+- **PRIMARY-Semantik (Linux):** PRIMARY enthält den *zuletzt markierten*
+  Text — egal in welchem Fenster. Hat der Nutzer nichts Frisches
+  markiert, wird eine veraltete/fremde Selektion gelesen. In der Praxis
+  unkritisch, weil der Workflow „markieren → sofort Hotkey" ist.
+- **Apps ohne PRIMARY (Linux):** Manche Chromium-/Electron-Builds und
+  einige Terminals füllen PRIMARY nicht zuverlässig → `read_selection`
+  liefert `None`, der Edit-Modus arbeitet dann auf leerer Selektion.
+- **`append`/`prepend` brauchen die überlebende Selektion (Output):** Das
+  Zurückschreiben kollabiert die Selektion per Pfeiltaste. Apps, die die
+  Selektion beim Fokuswechsel (Menü → Ziel-App) verwerfen, lassen das
+  Kollabieren ins Leere laufen. Das Lesen ist davon nicht betroffen
+  (PRIMARY persistiert fokus-unabhängig).
+- **Windows-`read_selection`-Heuristik:** „nichts markiert" wird über
+  „Clipboard nach Ctrl+C unverändert/leer" erkannt; falsch-negativ, wenn
+  die Selektion dem vorherigen Clipboard-Inhalt entspricht — seltener
+  Edge-Case. (Linux/PRIMARY ist davon nicht betroffen.)
 - **Wayland — `append`/`prepend`:** Die Kollaps-Pfeiltaste wird auf
   Wayland noch nicht über libei gesendet; dort landen diese Aktionen am
   Cursor (wie `replace`). `replace`/`insert` funktionieren. Offener
