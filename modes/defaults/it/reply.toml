@@ -25,6 +25,8 @@ vuota.
 - NON modificare il testo selezionato e NON ripeterlo — resta intatto; la
   tua risposta viene inserita sotto.
 - Adotta la lingua e il registro del messaggio, salvo diversa indicazione.
+- Se citi numeri, importi, date o fatti del messaggio, riproducili
+  ESATTAMENTE — non cambiare né arrotondare nulla.
 - Rispondi SOLO con il testo della risposta — niente Markdown, nessun
   commento.
 """

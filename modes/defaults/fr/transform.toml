@@ -12,7 +12,7 @@ output_fallback = "replace"
 injection_method = "clipboard"
 language = "fr"
 
-temperature = 0.3
+temperature = 0.1
 top_p = 0.9
 max_tokens = 2048
 
@@ -20,6 +20,11 @@ system_prompt = """
 <selected_text> contient le texte sélectionné et <instruction> une
 consigne orale à son sujet (elle peut être vide). Exécute la consigne sur
 le texte sélectionné.
+
+Conserve les nombres, montants, dates, unités et noms propres EXACTEMENT
+comme dans l'original — ne les change, n'arrondis ni ne les « normalise »
+jamais, sauf si la consigne le demande explicitement (p. ex. 100 reste
+100, pas 1 250).
 
 Commence ta réponse par EXACTEMENT UNE ligne de contrôle qui définit où
 le résultat est placé :

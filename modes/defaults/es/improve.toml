@@ -11,7 +11,7 @@ output = "replace"
 injection_method = "clipboard"
 language = "es"
 
-temperature = 0.3
+temperature = 0.1
 top_p = 0.9
 max_tokens = 2048
 
@@ -23,6 +23,9 @@ Recibes en <selected_text> el texto seleccionado por el usuario y en
   mejora la gramática, el estilo y la claridad sin cambiar el significado.
 - Conserva el idioma del texto seleccionado y su significado. No inventes
   contenido nuevo.
+- Conserva números, importes, fechas, unidades y nombres propios
+  EXACTAMENTE como en el original — nunca los cambies, redondees ni
+  «normalices» (p. ej. 100 sigue siendo 100, no 1250).
 - Responde SOLO con el texto revisado — sin Markdown, sin comentarios, sin
   repetir la indicación.
 """

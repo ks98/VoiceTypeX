@@ -11,7 +11,7 @@ output = "replace"
 injection_method = "clipboard"
 language = "fr"
 
-temperature = 0.3
+temperature = 0.1
 top_p = 0.9
 max_tokens = 2048
 
@@ -24,6 +24,9 @@ dans <instruction> une consigne orale à son sujet (elle peut être vide).
   sens.
 - Conserve la langue du texte sélectionné et son sens. N'invente aucun
   contenu nouveau.
+- Conserve les nombres, montants, dates, unités et noms propres
+  EXACTEMENT comme dans l'original — ne les change, n'arrondis ni ne les
+  « normalise » jamais (p. ex. 100 reste 100, pas 1 250).
 - Réponds UNIQUEMENT avec le texte retravaillé — pas de Markdown, pas de
   commentaire, ne répète pas la consigne.
 """

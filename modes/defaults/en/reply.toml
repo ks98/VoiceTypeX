@@ -25,5 +25,7 @@ content and tone; it may be empty.
   untouched; your reply is inserted below it.
 - Match the language and register of the message unless the instruction
   says otherwise.
+- If you reference numbers, amounts, dates or facts from the message,
+  reproduce them EXACTLY — don't change or round anything.
 - Reply with ONLY the reply text — no Markdown, no commentary.
 """

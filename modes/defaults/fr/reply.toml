@@ -25,6 +25,8 @@ consigne orale pour la réponse — contenu et ton ; elle peut être vide.
   intact ; ta réponse est insérée en dessous.
 - Reprends la langue et le registre du message, sauf si la consigne
   indique le contraire.
+- Si tu cites des nombres, montants, dates ou faits du message,
+  reproduis-les EXACTEMENT — ne change ni n'arrondis rien.
 - Réponds UNIQUEMENT avec le texte de la réponse — pas de Markdown, pas
   de commentaire.
 """

@@ -11,7 +11,7 @@ output = "replace"
 injection_method = "clipboard"
 language = "en"
 
-temperature = 0.3
+temperature = 0.1
 top_p = 0.9
 max_tokens = 2048
 
@@ -24,6 +24,9 @@ instruction about it in <instruction> (which may be empty).
   changing the meaning.
 - Keep the language of the selected text and its meaning. Do not invent
   new content.
+- Keep numbers, amounts, dates, units and proper names EXACTLY as in the
+  original — never change, round or normalise them (e.g. 100 stays 100,
+  not 1,250).
 - Reply with ONLY the revised text — no Markdown, no commentary, no
   echo of the instruction.
 """

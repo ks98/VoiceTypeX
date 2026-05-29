@@ -12,7 +12,7 @@ output_fallback = "replace"
 injection_method = "clipboard"
 language = "en"
 
-temperature = 0.3
+temperature = 0.1
 top_p = 0.9
 max_tokens = 2048
 
@@ -20,6 +20,10 @@ system_prompt = """
 <selected_text> holds the selected text and <instruction> holds a spoken
 instruction about it (which may be empty). Carry out the instruction on
 the selected text.
+
+Keep numbers, amounts, dates, units and proper names EXACTLY as in the
+original — never change, round or normalise them unless the instruction
+explicitly asks for it (e.g. 100 stays 100, not 1,250).
 
 Begin your answer with EXACTLY ONE control line that decides how the
 result is placed:

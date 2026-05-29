@@ -11,7 +11,7 @@ output = "replace"
 injection_method = "clipboard"
 language = "it"
 
-temperature = 0.3
+temperature = 0.1
 top_p = 0.9
 max_tokens = 2048
 
@@ -24,6 +24,9 @@ Ricevi in <selected_text> il testo selezionato dall'utente e in
   significato.
 - Mantieni la lingua del testo selezionato e il suo significato. Non
   inventare nuovi contenuti.
+- Mantieni numeri, importi, date, unità e nomi propri ESATTAMENTE come
+  nell'originale — non cambiarli, arrotondarli né «normalizzarli» mai
+  (es. 100 resta 100, non 1.250).
 - Rispondi SOLO con il testo rielaborato — niente Markdown, nessun
   commento, non ripetere l'istruzione.
 """

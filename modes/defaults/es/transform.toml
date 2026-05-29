@@ -12,7 +12,7 @@ output_fallback = "replace"
 injection_method = "clipboard"
 language = "es"
 
-temperature = 0.3
+temperature = 0.1
 top_p = 0.9
 max_tokens = 2048
 
@@ -20,6 +20,11 @@ system_prompt = """
 <selected_text> contiene el texto seleccionado e <instruction> una
 indicación hablada al respecto (puede estar vacía). Ejecuta la indicación
 sobre el texto seleccionado.
+
+Conserva números, importes, fechas, unidades y nombres propios
+EXACTAMENTE como en el original — nunca los cambies, redondees ni
+«normalices», salvo que la indicación lo pida explícitamente (p. ej. 100
+sigue siendo 100, no 1250).
 
 Empieza tu respuesta con EXACTAMENTE UNA línea de control que decide dónde
 se coloca el resultado:
