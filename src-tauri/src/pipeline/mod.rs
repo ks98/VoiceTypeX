@@ -293,6 +293,8 @@ async fn streaming_worker(
             language: language.clone(),
             initial_prompt: initial_prompt.clone(),
             n_threads,
+            // Streaming pass is greedy — beam width is irrelevant here.
+            beam_size: None,
         };
 
         let started = std::time::Instant::now();
@@ -463,7 +465,15 @@ async fn finish_recording_and_inject(
 
     // Settings read here before the await — the parking_lot
     // RwLockReadGuard is not Send and must not live across await points.
-    let n_threads = ctx.settings.read().whisper_n_threads;
+    // Effective beam width: a per-mode override wins over the global
+    // default. Only the local final pass uses it; cloud STT ignores it.
+    let (n_threads, beam_size) = {
+        let s = ctx.settings.read();
+        (
+            s.whisper_n_threads,
+            mode.whisper_beam_size.unwrap_or(s.whisper_beam_size),
+        )
+    };
     let transcript = transcriber
         .transcribe_oneshot(
             &wav,
@@ -471,6 +481,7 @@ async fn finish_recording_and_inject(
                 language: mode.language.clone(),
                 initial_prompt: mode.initial_prompt.clone(),
                 n_threads,
+                beam_size: Some(beam_size),
             },
         )
         .await

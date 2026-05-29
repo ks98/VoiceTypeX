@@ -120,6 +120,7 @@ impl Transcriber for LocalTranscriber {
         let language = opts.language.clone();
         let initial_prompt = opts.initial_prompt.clone();
         let n_threads_override = opts.n_threads;
+        let beam_size_override = opts.beam_size;
 
         tokio::task::spawn_blocking(move || -> Result<String> {
             run_whisper_blocking(
@@ -130,6 +131,7 @@ impl Transcriber for LocalTranscriber {
                 language,
                 initial_prompt,
                 n_threads_override,
+                beam_size_override,
                 DecodeProfile::Final,
             )
         })
@@ -162,6 +164,9 @@ impl LocalTranscriber {
         let language = opts.language.clone();
         let initial_prompt = opts.initial_prompt.clone();
         let n_threads_override = opts.n_threads;
+        // Streaming pass is greedy regardless of beam_size — pass it
+        // through for a uniform call, the Streaming arm ignores it.
+        let beam_size_override = opts.beam_size;
 
         tokio::task::spawn_blocking(move || -> Result<String> {
             run_whisper_blocking(
@@ -172,6 +177,7 @@ impl LocalTranscriber {
                 language,
                 initial_prompt,
                 n_threads_override,
+                beam_size_override,
                 DecodeProfile::Streaming,
             )
         })
@@ -193,6 +199,7 @@ fn run_whisper_blocking(
     language: Option<String>,
     initial_prompt: Option<String>,
     n_threads_override: Option<u32>,
+    beam_size_override: Option<u32>,
     profile: DecodeProfile,
 ) -> Result<String> {
     let guard = ctx.read();
@@ -208,16 +215,17 @@ fn run_whisper_blocking(
         .map_err(|e| VoiceTypeError::Transcription(format!("create_state: {e}")))?;
 
     // Sampling choice depends on the profile:
-    // - Final: BeamSearch (size=5, patience=1.0) — ~2-3 % WER
-    //   improvement over greedy, ~3x slower per decode step. OK for
-    //   oneshot.
+    // - Final: BeamSearch (patience=1.0) — ~2-3 % WER improvement over
+    //   greedy at ~beam× the decode cost. The beam width is
+    //   configurable (Settings.whisper_beam_size + per-mode override);
+    //   default 5, clamped to 1..=10 (1 ≈ greedy).
     // - Streaming: greedy with best_of=1 — fastest variant, because
     //   partials are overwritten anyway as soon as the next pass
     //   delivers a stable prefix. Quality is caught up in the final
-    //   pass.
+    //   pass. `beam_size_override` is ignored here.
     let sampling = match profile {
         DecodeProfile::Final => SamplingStrategy::BeamSearch {
-            beam_size: 5,
+            beam_size: beam_size_override.unwrap_or(5).clamp(1, 10) as i32,
             patience: 1.0,
         },
         DecodeProfile::Streaming => SamplingStrategy::Greedy { best_of: 1 },

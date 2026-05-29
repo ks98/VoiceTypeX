@@ -378,9 +378,25 @@ export default function Settings(): JSX.Element {
           </Field>
 
           <Field
-            label={t("settings.llm.label")}
-            hint={t("settings.llm.hint")}
+            label={t("settings.beam_size.label")}
+            hint={t("settings.beam_size.hint")}
           >
+            <input
+              type="number"
+              min={1}
+              max={10}
+              className={`${inputCls} w-32`}
+              value={settings.whisper_beam_size}
+              onChange={(e) => {
+                const n = parseInt(e.target.value, 10);
+                if (!Number.isNaN(n) && n >= 1 && n <= 10) {
+                  void update({ whisper_beam_size: n });
+                }
+              }}
+            />
+          </Field>
+
+          <Field label={t("settings.llm.label")} hint={t("settings.llm.hint")}>
             <select
               className={inputCls}
               value={settings.llm_default_slot}
@@ -719,10 +735,7 @@ function MenuHotkeyField({
   }
 
   return (
-    <Field
-      label={t("settings.hotkey.label")}
-      hint={t("settings.hotkey.hint")}
-    >
+    <Field label={t("settings.hotkey.label")} hint={t("settings.hotkey.hint")}>
       <input
         type="text"
         className={`${inputCls} font-mono w-72`}
@@ -880,9 +893,7 @@ function CacheManagementField(): JSX.Element {
       const list = await ipcListCachedFiles();
       setFiles(list);
     } catch (e) {
-      setStatus(
-        t("settings.cache.status.list_failed", { message: String(e) }),
-      );
+      setStatus(t("settings.cache.status.list_failed", { message: String(e) }));
     }
   };
 
@@ -988,10 +999,7 @@ function CacheManagementField(): JSX.Element {
   const totalBytes = files?.reduce((sum, f) => sum + f.size_bytes, 0) ?? 0;
 
   return (
-    <Field
-      label={t("settings.cache.label")}
-      hint={t("settings.cache.hint")}
-    >
+    <Field label={t("settings.cache.label")} hint={t("settings.cache.hint")}>
       <div className="flex flex-col gap-3">
         {files === null ? (
           <Loading label={t("settings.cache.loading")} inline />
@@ -1118,10 +1126,7 @@ function DangerZoneSection(): JSX.Element {
     );
 
   return (
-    <Field
-      label={t("settings.danger.label")}
-      hint={t("settings.danger.hint")}
-    >
+    <Field label={t("settings.danger.label")} hint={t("settings.danger.hint")}>
       <div className="rounded-md border border-status-error/40 bg-status-error/5 p-3 flex flex-col gap-3">
         <DangerRow
           title={t("settings.danger.api_keys.title")}
@@ -1160,9 +1165,7 @@ function DangerZoneSection(): JSX.Element {
         {status ? (
           <div
             className={`text-xs ${
-              status.kind === "ok"
-                ? "text-status-done"
-                : "text-status-error"
+              status.kind === "ok" ? "text-status-done" : "text-status-error"
             }`}
           >
             {status.text}

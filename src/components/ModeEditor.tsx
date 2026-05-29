@@ -77,6 +77,7 @@ function emptyMode(): Mode {
     embedded_llm_slot: null,
     whisper_model_slot: null,
     initial_prompt: null,
+    whisper_beam_size: null,
     injection_method: "clipboard",
     input: "voice",
     output: "insert",
@@ -199,6 +200,7 @@ export default function ModeEditor({
         local_llm_model: null,
         whisper_model_slot: isLocalSTT ? draft.whisper_model_slot : null,
         initial_prompt: isLocalSTT ? draft.initial_prompt : null,
+        whisper_beam_size: isLocalSTT ? draft.whisper_beam_size : null,
         system_prompt: needsSystemPrompt ? draft.system_prompt : null,
         // A voice mode always injects at the cursor; only selection
         // modes carry replace/append/prepend/auto.
@@ -389,6 +391,17 @@ export default function ModeEditor({
                     }
                   />
                 </Field>
+                <NumField
+                  t={t}
+                  label={t("mode_editor.stt.beam_size.label")}
+                  hint={t("mode_editor.stt.beam_size.hint")}
+                  value={draft.whisper_beam_size}
+                  onChange={(v) => update("whisper_beam_size", v)}
+                  min={1}
+                  max={10}
+                  step={1}
+                  integer
+                />
               </>
             ) : null}
           </Section>

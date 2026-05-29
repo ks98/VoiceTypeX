@@ -45,6 +45,9 @@ export interface Mode {
   whisper_model_slot: string | null;
   /** Phase 3b: Whisper initial prompt (glossary / proper-name hints). */
   initial_prompt: string | null;
+  /** Per-mode override of the final-pass beam width. null = use the
+   * global Settings.whisper_beam_size. Range 1..=10 (1 ≈ greedy). */
+  whisper_beam_size: number | null;
   injection_method: InjectionMethod;
   /** Input side of edit modes: "voice" (dictation) or "selection"
    * (read the focused app's selection and transform it). */
@@ -80,6 +83,10 @@ export interface Settings {
   llm_model_path: string | null;
   onboarding_done: boolean;
   whisper_n_threads: number | null;
+  /** Beam width for the local Whisper final pass (BeamSearch). Default
+   * 5; 1 ≈ greedy/fastest, higher = slightly more accurate + slower.
+   * Clamped to 1..=10. Per-mode Mode.whisper_beam_size overrides it. */
+  whisper_beam_size: number;
   menu_hotkey: string;
   last_selected_mode_id: string | null;
   /**

@@ -128,7 +128,10 @@ pub async fn run_test_transcription(
         .map_err(|e| e.to_string())?;
 
     let start = Instant::now();
-    let n_threads = state.settings.read().whisper_n_threads;
+    let (n_threads, beam_size) = {
+        let s = state.settings.read();
+        (s.whisper_n_threads, s.whisper_beam_size)
+    };
     // The test endpoint leaves the language open — Whisper
     // auto-detect. Previously hardcoded "de", which broke English
     // testers. Anyone who wants to test a specific language uses a
@@ -141,6 +144,7 @@ pub async fn run_test_transcription(
                 language: None,
                 initial_prompt: None,
                 n_threads,
+                beam_size: Some(beam_size),
             },
         )
         .await;

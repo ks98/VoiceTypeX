@@ -86,6 +86,13 @@ pub struct Settings {
     #[serde(default)]
     pub whisper_n_threads: Option<u32>,
 
+    /// Beam width for the local Whisper **final** pass (BeamSearch).
+    /// Default 5. Lower = faster, slightly less accurate (`1` ≈ greedy,
+    /// ~beam× cheaper). Clamped to `1..=10` at use. A per-mode
+    /// `Mode.whisper_beam_size` overrides this; cloud STT ignores it.
+    #[serde(default = "default_whisper_beam_size")]
+    pub whisper_beam_size: u32,
+
     /// Global hotkey that opens the mode-selection menu. Exactly one
     /// hotkey for the whole app — the individual modes no longer have
     /// their own hotkeys.
@@ -160,6 +167,7 @@ impl Default for Settings {
             llm_model_path: None,
             onboarding_done: false,
             whisper_n_threads: None,
+            whisper_beam_size: default_whisper_beam_size(),
             menu_hotkey: default_menu_hotkey(),
             last_selected_mode_id: None,
             locale: None,
@@ -220,6 +228,10 @@ fn default_llm_slot() -> String {
     // latency on 16 GB setups. Power users can switch to
     // "gemma3-4b-it-q5_k_m" in settings once they have 16+ GB RAM.
     "gemma3-1b-it-q5_k_m".to_string()
+}
+
+fn default_whisper_beam_size() -> u32 {
+    5
 }
 
 fn default_whisper_slot() -> String {

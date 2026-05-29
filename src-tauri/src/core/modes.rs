@@ -120,6 +120,13 @@ pub struct Mode {
     #[serde(default)]
     pub initial_prompt: Option<String>,
 
+    /// Per-mode override of the final-pass beam width. `None` = use the
+    /// global `Settings.whisper_beam_size` (default 5). Only affects
+    /// `transcription = "local"`; cloud STT ignores it. Range 1..=10
+    /// (1 ≈ greedy/fastest, higher = slightly more accurate + slower).
+    #[serde(default)]
+    pub whisper_beam_size: Option<u32>,
+
     // --- LLM configuration ---
     #[serde(default)]
     pub cloud_llm_provider: Option<String>,
@@ -338,6 +345,14 @@ impl Mode {
             if !(1..=8192).contains(&m) {
                 return Err(VoiceTypeError::Mode(format!(
                     "Mode '{}': max_tokens {m} ausserhalb [1, 8192]",
+                    self.id
+                )));
+            }
+        }
+        if let Some(b) = self.whisper_beam_size {
+            if !(1..=10).contains(&b) {
+                return Err(VoiceTypeError::Mode(format!(
+                    "Mode '{}': whisper_beam_size {b} out of range [1, 10]",
                     self.id
                 )));
             }
@@ -780,6 +795,36 @@ mod tests {
             output = "auto"
             output_fallback = "auto"
             system_prompt = "x"
+        "#,
+        )
+        .unwrap_err();
+        assert!(matches!(err, VoiceTypeError::Mode(_)));
+    }
+
+    #[test]
+    fn whisper_beam_size_override_parses() {
+        let m = parse(
+            r#"
+            id = "fast"
+            name = "Fast dictation"
+            transcription = "local"
+            processing = "none"
+            whisper_beam_size = 2
+        "#,
+        )
+        .unwrap();
+        assert_eq!(m.whisper_beam_size, Some(2));
+    }
+
+    #[test]
+    fn whisper_beam_size_out_of_range_fails() {
+        let err = parse(
+            r#"
+            id = "broken"
+            name = "Broken"
+            transcription = "local"
+            processing = "none"
+            whisper_beam_size = 0
         "#,
         )
         .unwrap_err();

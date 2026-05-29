@@ -48,6 +48,12 @@ pub struct TranscribeOpts {
     /// Relevant only for `LocalTranscriber`; cloud transcribers
     /// ignore it.
     pub n_threads: Option<u32>,
+    /// Beam width for the local final-pass BeamSearch. `None` = the
+    /// built-in default (5). Higher = slightly more accurate, markedly
+    /// slower (~beam× decode cost); 1 ≈ greedy. Relevant only for
+    /// `LocalTranscriber`'s final pass; the streaming pass is greedy
+    /// regardless, and cloud transcribers ignore it.
+    pub beam_size: Option<u32>,
 }
 
 #[async_trait]

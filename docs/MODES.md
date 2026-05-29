@@ -161,6 +161,13 @@ embedded_llm_slot = "gemma4-e4b-it-q5_k_m"  # null = globaler Default
 
 # Nur wenn transcription = "local" — Override des globalen Whisper-Slots:
 whisper_model_slot = "large-v3-turbo-q8_0"  # null = globaler Default
+
+# Nur wenn transcription = "local" — Override der Beam-Breite des
+# Final-Pass. null = globaler Default (Settings.whisper_beam_size, = 5).
+# Bereich 1..=10: niedriger = schneller (1 ≈ greedy), höher = minimal
+# genauer + langsamer. Cloud-STT ignoriert es.
+whisper_beam_size = 5
+
 initial_prompt = """
 Optionaler Whisper-Glossar — Eigennamen, Fachbegriffe oder Schreibweisen,
 die der Decoder als Kontext bekommen soll.
