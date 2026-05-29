@@ -33,7 +33,12 @@ eigenständig — kein künstlicher Shared-Wrapper.
 - **Auth:** Bearer-Header (`Authorization: Bearer <api_key>`)
 - **Body:** `multipart/form-data`
 - **Wichtig:** `file` muss das **letzte** Multipart-Feld sein.
-  Andere Felder (z.B. `model`, `response_format`) davor.
+  Optionale Felder (z.B. `language`) davor.
+- **Kein `model`-Feld:** Anders als die Whisper-kompatiblen Provider
+  akzeptiert `/v1/stt` **kein** `model`- und **kein** `initial_prompt`-
+  Feld (offizielle Doku, Stand Mai 2026 — nur `file`/`url` plus Flags
+  wie `language`/`diarize`/`keyterm`). Frühere Versionen schickten ein
+  erfundenes `model = "stt-1"` mit; das wurde entfernt.
 - **Response:** `{ text, language, duration, words[] }` — wir nutzen
   nur `text`.
 - **Sprach-Erzwingung:** keine. xAI's `language`-Parameter steuert nur

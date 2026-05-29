@@ -10,12 +10,9 @@ use crate::transcription::{TranscribeOpts, Transcriber};
 use async_trait::async_trait;
 use serde::Deserialize;
 
-const DEFAULT_MODEL: &str = "stt-1";
-
 pub struct XaiTranscriber {
     api_key: String,
     base_url: String,
-    model: String,
     client: reqwest::Client,
 }
 
@@ -24,7 +21,6 @@ impl XaiTranscriber {
         Self {
             api_key,
             base_url: "https://api.x.ai/v1".to_string(),
-            model: DEFAULT_MODEL.to_string(),
             client: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(120))
                 .build()
@@ -50,12 +46,14 @@ impl Transcriber for XaiTranscriber {
                 .mime_str("audio/wav")
                 .map_err(|e| VoiceTypeError::Transcription(format!("multipart-Part: {e}")))?;
 
-            let mut form = reqwest::multipart::Form::new().text("model", self.model.clone());
+            // xAI `/v1/stt` accepts no `model` and no `initial_prompt`
+            // field (verified against the official docs — only `file`/
+            // `url` plus optional flags like `language`). Sending them
+            // was a no-op at best and a latent 4xx risk. `file` must be
+            // the LAST field.
+            let mut form = reqwest::multipart::Form::new();
             if let Some(lang) = opts.language.as_deref() {
                 form = form.text("language", lang.to_string());
-            }
-            if let Some(prompt) = opts.initial_prompt.as_deref() {
-                form = form.text("initial_prompt", prompt.to_string());
             }
             let form = form.part("file", part);
 
