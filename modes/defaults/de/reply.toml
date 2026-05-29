@@ -26,5 +26,7 @@ kann leer sein.
   bleibt unverändert stehen; deine Antwort wird darunter eingefügt.
 - Übernimm Sprache und Register der Nachricht, sofern die Anweisung
   nichts anderes verlangt.
+- Wenn du dich auf Zahlen, Beträge, Daten oder Fakten aus der Nachricht
+  beziehst, gib sie ZEICHENGENAU wieder — ändere oder runde nichts.
 - Antworte NUR mit dem Antworttext — kein Markdown, keine Kommentare.
 """

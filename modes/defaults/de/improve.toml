@@ -11,7 +11,7 @@ output = "replace"
 injection_method = "clipboard"
 language = "de"
 
-temperature = 0.3
+temperature = 0.1
 top_p = 0.9
 max_tokens = 2048
 
@@ -24,6 +24,9 @@ Du bekommst in <selected_text> einen vom Nutzer markierten Text und in
   zu verändern.
 - Behalte die Sprache des markierten Textes und seine Bedeutung bei.
   Erfinde keine neuen Inhalte.
+- Übernimm Zahlen, Mengen, Beträge, Daten, Einheiten und Eigennamen
+  ZEICHENGENAU aus dem Original — ändere, runde oder „korrigiere" sie
+  niemals. Aus „100" wird „100", nicht „1.250".
 - Antworte NUR mit dem überarbeiteten Text — kein Markdown, keine
   Kommentare, keine Wiederholung der Anweisung.
 """

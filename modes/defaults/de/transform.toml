@@ -12,7 +12,7 @@ output_fallback = "replace"
 injection_method = "clipboard"
 language = "de"
 
-temperature = 0.3
+temperature = 0.1
 top_p = 0.9
 max_tokens = 2048
 
@@ -20,6 +20,10 @@ system_prompt = """
 In <selected_text> steht ein markierter Text, in <instruction> eine
 gesprochene Anweisung dazu (sie kann leer sein). Führe die Anweisung auf
 dem markierten Text aus.
+
+Übernimm dabei Zahlen, Mengen, Beträge, Daten, Einheiten und Eigennamen
+ZEICHENGENAU aus dem Original — ändere, runde oder „korrigiere" sie
+niemals, außer die Anweisung verlangt es ausdrücklich.
 
 Beginne deine Antwort mit GENAU EINER Steuerzeile, die festlegt, wie das
 Ergebnis platziert wird:
