@@ -134,6 +134,9 @@ Für Linux-Bundle-Build inkl. RPM zusätzlich `rpmbuild` installieren
 Details, Output-Pfade und Installations-Anleitung in
 [`docs/PLATFORMS.md`](docs/PLATFORMS.md) → *„Distribution-Bundles"*.
 
+**Release schneiden** (Version bumpen, taggen, CI-Pipeline, Auto-Update,
+Signing-Key): siehe [`docs/RELEASING.md`](docs/RELEASING.md).
+
 ## Erste Schritte
 
 1. **App starten:** `pnpm tauri dev`. Tray-Icon erscheint im System-Tray

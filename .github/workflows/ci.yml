@@ -9,7 +9,18 @@ name: CI
 on:
   push:
     branches: [main]
+    # Reine Doku-Aenderungen loesen den schweren nativen Build nicht aus.
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "LICENSE"
+      - "COPYING"
   pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "LICENSE"
+      - "COPYING"
 
 # Laufende PR-Checks abbrechen, wenn ein neuer Commit gepusht wird.
 concurrency:
