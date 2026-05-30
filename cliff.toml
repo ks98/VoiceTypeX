@@ -1,0 +1,74 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# git-cliff Konfiguration fuer VoiceTypeX — generiert CHANGELOG.md und den
+# GitLab-Release-Body aus Conventional Commits.
+#
+# Erzeugen:
+#   git cliff --latest --strip header -o release_notes.md   # nur das aktuelle Tag (CI-Release-Body)
+#   git cliff -o CHANGELOG.md                                # vollstaendiger Changelog
+#   git cliff --unreleased                                   # Vorschau der noch ungetaggten Commits
+#
+# WICHTIG: Wenn ein NEUER Commit-Type eingefuehrt wird, hier in
+# `commit_parsers` ergaenzen — sonst faellt er in den Catch-all und
+# verschwindet aus dem Changelog (das gilt insb. fuer das projekteigene
+# `tune:`, das hier explizit als eigene Gruppe gefuehrt wird).
+
+[changelog]
+header = """
+# Changelog
+
+Alle nennenswerten Aenderungen an VoiceTypeX. Format orientiert an
+[Keep a Changelog](https://keepachangelog.com/), Versionierung nach
+[Semantic Versioning](https://semver.org/).
+"""
+body = """
+{% if version %}\
+    ## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+    ## [unreleased]
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+    ### {{ group | striptags | trim | upper_first }}
+    {% for commit in commits %}
+        - {% if commit.scope %}*({{ commit.scope }})* {% endif %}\
+            {% if commit.breaking %}[**breaking**] {% endif %}\
+            {{ commit.message | upper_first }}\
+    {% endfor %}
+{% endfor %}\n
+"""
+trim = true
+footer = ""
+
+[git]
+# Nur Conventional Commits beruecksichtigen; alles andere rausfiltern.
+conventional_commits = true
+filter_unconventional = true
+split_commits = false
+# Reihenfolge der Gruppen wird ueber das versteckte `<!-- N -->`-Praefix
+# gesteuert (group_by sortiert lexikografisch), das `striptags` im Template
+# fuer die Anzeige wieder entfernt.
+commit_parsers = [
+    { message = "^feat", group = "<!-- 0 -->🚀 Features" },
+    { message = "^fix", group = "<!-- 1 -->🐛 Bug Fixes" },
+    { message = "^perf", group = "<!-- 2 -->⚡ Performance" },
+    { message = "^tune", group = "<!-- 3 -->🎚️ Tuning" },
+    { message = "^refactor", group = "<!-- 4 -->♻️ Refactor" },
+    { message = "^docs", group = "<!-- 5 -->📝 Documentation" },
+    { message = "^diag", group = "<!-- 6 -->🔍 Diagnostics" },
+    { message = "^chore\\(deps\\)", group = "<!-- 7 -->📦 Dependencies" },
+    # Rausch-Typen tauchen nicht im User-Changelog auf.
+    { message = "^chore\\(release\\)", skip = true },
+    { message = "^chore", skip = true },
+    { message = "^test", skip = true },
+    { message = "^ci", skip = true },
+    { message = "^build", skip = true },
+    # Catch-all: alles bisher Unerfasste explizit verwerfen, damit keine
+    # gruppenlosen Eintraege im Changelog landen. Neue Types VORHER oben
+    # ergaenzen.
+    { message = ".*", skip = true },
+]
+protect_breaking_commits = false
+filter_commits = false
+tag_pattern = "v[0-9].*"
+topo_order = false
+sort_commits = "oldest"
