@@ -59,6 +59,12 @@ jobs:
         run: pnpm lint
       - name: prettier
         run: pnpm format:check
+      # clippy hat oben den ggml/llama-Build erzeugt; vor dem ZWEITEN Build
+      # (cargo test) die dangling libggml*/libllama-Links raeumen, sonst
+      # panict llama-cpp-sys-2 0.1.146 (Os code 17, AlreadyExists) — derselbe
+      # TOC/TOU-Bug, den scripts/clean-dangling-libs.mjs adressiert.
+      - name: Clean dangling GPU libs before the second build
+        run: node scripts/clean-dangling-libs.mjs
       - name: cargo test
         run: cargo test --manifest-path src-tauri/Cargo.toml --lib
       - name: vitest
