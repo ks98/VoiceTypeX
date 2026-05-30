@@ -488,5 +488,12 @@
   "settings.update.downloading": "Descargando… {current} de {total}",
   "settings.update.downloading_indeterminate": "Descargando… {current}",
   "settings.update.installing": "Instalando — la aplicación se reiniciará…",
-  "settings.update.error": "Error en la actualización: {message}"
+  "settings.update.error": "Error en la actualización: {message}",
+
+  "settings.windows.local_llm.hint": "LLM local en Windows",
+  "settings.windows.local_llm.body": "El LLM integrado (embedded) aún no está disponible en Windows. Para el posprocesamiento local, instala Ollama y selecciónalo por modo; de lo contrario, usa un proveedor en la nube. El reconocimiento de voz sigue siendo totalmente local.",
+  "mode_editor.llm.engine.windows_no_embedded": "El motor integrado no está disponible en Windows. Este modo usa Ollama — indica una etiqueta de modelo abajo (requiere tu propia instalación de Ollama) o cambia el posprocesamiento a un proveedor en la nube.",
+  "wizard.windows_local.title": "LLM local (opcional)",
+  "wizard.windows_local.body": "En Windows, el LLM integrado todavía no se incluye. Puedes omitir este paso: el dictado funciona de forma totalmente local y la limpieza de texto se realiza mediante un proveedor en la nube.",
+  "wizard.windows_local.hint": "¿Quieres un LLM totalmente local? Instala Ollama y selecciónalo por modo más tarde en Ajustes."
 }

@@ -33,6 +33,7 @@ import {
   type WhisperBackendInfo,
 } from "../lib/tauri";
 import { recommendLlmSlot } from "../lib/recommend";
+import { isWindows } from "../lib/platform";
 import { emit } from "@tauri-apps/api/event";
 import {
   LOCALE_NATIVE_NAMES,
@@ -397,61 +398,79 @@ export default function Settings(): JSX.Element {
             />
           </Field>
 
-          <Field label={t("settings.llm.label")} hint={t("settings.llm.hint")}>
-            <select
-              className={inputCls}
-              value={settings.llm_default_slot}
-              onChange={(e) =>
-                void update({ llm_default_slot: e.target.value })
-              }
+          {/* Embedded LLM (llama-cpp-2) is Linux/macOS-only — on Windows it
+              collides with whisper's ggml at link time (issue #1). There we
+              hide the GGUF slot picker + download and point the user at
+              Ollama (configured below) or a cloud provider. */}
+          {isWindows() ? (
+            <Field
+              label={t("settings.llm.label")}
+              hint={t("settings.windows.local_llm.hint")}
             >
-              {Object.entries(LLM_SLOT_KEYS).map(([slot, key]) => (
-                <option key={slot} value={slot}>
-                  {t(key)}
-                </option>
-              ))}
-            </select>
-            <input
-              type="text"
-              className={inputCls}
-              placeholder={t("settings.llm.path_placeholder")}
-              value={settings.llm_model_path ?? ""}
-              onChange={(e) =>
-                void update({ llm_model_path: e.target.value || null })
-              }
-            />
-            <div className="flex flex-col gap-1.5">
-              <Button
-                onClick={() => void onDownloadLlmDefault()}
-                disabled={llmDownloading}
-                className="self-start"
+              <p className="text-sm text-fg-muted">
+                {t("settings.windows.local_llm.body")}
+              </p>
+            </Field>
+          ) : (
+            <Field
+              label={t("settings.llm.label")}
+              hint={t("settings.llm.hint")}
+            >
+              <select
+                className={inputCls}
+                value={settings.llm_default_slot}
+                onChange={(e) =>
+                  void update({ llm_default_slot: e.target.value })
+                }
               >
-                {llmDownloading
-                  ? t("settings.llm.btn.busy")
-                  : t("settings.llm.btn.idle")}
-              </Button>
-              {llmProgress ? (
-                <div className="flex flex-col gap-1 text-xs text-fg-muted">
-                  <div>{renderProgress(llmProgress)}</div>
-                  {llmProgress.total ? (
-                    <div className="h-1.5 bg-elevated rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-brand transition-all"
-                        style={{
-                          width: `${Math.round((llmProgress.downloaded / llmProgress.total) * 100)}%`,
-                        }}
-                      />
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-              {llmDownloadError ? (
-                <div className="text-xs text-status-error">
-                  {llmDownloadError}
-                </div>
-              ) : null}
-            </div>
-          </Field>
+                {Object.entries(LLM_SLOT_KEYS).map(([slot, key]) => (
+                  <option key={slot} value={slot}>
+                    {t(key)}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="text"
+                className={inputCls}
+                placeholder={t("settings.llm.path_placeholder")}
+                value={settings.llm_model_path ?? ""}
+                onChange={(e) =>
+                  void update({ llm_model_path: e.target.value || null })
+                }
+              />
+              <div className="flex flex-col gap-1.5">
+                <Button
+                  onClick={() => void onDownloadLlmDefault()}
+                  disabled={llmDownloading}
+                  className="self-start"
+                >
+                  {llmDownloading
+                    ? t("settings.llm.btn.busy")
+                    : t("settings.llm.btn.idle")}
+                </Button>
+                {llmProgress ? (
+                  <div className="flex flex-col gap-1 text-xs text-fg-muted">
+                    <div>{renderProgress(llmProgress)}</div>
+                    {llmProgress.total ? (
+                      <div className="h-1.5 bg-elevated rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-brand transition-all"
+                          style={{
+                            width: `${Math.round((llmProgress.downloaded / llmProgress.total) * 100)}%`,
+                          }}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+                {llmDownloadError ? (
+                  <div className="text-xs text-status-error">
+                    {llmDownloadError}
+                  </div>
+                ) : null}
+              </div>
+            </Field>
+          )}
 
           <OllamaAdvancedSection
             url={settings.ollama_url}
@@ -847,7 +866,7 @@ function HardwareStatusField({
           </span>{" "}
           {libsFlags.join(", ")}
         </div>
-        {llmRecommendation ? (
+        {llmRecommendation && !isWindows() ? (
           <div>
             <span className="text-fg-faint">
               {t("settings.hardware.llm_recommendation")}

@@ -25,10 +25,11 @@ veröffentlicht und an Nutzer ausgeliefert wird.
    → der In-App-Updater bietet die neue Version an
 ```
 
-> **Windows ist derzeit nicht im Release** (ggml-Symbolkollision beim
-> Linken von whisper.cpp + llama.cpp, MSVC). Tracking:
-> [#1](https://github.com/ks98/voicetypex/issues/1). Sobald gelöst, wird
-> `windows-latest` in `release.yml` wieder aktiviert.
+> **Windows ist wieder im Release** (NSIS-Installer mit STT + Vulkan +
+> Cloud/Ollama-LLM). Das embedded llama-cpp-2 ist auf Windows ausgebaut
+> ([#1](https://github.com/ks98/voicetypex/issues/1): ggml-Symbolkollision
+> beim MSVC-Linken von whisper.cpp + llama.cpp) — lokales LLM läuft dort
+> über einen selbst installierten Ollama-Daemon oder Cloud.
 
 ## Versionierung — eine Quelle
 
@@ -134,15 +135,17 @@ Nutzer bekommen sie nicht angeboten.
 ## Plattform-Status
 
 - **Linux** (deb / rpm / AppImage): im Release. Der AppImage-Build wurde
-  gerade (per `NO_STRIP=true`) repariert — Hintergrund in
+  per `NO_STRIP=true` repariert — Hintergrund in
   [#2](https://github.com/ks98/voicetypex/issues/2). Der In-App-Auto-Updater
   (AppImage) ist noch **deaktiviert** (`uploadUpdaterJson: false`), bis der
   `AppImage Validate`-Workflow ein startendes AppImage bestätigt.
-- **Windows** (NSIS): **zurückgestellt** — siehe
-  [#1](https://github.com/ks98/voicetypex/issues/1). Der gesamte
-  Vulkan-Build kompiliert bereits; nur das Linken der zwei ggml-Kopien
-  (whisper.cpp + llama.cpp) bricht auf MSVC. `cargo check` läuft in CI
-  als Smoke-Test weiter.
+- **Windows** (NSIS): **im Release** — STT (whisper.cpp + Vulkan) +
+  Cloud/Ollama-LLM. Das embedded llama-cpp-2 ist auf Windows ausgebaut
+  ([#1](https://github.com/ks98/voicetypex/issues/1): ggml-Symbolkollision
+  der zwei ggml-Kopien beim MSVC-Linken), womit der Link gelingt; CI
+  baut+testet Windows voll (`cargo build + test`). Der NSIS-Auto-Updater
+  ist verdrahtet; die `latest.json` ist — wie bei AppImage — noch
+  deaktiviert (s. oben).
 - **macOS**: out of scope.
 
 ## Erst-Setup-Checkliste (einmalig)

@@ -12,10 +12,13 @@ GNOME 46+)**, **Linux/X11** und **Windows**. Auto-Paste auf Wayland
 über `xdg-desktop-portal.RemoteDesktop` + libei. Settings und Wayland-
 Permission-Token persistent. Release-Bundles für Linux
 (`.deb` / `.rpm` / AppImage) mit signiertem Auto-Updater verfügbar.
-Das **Windows-Release ist vorübergehend zurückgestellt** — beim Linken
-kollidieren die ggml-Symbole von whisper.cpp + llama.cpp (MSVC LNK2005),
-siehe [Issue #1](https://github.com/ks98/voicetypex/issues/1). macOS ist
-nicht im Scope.
+Das **Windows-Release** umfasst Spracherkennung (whisper.cpp + Vulkan) und
+Cloud-LLM-Nachbearbeitung; das **eingebettete lokale LLM (llama-cpp-2) ist
+Linux/macOS-only** — auf Windows kollidierten dessen ggml-Symbole mit denen
+von whisper.cpp beim MSVC-Linken (LNK2005,
+[Issue #1](https://github.com/ks98/voicetypex/issues/1)), daher läuft
+lokales LLM dort über einen selbst installierten **Ollama**-Daemon oder
+einen Cloud-Provider. macOS ist nicht im Scope.
 
 Beta-spezifische Hinweise: siehe Abschnitt
 [*„Beta-Status & Updates"*](#beta-status--updates) weiter unten.
@@ -85,10 +88,13 @@ Menü-Hotkey*.
   GPU-Device automatischer CPU-Fallback. `gpu-cuda`/`gpu-metal`/
   `gpu-coreml` als opt-in Features, `fast-cpu` (OpenBLAS) als
   Headless-Fallback.
-- **Lokales LLM:** **Embedded** ist seit Mai 2026 der Standardpfad —
-  llama-cpp-2 0.1.146 mit Vulkan-Backend läuft direkt im VoiceTypeX-
-  Prozess, **kein externer Daemon nötig**. Modi mit `processing = "local"`
-  ohne explizites `local_engine` nutzen automatisch Embedded. Sechs
+- **Lokales LLM:** **Embedded** ist seit Mai 2026 der Standardpfad
+  (**Linux/macOS-only**) — llama-cpp-2 0.1.146 mit Vulkan-Backend läuft
+  direkt im VoiceTypeX-Prozess, **kein externer Daemon nötig**. Modi mit
+  `processing = "local"` ohne explizites `local_engine` nutzen automatisch
+  Embedded. **Auf Windows** ist Embedded nicht kompiliert (Issue #1, ggml-
+  Symbolkollision beim MSVC-Linken); dort defaultet `local_engine` auf
+  `"ollama"` — lokales LLM via selbst installiertem Ollama oder Cloud. Sechs
   GGUF-Slots: **Gemma 4 E4B** (Pro, 12+ GB RAM, ~5,1 GB Disk),
   **Gemma 4 E2B** (Mittel, 8-12 GB, ~3,1 GB), Gemma 3 1B (Light,
   <8 GB, ~851 MB), Gemma 3 4B (Vor-Gemma4-Pro), Llama 3.2 1B, Qwen 2.5

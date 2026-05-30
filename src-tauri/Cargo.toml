@@ -89,27 +89,6 @@ rodio = { version = "0.20", default-features = false, features = ["wav"] }
 # fuer die Local-Pipeline-Modernisierung.
 whisper-rs = "0.16"
 
-# Lokales LLM via llama.cpp (Rust-Bindings) — Phase 3b.
-# Ersetzt mittelfristig die Ollama-HTTP-Dependency durch embedded
-# Inferenz. Features:
-# - `vulkan`: GPU-Beschleunigung im selben Backend wie unser Whisper,
-#   konsistente Hardware-Anforderungen.
-# - `sampler`: idiomatische Rust-Sampling-API (statt manueller Token-
-#   Loop), wird in `LlamaEmbeddedProcessor` verwendet.
-# - `dynamic-link`: llama.cpp wird als Shared-Lib (libllama.so) gelinkt,
-#   nicht statisch in unsere Binary einkompiliert. **Pflicht-Feature**:
-#   sonst kollidieren llama-cpp-sys-2 und whisper-rs-sys beim Linken,
-#   weil beide ihre eigene statische ggml bundlen (gguf_get_val_*
-#   duplicate symbols). Mit dynamic-link liegen die ggml-Symbole in
-#   einer separaten .so und kollidieren nicht.
-# - default-features=false: deaktiviert openmp (zusaetzliche libomp-
-#   Build-Dep) und android-shared-stdcxx (irrelevant fuer Desktop).
-#
-# `dynamic-backends` (Runtime-Backend-Dispatch, dlopen-CUDA-Pfad)
-# kommt in einer Folge-Iteration, wenn wir auch GGML-Backends als
-# Shared-Libs bundeln.
-llama-cpp-2 = { version = "0.1.146", default-features = false, features = ["vulkan", "sampler", "dynamic-link"] }
-
 # HTTP-Client + Streaming + Hashing fuer Modell-Download
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream", "json", "multipart"] }
 sha2 = "0.10"
@@ -149,6 +128,19 @@ xkbcommon = "0.7"
 # und ohne Ctrl+C-Simulation. Bereits transitiv via
 # tauri-plugin-clipboard-manager im Baum; hier direkt nutzbar gemacht.
 arboard = { version = "3", features = ["wayland-data-control"] }
+
+# Lokales LLM via llama.cpp (Rust-Bindings) — Phase 3b. NUR Linux/macOS.
+# Auf Windows NICHT kompiliert: whisper-rs-sys und llama-cpp-sys-2 bundlen
+# je ihr eigenes ggml; auf MSVC kollidieren die zwei ggml-Kopien beim
+# Linken (LNK2005 — Issue #1). Linux/ELF toleriert das (llamas ggml liegt
+# in einer separaten .so), MSVC nicht. Ohne llama-cpp-2 bleibt auf Windows
+# nur whispers statisches ggml -> der Build linkt. Windows shippt STT +
+# Cloud-LLM + optional Ollama statt des embedded LLM.
+# Features: vulkan (GPU), sampler (idiomatische Sampling-API), dynamic-link
+# (llama.cpp als Shared-Lib; auf Linux liegt ggml dadurch in separater .so).
+# default-features=false: ohne openmp (libomp-Build-Dep) + android-shared-stdcxx.
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+llama-cpp-2 = { version = "0.1.146", default-features = false, features = ["vulkan", "sampler", "dynamic-link"] }
 
 [features]
 # Default ab Phase 3a: 'gpu-vulkan' — Vulkan deckt iGPU + AMD + Intel

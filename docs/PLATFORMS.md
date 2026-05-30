@@ -214,37 +214,33 @@ dem Tauri-Installer).
   aber einige UWP-/WinUI-Apps haben restriktive Input-Pfade. Workaround
   mit Clipboard-Fallback (Standard).
 
-### Windows — Embedded-LLM DLL-Bundle (offener Verifikations-Punkt)
+### Windows — lokales LLM (embedded vs. Ollama)
 
-`llama-cpp-2` wird mit `dynamic-link` gelinkt; auf Windows entstehen
-dadurch `llama.dll`, `ggml.dll`, `ggml-cpu.dll`, `ggml-vulkan.dll` und
-`ggml-base.dll` neben dem Binary in `target/release/`.
-`scripts/bundle-libs.mjs` kopiert sie cross-platform nach
-`src-tauri/resources/lib/`, der Tauri-NSIS-Bundler legt sie damit auf der
-Ziel-Maschine unter `$INSTDIR\resources\lib\` ab.
+Das **embedded LLM** (`llama-cpp-2`) wird auf Windows **nicht** kompiliert.
+Grund (ks98/voicetypex#1): `whisper-rs-sys` und `llama-cpp-sys-2` bundeln je
+ihr eigenes ggml; auf MSVC kollidieren die doppelten `ggml_*`-Symbole beim
+Linken (LNK2005). Linux/ELF toleriert ein in Executable **und** Shared-Lib
+definiertes Symbol, MSVC nicht. `llama-cpp-2` ist daher in `Cargo.toml`
+target-gegatet (`[target.'cfg(not(target_os = "windows"))'.dependencies]`),
+und der `processing::embedded`-Pfad ist `#[cfg(not(windows))]`.
 
-**Problem:** Der Windows-DLL-Loader sucht zur Laufzeit in
-`$INSTDIR\` (App-Dir), nicht in `$INSTDIR\resources\lib\`. Beim ersten
-LLM-Aufruf droht *„llama.dll not found"*.
+**Folge fuer das Bundle:** Auf Windows linkt `whisper-rs-sys` sein ggml
+**statisch** in die Binary — es gibt also **keine** `ggml-*.dll`/`llama.dll`
+zu buendeln. `scripts/bundle-libs.mjs` ist auf Windows ein No-op (es findet
+kein `llama.dll`-Marker und beendet sich sauber mit Exit 0). Damit entfaellt
+auch die frueher hier notierte NSIS-DLL-Loader-Problematik komplett.
 
-**Verifikation auf erstem Windows-Bundle-Build:**
+**Lokales LLM auf Windows** laeuft ueber einen **selbst installierten
+Ollama-Daemon** (`local_engine = "ollama"`; der Default-Engine-Wert ist auf
+Windows `"ollama"` statt `"embedded"`) oder ueber einen **Cloud-Provider**.
+Triggert ein Modus explizit `local_engine = "embedded"`, liefert die
+Pipeline eine klare Fehlermeldung statt eines Absturzes. Die Spracherkennung
+(whisper.cpp + Vulkan) ist davon unberuehrt und laeuft voll lokal.
 
-1. NSIS-Installer ausführen, App starten.
-2. Im Modes-Settings einen Embedded-LLM-Modus auswählen, einmal diktieren.
-3. Wenn die App weiterläuft → DLLs werden gefunden, alles okay.
-4. Wenn *„The code execution cannot proceed because llama.dll was not
-   found"* erscheint:
-   - **Workaround per Hand:** DLLs aus `$INSTDIR\resources\lib\*.dll`
-     neben die `voicetypex.exe` (`$INSTDIR\`) kopieren.
-   - **Permanente Lösung:** NSIS-Hook in `tauri.conf.json` ergänzen, der
-     die DLLs beim Install kopiert. Skizze:
-     ```nsis
-     ; In bundle.windows.nsis.installerHooks → NSIS_HOOK_POSTINSTALL
-     CopyFiles "$INSTDIR\resources\lib\*.dll" "$INSTDIR"
-     ```
-     Tauri 2's NSIS-Template-Override-Feature dokumentieren wir hier
-     nach erstem realen Test (Doku-Stand zum Zeitpunkt der Notiz: Hook-
-     API in Tauri 2.x in Bewegung).
+| Plattform | STT | Embedded LLM | Ollama-LLM | Cloud-LLM |
+| --- | --- | --- | --- | --- |
+| Linux / macOS | whisper.cpp (Vulkan) | ✅ llama-cpp-2 | ✅ | ✅ |
+| Windows | whisper.cpp (Vulkan) | ❌ (#1) | ✅ (selbst installiert) | ✅ |
 
 ## Bearbeiten-Modi: Selektion lesen & zurückschreiben
 
@@ -470,7 +466,8 @@ kwalletmanager aus.
 
 GitHub Actions baut auf jedem Push/PR (`.github/workflows/ci.yml`):
 - Linux (ubuntu-24.04) — `cargo fmt + clippy + test`, `pnpm lint + build`
-- Windows (windows-latest) — `cargo check + test`, `pnpm build`
+- Windows (windows-latest) — `cargo build + test`, `pnpm build` (embedded
+  llama-cpp-2 ausgebaut, daher voller Link statt nur `cargo check`)
 - Supply-Chain-Audit (`cargo audit`, `pnpm audit`)
 
 Auf Tags `v*` baut `release.yml` via `tauri-action` für beide

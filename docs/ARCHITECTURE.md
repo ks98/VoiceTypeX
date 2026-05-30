@@ -18,7 +18,7 @@ Festgelegt — Alternativen werden nicht ohne Rücksprache eingeführt.
 | Async-Runtime | tokio |
 | Audio | cpal + hound (WAV) + rubato (Sinc-Resampling) |
 | Lokales STT | whisper-rs 0.16 + Silero-VAD v6, **Default-Backend `gpu-vulkan`** (Phase 3a, Mai 2026); `gpu-cuda`/`gpu-metal`/`gpu-coreml` opt-in, `fast-cpu` (OpenBLAS) als Headless-Fallback. CPU-Fallback bei fehlendem Vulkan-Device ist whisper.cpp-internal — kein App-Code-Pfad. |
-| Lokales LLM | **Embedded llama-cpp-2 0.1.146** mit Vulkan + `dynamic-link` ist seit Mai 2026 produktiver Standard (kein externer Daemon nötig, GGUF im VoiceTypeX-Prozess). Per-Mode-Switch via `local_engine = "embedded"` (Default) vs `"ollama"`. Ollama bleibt Opt-in für User, die einen eigenen Daemon betreiben. |
+| Lokales LLM | **Embedded llama-cpp-2 0.1.146** mit Vulkan + `dynamic-link` ist seit Mai 2026 produktiver Standard (kein externer Daemon nötig, GGUF im VoiceTypeX-Prozess) — **nur Linux/macOS**. Per-Mode-Switch via `local_engine = "embedded"` (Default) vs `"ollama"`. Ollama bleibt Opt-in für User, die einen eigenen Daemon betreiben. **Auf Windows ist das embedded LLM nicht kompiliert** (Issue #1: whisper-rs-sys + llama-cpp-sys-2 kollidieren beim MSVC-Linken an doppelten ggml-Symbolen); dort defaultet `local_engine` auf `"ollama"`, und lokales LLM läuft über einen selbst installierten Ollama-Daemon oder Cloud. |
 | Cloud-STT | xAI (One-Shot REST), OpenAI Whisper, Groq Whisper, Deepgram |
 | Cloud-LLM | xAI Grok (Default `grok-4-fast-non-reasoning`), OpenAI GPT, Anthropic Claude |
 | HTTP-Client | reqwest (rustls-tls) |
@@ -205,9 +205,9 @@ pub struct AppContext {
     pub effective_menu_hotkey: Arc<RwLock<Option<String>>>, // Wayland: vom Portal zurückgegebener Trigger
     pub transcriber: Arc<dyn Transcriber>,             // App-Default-Transcriber (Local oder Cloud)
     pub local_transcriber: Arc<LocalTranscriber>,      // konkret für Streaming-Worker (Phase 2)
-    pub local_llm_processor: Arc<LlamaEmbeddedProcessor>, // Embedded-LLM-Default-Processor (Phase 3b)
+    pub local_llm_processor: Arc<LlamaEmbeddedProcessor>, // Embedded-LLM-Default-Processor (Phase 3b) — #[cfg(not(windows))]
     pub extra_transcribers: Arc<Mutex<HashMap<String, Arc<LocalTranscriber>>>>, // Per-Mode-Whisper-Slot-Cache
-    pub extra_llm_processors: Arc<Mutex<HashMap<String, Arc<LlamaEmbeddedProcessor>>>>, // Per-Mode-LLM-Slot-Cache
+    pub extra_llm_processors: Arc<Mutex<HashMap<String, Arc<LlamaEmbeddedProcessor>>>>, // Per-Mode-LLM-Slot-Cache — #[cfg(not(windows))]
     pub active_streaming_handle: Arc<Mutex<Option<JoinHandle<()>>>>, // Phase-2-Streaming-Worker-Handle
     pub injector: Arc<dyn TextInjector>,
     pub selection_buffer: Arc<Mutex<Option<String>>>,  // eager-captured Selektion für Bearbeiten-Modi
@@ -415,6 +415,16 @@ keep_alive + `mode.ollama_model_tag`, Fallback auf deprecated
 `local_llm_model`). Unbekannter Engine-Wert → `Mode`-Fehlermeldung.
 Sampling-Felder werden in beide Pfade über `ProcessOpts.{temperature,
 top_p, repeat_penalty, max_tokens}` durchgereicht.
+
+**Windows:** `resolve_embedded_llm` und der `"embedded"`-Arm sind
+`#[cfg(not(target_os = "windows"))]`-gegatet; der Default-Engine-Wert ist
+dort `"ollama"` statt `"embedded"`. Triggert ein Modus trotzdem explizit
+`local_engine = "embedded"` (z.B. das mitgelieferte *Korrigierendes
+Diktat*, dessen TOML plattform-identisch ist), liefert der Windows-Arm
+eine klare Steuer-Fehlermeldung („embedded LLM not available on Windows —
+use Ollama or a cloud provider"), statt zu paniken. Die TOMLs bleiben
+über alle Plattformen byte-identisch, und `Mode::validate` akzeptiert
+`"embedded"` plattform-agnostisch (nur der Laufzeit-Pfad ist gegatet).
 
 **Bestehende User-TOMLs aus Phase 1/2** (mit `local_llm_model` oder
 `ollama_model_tag` aber ohne `local_engine`) werden in

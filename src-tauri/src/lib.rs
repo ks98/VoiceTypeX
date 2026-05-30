@@ -28,9 +28,12 @@ use crate::pipeline::{
     register_menu_hotkey, spawn_overlay_state_listener, spawn_state_event_emitter,
     spawn_tray_recording_pulse, spawn_tray_state_listener,
 };
+#[cfg(not(target_os = "windows"))]
 use crate::processing::embedded::LlamaEmbeddedProcessor;
 use crate::transcription::local::LocalTranscriber;
-use crate::transcription::model_downloader::{LlmModelSlot, ModelSlot};
+#[cfg(not(target_os = "windows"))]
+use crate::transcription::model_downloader::LlmModelSlot;
+use crate::transcription::model_downloader::ModelSlot;
 use crate::transcription::Transcriber;
 use parking_lot::{Mutex, RwLock};
 use std::path::PathBuf;
@@ -194,7 +197,9 @@ pub fn run() {
             // takes precedence, otherwise the slot-based default. The
             // model is loaded LAZILY on the first `process()` call —
             // if the user doesn't use embedded, the file stays
-            // optional.
+            // optional. Linux/macOS-only — llama-cpp-2 is not compiled
+            // on Windows (issue #1 ggml link collision).
+            #[cfg(not(target_os = "windows"))]
             let llm_model_path: PathBuf = initial_settings
                 .llm_model_path
                 .as_ref()
@@ -203,6 +208,7 @@ pub fn run() {
                     let slot = LlmModelSlot::from_setting(&initial_settings.llm_default_slot);
                     model_dir.join(slot.filename())
                 });
+            #[cfg(not(target_os = "windows"))]
             let local_llm_processor = Arc::new(LlamaEmbeddedProcessor::new(llm_model_path));
             let wayland_token_path = config_dir.join("wayland_session.json");
             let injector_box = make_default_injector(app_handle.clone(), wayland_token_path);
@@ -216,8 +222,10 @@ pub fn run() {
                 effective_menu_hotkey: Arc::new(RwLock::new(None)),
                 transcriber,
                 local_transcriber,
+                #[cfg(not(target_os = "windows"))]
                 local_llm_processor,
                 extra_transcribers: Arc::new(Mutex::new(std::collections::HashMap::new())),
+                #[cfg(not(target_os = "windows"))]
                 extra_llm_processors: Arc::new(Mutex::new(std::collections::HashMap::new())),
                 active_streaming_handle: Arc::new(Mutex::new(None)),
                 injector,
