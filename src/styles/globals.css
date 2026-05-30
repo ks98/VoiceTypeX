@@ -17,46 +17,46 @@
  */
 @layer base {
   :root {
-    --canvas-rgb:          251 251 253;   /* #FBFBFD */
-    --surface-rgb:         255 255 255;   /* #FFFFFF */
-    --elevated-rgb:        244 245 248;   /* #F4F5F8 */
-    --outline-rgb:         229 231 236;   /* #E5E7EC */
-    --outline-strong-rgb:  200 204 212;   /* #C8CCD4 */
-    --fg-rgb:              21 24 29;      /* #15181D */
-    --fg-muted-rgb:        92 100 112;    /* #5C6470 */
+    --canvas-rgb: 251 251 253; /* #FBFBFD */
+    --surface-rgb: 255 255 255; /* #FFFFFF */
+    --elevated-rgb: 244 245 248; /* #F4F5F8 */
+    --outline-rgb: 229 231 236; /* #E5E7EC */
+    --outline-strong-rgb: 200 204 212; /* #C8CCD4 */
+    --fg-rgb: 21 24 29; /* #15181D */
+    --fg-muted-rgb: 92 100 112; /* #5C6470 */
     /* fg-faint bewusst etwas dunkler als rein dekorativ: wird als Hint-
      * Farbe in Field.tsx benutzt, das ist Body-Text und braucht WCAG AA
      * (>=4.5:1). 0x70788A auf canvas #FBFBFD ergibt ~4.1:1 — knapp AA
      * fuer Small Text, sicher AA fuer >=14pt. */
-    --fg-faint-rgb:        112 120 138;   /* #70788A */
-    --brand-rgb:           61 90 254;     /* #3D5AFE */
-    --brand-hover-rgb:     46 72 224;     /* #2E48E0 */
-    --brand-contrast-rgb:  255 255 255;
-    --status-idle-rgb:        138 146 160;
-    --status-recording-rgb:   229 72 77;
-    --status-processing-rgb:  245 165 36;
-    --status-done-rgb:        34 197 94;
-    --status-error-rgb:       192 41 46;
+    --fg-faint-rgb: 112 120 138; /* #70788A */
+    --brand-rgb: 61 90 254; /* #3D5AFE */
+    --brand-hover-rgb: 46 72 224; /* #2E48E0 */
+    --brand-contrast-rgb: 255 255 255;
+    --status-idle-rgb: 138 146 160;
+    --status-recording-rgb: 229 72 77;
+    --status-processing-rgb: 245 165 36;
+    --status-done-rgb: 34 197 94;
+    --status-error-rgb: 192 41 46;
     color-scheme: light;
   }
 
   html.dark {
-    --canvas-rgb:          11 13 16;      /* #0B0D10 */
-    --surface-rgb:         20 23 28;      /* #14171C */
-    --elevated-rgb:        27 31 38;      /* #1B1F26 */
-    --outline-rgb:         38 43 51;      /* #262B33 */
-    --outline-strong-rgb:  58 64 73;      /* #3A4049 */
-    --fg-rgb:              232 235 240;   /* #E8EBF0 */
-    --fg-muted-rgb:        154 161 172;   /* #9AA1AC */
-    --fg-faint-rgb:        94 101 113;    /* #5E6571 */
-    --brand-rgb:           124 140 255;   /* #7C8CFF */
-    --brand-hover-rgb:     148 162 255;   /* #94A2FF */
-    --brand-contrast-rgb:  11 13 16;
-    --status-idle-rgb:        94 101 113;
-    --status-recording-rgb:   255 99 105;
-    --status-processing-rgb:  245 165 36;
-    --status-done-rgb:        46 190 107;
-    --status-error-rgb:       255 99 105;
+    --canvas-rgb: 11 13 16; /* #0B0D10 */
+    --surface-rgb: 20 23 28; /* #14171C */
+    --elevated-rgb: 27 31 38; /* #1B1F26 */
+    --outline-rgb: 38 43 51; /* #262B33 */
+    --outline-strong-rgb: 58 64 73; /* #3A4049 */
+    --fg-rgb: 232 235 240; /* #E8EBF0 */
+    --fg-muted-rgb: 154 161 172; /* #9AA1AC */
+    --fg-faint-rgb: 94 101 113; /* #5E6571 */
+    --brand-rgb: 124 140 255; /* #7C8CFF */
+    --brand-hover-rgb: 148 162 255; /* #94A2FF */
+    --brand-contrast-rgb: 11 13 16;
+    --status-idle-rgb: 94 101 113;
+    --status-recording-rgb: 255 99 105;
+    --status-processing-rgb: 245 165 36;
+    --status-done-rgb: 46 190 107;
+    --status-error-rgb: 255 99 105;
     color-scheme: dark;
   }
 
@@ -72,9 +72,20 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     font-family:
-      ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-      "Segoe UI Variable", "Segoe UI", "Inter", Roboto, Oxygen, Ubuntu,
-      Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+      ui-sans-serif,
+      system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      "Segoe UI Variable",
+      "Segoe UI",
+      "Inter",
+      Roboto,
+      Oxygen,
+      Ubuntu,
+      Cantarell,
+      "Open Sans",
+      "Helvetica Neue",
+      sans-serif;
   }
 
   code,
@@ -132,7 +143,9 @@
   border: 1px solid rgb(var(--fg-rgb) / 0.1);
 }
 
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+@supports not (
+  (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
+) {
   .vtx-glass {
     background-color: rgb(var(--canvas-rgb) / 0.95);
     border-color: rgb(var(--fg-rgb) / 0.15);

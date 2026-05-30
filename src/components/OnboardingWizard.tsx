@@ -58,8 +58,9 @@ export default function OnboardingWizard({
 
   // LLM download — analogous.
   const [llmStatus, setLlmStatus] = useState<DownloadStatus>({ kind: "idle" });
-  const [llmProgress, setLlmProgress] =
-    useState<ModelDownloadProgress | null>(null);
+  const [llmProgress, setLlmProgress] = useState<ModelDownloadProgress | null>(
+    null,
+  );
 
   // Auto-hide done flashes after DONE_FLASH_MS. Refs let a new download
   // cancel the previous timer.
@@ -195,11 +196,7 @@ export default function OnboardingWizard({
                 {t("wizard.header.subtitle", { total: TOTAL_STEPS })}
               </div>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => void skipAll()}
-            >
+            <Button variant="ghost" size="sm" onClick={() => void skipAll()}>
               {t("wizard.header.skip")}
             </Button>
           </div>
@@ -268,9 +265,7 @@ export default function OnboardingWizard({
             <Button
               variant="secondary"
               onClick={() =>
-                setStep(
-                  (s) => Math.min(TOTAL_STEPS, (s + 1) as Step) as Step,
-                )
+                setStep((s) => Math.min(TOTAL_STEPS, (s + 1) as Step) as Step)
               }
             >
               {t("wizard.nav.next")}
@@ -376,8 +371,7 @@ export default function OnboardingWizard({
           <Button
             onClick={() => void onSaveKey()}
             disabled={
-              !xaiKey ||
-              (keyStatus !== null && keyStatus.kind === "saving")
+              !xaiKey || (keyStatus !== null && keyStatus.kind === "saving")
             }
           >
             {keyStatus?.kind === "saving"
@@ -554,9 +548,7 @@ export default function OnboardingWizard({
           </li>
           <li>
             {t("wizard.finish.bullet_custom_prefix")}{" "}
-            <code className="text-brand font-mono">
-              app_config_dir/modes/
-            </code>
+            <code className="text-brand font-mono">app_config_dir/modes/</code>
             {t("wizard.finish.bullet_custom_suffix")}
           </li>
           <li>
@@ -599,7 +591,13 @@ function MiniProgressStack({
   llmFlashVisible,
 }: MiniProgressStackProps): JSX.Element | null {
   const t = useT();
-  const whisperRow = renderRow(t, "whisper", whisperStatus, whisperProgress, whisperFlashVisible);
+  const whisperRow = renderRow(
+    t,
+    "whisper",
+    whisperStatus,
+    whisperProgress,
+    whisperFlashVisible,
+  );
   const llmRow = renderRow(t, "llm", llmStatus, llmProgress, llmFlashVisible);
   if (whisperRow === null && llmRow === null) return null;
   return (
@@ -771,7 +769,10 @@ function StepIndicator({
 }): JSX.Element {
   const t = useT();
   return (
-    <div className="flex items-center gap-1.5" aria-label={t("wizard.indicator.aria")}>
+    <div
+      className="flex items-center gap-1.5"
+      aria-label={t("wizard.indicator.aria")}
+    >
       {Array.from({ length: total }, (_, i) => i + 1).map((n) => {
         const state =
           n < current ? "done" : n === current ? "active" : "pending";

@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
-type Variant = "primary" | "secondary" | "ghost" | "danger" | "danger-strong" | "tab";
+type Variant =
+  | "primary"
+  | "secondary"
+  | "ghost"
+  | "danger"
+  | "danger-strong"
+  | "tab";
 type Size = "md" | "sm";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -53,8 +59,7 @@ export default function Button({
   type = "button",
   ...rest
 }: ButtonProps): JSX.Element {
-  const cn =
-    `${BASE} ${VARIANTS[variant]} ${SIZES[size]} ${className}`.trim();
+  const cn = `${BASE} ${VARIANTS[variant]} ${SIZES[size]} ${className}`.trim();
   return (
     <button type={type} className={cn} {...rest}>
       {children}

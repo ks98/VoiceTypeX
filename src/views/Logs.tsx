@@ -181,9 +181,7 @@ export default function Logs(): JSX.Element {
       {error ? <Banner tone="error">{error}</Banner> : null}
       {displayLines.length === 0 ? (
         <Banner tone="info" dense>
-          {filter === "all"
-            ? t("logs.empty.all")
-            : t("logs.empty.filtered")}
+          {filter === "all" ? t("logs.empty.all") : t("logs.empty.filtered")}
         </Banner>
       ) : null}
       <pre

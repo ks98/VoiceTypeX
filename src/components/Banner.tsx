@@ -45,28 +45,26 @@ export default function Banner({
   );
 }
 
-const TONE_CLASSES: Record<
-  Tone,
-  { bg: string; border: string; text: string }
-> = {
-  error: {
-    bg: "bg-status-error/10",
-    border: "border-status-error/40",
-    text: "text-status-error",
-  },
-  warning: {
-    bg: "bg-status-processing/10",
-    border: "border-status-processing/40",
-    text: "text-status-processing",
-  },
-  success: {
-    bg: "bg-status-done/10",
-    border: "border-status-done/40",
-    text: "text-status-done",
-  },
-  info: {
-    bg: "bg-brand/10",
-    border: "border-brand/40",
-    text: "text-brand",
-  },
-};
+const TONE_CLASSES: Record<Tone, { bg: string; border: string; text: string }> =
+  {
+    error: {
+      bg: "bg-status-error/10",
+      border: "border-status-error/40",
+      text: "text-status-error",
+    },
+    warning: {
+      bg: "bg-status-processing/10",
+      border: "border-status-processing/40",
+      text: "text-status-processing",
+    },
+    success: {
+      bg: "bg-status-done/10",
+      border: "border-status-done/40",
+      text: "text-status-done",
+    },
+    info: {
+      bg: "bg-brand/10",
+      border: "border-brand/40",
+      text: "text-brand",
+    },
+  };

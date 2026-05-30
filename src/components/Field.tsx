@@ -27,10 +27,7 @@ export default function Field({
   const hintId = htmlFor ? `${htmlFor}-hint` : undefined;
   return (
     <div className="flex flex-col gap-1.5">
-      <label
-        className="text-sm font-medium text-fg-muted"
-        htmlFor={htmlFor}
-      >
+      <label className="text-sm font-medium text-fg-muted" htmlFor={htmlFor}>
         {label}
       </label>
       {children}

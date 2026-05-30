@@ -20,9 +20,7 @@ export const DEFAULT_LOCALE: SupportedLocale = "en";
  * just "de") to one of the supported locales. Region suffixes are
  * ignored. Unknown languages fall back to `DEFAULT_LOCALE`.
  */
-export function pickSupported(
-  raw: string | null | undefined,
-): SupportedLocale {
+export function pickSupported(raw: string | null | undefined): SupportedLocale {
   if (!raw) return DEFAULT_LOCALE;
   const prefix = raw.split(/[-_]/)[0]?.toLowerCase();
   if (!prefix) return DEFAULT_LOCALE;

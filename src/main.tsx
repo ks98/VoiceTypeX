@@ -69,10 +69,7 @@ ipcGetSettings()
     useI18nStore.setState({ locale: picked });
   })
   .catch((e) => {
-    console.warn(
-      "i18n bootstrap failed — rendering with default locale:",
-      e,
-    );
+    console.warn("i18n bootstrap failed — rendering with default locale:", e);
   })
   .finally(() => {
     ReactDOM.createRoot(rootEl).render(

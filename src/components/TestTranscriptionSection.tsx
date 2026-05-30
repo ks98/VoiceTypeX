@@ -80,9 +80,7 @@ export default function TestTranscriptionSection(): JSX.Element {
           {btnLabel}
         </Button>
       </div>
-      {error ? (
-        <div className="text-xs text-status-error">{error}</div>
-      ) : null}
+      {error ? <div className="text-xs text-status-error">{error}</div> : null}
       {result ? (
         <div className="flex flex-col gap-2 text-sm">
           <div className="flex gap-4">

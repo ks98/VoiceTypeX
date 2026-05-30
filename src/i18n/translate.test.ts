@@ -7,12 +7,12 @@ const en: Dictionary = {
   "modes.confirm_delete": 'Really delete mode "{name}"?',
   "logs.missed.one": "{count} new entry while paused",
   "logs.missed.other": "{count} new entries while paused",
-  "ratio": "{ratio}",
+  ratio: "{ratio}",
 };
 
 const de: Dictionary = {
   "app.title": "VoiceTypeX",
-  "modes.confirm_delete": "Modus „{name}\" wirklich löschen?",
+  "modes.confirm_delete": 'Modus „{name}" wirklich löschen?',
   "logs.missed.one": "{count} neuer Eintrag während Pause",
   "logs.missed.other": "{count} neue Einträge während Pause",
 };
@@ -37,7 +37,7 @@ describe("translate", () => {
 
   it("leaves placeholder intact when param missing", () => {
     expect(translate("modes.confirm_delete", {}, ctxDe)).toBe(
-      "Modus „{name}\" wirklich löschen?",
+      'Modus „{name}" wirklich löschen?',
     );
   });
 

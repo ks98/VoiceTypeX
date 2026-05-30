@@ -86,8 +86,7 @@ export default function Modes(): JSX.Element {
           <strong>
             {t("modes.no_hotkeys.server_label", { server: noHotkeyServer })}
           </strong>{" "}
-          {t("modes.no_hotkeys.body_prefix")}{" "}
-          <em>{triggerLabel}</em>
+          {t("modes.no_hotkeys.body_prefix")} <em>{triggerLabel}</em>
           {session?.auto_paste_supported
             ? t("modes.no_hotkeys.body_suffix_paste")
             : t("modes.no_hotkeys.body_suffix_manual")}

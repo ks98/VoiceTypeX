@@ -3,7 +3,11 @@ import { useUIStore } from "../store";
 import { useT } from "../i18n";
 import type { ThemeChoice } from "../lib/theme";
 
-const THEME_IDS = ["system", "light", "dark"] as const satisfies readonly ThemeChoice[];
+const THEME_IDS = [
+  "system",
+  "light",
+  "dark",
+] as const satisfies readonly ThemeChoice[];
 
 export default function ThemeToggle(): JSX.Element {
   const t = useT();

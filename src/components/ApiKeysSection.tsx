@@ -20,12 +20,15 @@ type TestState =
   | { kind: "ok" }
   | { kind: "error"; message: string };
 
-type SaveState =
-  | { kind: "idle" }
-  | { kind: "saving" }
-  | { kind: "testing" };
+type SaveState = { kind: "idle" } | { kind: "saving" } | { kind: "testing" };
 
-const PROVIDER_IDS = ["xai", "openai", "anthropic", "groq", "deepgram"] as const;
+const PROVIDER_IDS = [
+  "xai",
+  "openai",
+  "anthropic",
+  "groq",
+  "deepgram",
+] as const;
 
 function providerLabel(t: TranslateFn, provider: string): string {
   if ((PROVIDER_IDS as readonly string[]).includes(provider)) {

@@ -22,11 +22,7 @@
 
 import { useCallback } from "react";
 import { create } from "zustand";
-import {
-  translate,
-  type Dictionary,
-  type TranslateParams,
-} from "./translate";
+import { translate, type Dictionary, type TranslateParams } from "./translate";
 import {
   DEFAULT_LOCALE,
   SUPPORTED_LOCALES,
@@ -64,10 +60,7 @@ export const useI18nStore = create<I18nState>((set) => ({
   setLocale: (locale) => set({ locale }),
 }));
 
-export type TranslateFn = (
-  key: string,
-  params?: TranslateParams,
-) => string;
+export type TranslateFn = (key: string, params?: TranslateParams) => string;
 
 /**
  * React hook for translations. Re-renders the consuming component when

@@ -235,13 +235,9 @@ function ModeRow({
         aria-hidden
       />
       <span
-        className={
-          "shrink-0 inline-flex items-center justify-center h-7 w-7"
-        }
+        className={"shrink-0 inline-flex items-center justify-center h-7 w-7"}
         aria-label={offline ? t("menu.aria.offline") : t("menu.aria.online")}
-        title={
-          offline ? t("menu.title_offline") : t("menu.title_online")
-        }
+        title={offline ? t("menu.title_offline") : t("menu.title_online")}
       >
         <span
           className={
@@ -255,8 +251,7 @@ function ModeRow({
         <div className="flex items-center gap-1.5">
           <span
             className={
-              "text-sm truncate " +
-              (active ? "text-fg font-medium" : "text-fg")
+              "text-sm truncate " + (active ? "text-fg font-medium" : "text-fg")
             }
           >
             {mode.name}

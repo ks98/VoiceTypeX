@@ -44,7 +44,10 @@ function interpolate(
   });
 }
 
-function selectPluralSuffix(count: number, locale: string): Intl.LDMLPluralRule {
+function selectPluralSuffix(
+  count: number,
+  locale: string,
+): Intl.LDMLPluralRule {
   return new Intl.PluralRules(locale).select(count);
 }
 
