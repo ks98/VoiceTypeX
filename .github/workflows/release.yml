@@ -70,6 +70,19 @@ jobs:
         if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: echo "CMAKE_GENERATOR=Ninja" >> $env:GITHUB_ENV
+      - name: Disable ccache (breaks the ggml-vulkan nested MSVC build)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          # ggml aktiviert ccache automatisch, wenn gefunden; ccache + MSVC
+          # /Zi bricht den verschachtelten vulkan-shaders-gen-Build (C1083).
+          # ccache + sccache verstecken -> GGML_CCACHE aus.
+          foreach ($tool in 'ccache', 'sccache') {
+            Get-Command $tool -All -ErrorAction SilentlyContinue | ForEach-Object {
+              Write-Host "Disabling $($_.Source)"
+              Rename-Item -Path $_.Source -NewName "$($_.Name).disabled" -ErrorAction SilentlyContinue
+            }
+          }
 
       # --- System-Abhaengigkeiten (Tauri + Vulkan-GPU-Build) -------------
       - name: Install Linux system dependencies

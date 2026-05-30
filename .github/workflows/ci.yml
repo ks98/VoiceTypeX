@@ -76,6 +76,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ilammy/msvc-dev-cmd@v1
+      - name: Disable ccache (breaks the ggml-vulkan nested MSVC build)
+        shell: pwsh
+        run: |
+          # ggml aktiviert ccache automatisch, wenn gefunden; ccache + MSVC
+          # /Zi bricht den verschachtelten vulkan-shaders-gen-Build (C1083,
+          # leerer Dateiname). ccache + sccache verstecken -> GGML_CCACHE aus.
+          foreach ($tool in 'ccache', 'sccache') {
+            Get-Command $tool -All -ErrorAction SilentlyContinue | ForEach-Object {
+              Write-Host "Disabling $($_.Source)"
+              Rename-Item -Path $_.Source -NewName "$($_.Name).disabled" -ErrorAction SilentlyContinue
+            }
+          }
       - name: Install Vulkan SDK
         uses: jakoch/install-vulkan-sdk-action@v1
         with:

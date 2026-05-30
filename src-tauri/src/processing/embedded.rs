@@ -239,6 +239,9 @@ fn run_llama_blocking(
 
     let mut output = String::new();
     let mut cursor = prompt_len;
+    // `cursor` is the KV-cache position (starts at prompt_len), not a plain
+    // loop counter — explicit_counter_loop is a false positive here.
+    #[allow(clippy::explicit_counter_loop)]
     for _ in 0..max_tokens {
         // -1 = last token in the batch (the one set with logits=true).
         let token = sampler.sample(&ctx, -1);
