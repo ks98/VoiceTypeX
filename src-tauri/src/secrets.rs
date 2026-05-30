@@ -227,7 +227,7 @@ fn dpapi_encrypt(plaintext: &[u8]) -> Result<String> {
     use windows::Win32::Foundation::LocalFree;
     use windows::Win32::Foundation::HLOCAL;
     use windows::Win32::Security::Cryptography::{
-        CryptProtectData, CRYPT_INTEGER_BLOB, CRYPTPROTECT_UI_FORBIDDEN,
+        CryptProtectData, CRYPTPROTECT_UI_FORBIDDEN, CRYPT_INTEGER_BLOB,
     };
 
     let mut in_bytes = plaintext.to_vec();
@@ -263,7 +263,7 @@ fn dpapi_decrypt(ct_b64: &str) -> Result<Vec<u8>> {
     use windows::Win32::Foundation::LocalFree;
     use windows::Win32::Foundation::HLOCAL;
     use windows::Win32::Security::Cryptography::{
-        CryptUnprotectData, CRYPT_INTEGER_BLOB, CRYPTPROTECT_UI_FORBIDDEN,
+        CryptUnprotectData, CRYPTPROTECT_UI_FORBIDDEN, CRYPT_INTEGER_BLOB,
     };
 
     let mut ct = B64
