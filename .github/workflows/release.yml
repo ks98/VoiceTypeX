@@ -60,6 +60,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # MSVC + Ninja für den Windows-Vulkan-Build: das vulkan-shaders-gen-
+      # ExternalProject von ggml/llama.cpp baut mit dem VS-Generator nicht.
+      # Nur Windows — auf Linux bleibt der Default-Generator.
+      - name: Set up MSVC environment (Windows)
+        if: matrix.platform == 'windows-latest'
+        uses: ilammy/msvc-dev-cmd@v1
+      - name: Force Ninja generator (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: echo "CMAKE_GENERATOR=Ninja" >> $env:GITHUB_ENV
+
       # --- System-Abhaengigkeiten (Tauri + Vulkan-GPU-Build) -------------
       - name: Install Linux system dependencies
         if: matrix.platform == 'ubuntu-24.04'

@@ -40,6 +40,11 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # generate_context!() bettet frontendDist (../dist) ein -> dist muss
+      # vor cargo clippy/test existieren. pnpm build erzeugt es (und führt
+      # das i18n:check-prebuild-Gate aus).
+      - name: Build frontend (dist for generate_context!)
+        run: pnpm build
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -62,8 +67,15 @@ jobs:
   build-windows:
     name: Build-Check (Windows)
     runs-on: windows-latest
+    # Ninja statt VS-Generator: das vulkan-shaders-gen-ExternalProject von
+    # ggml/llama.cpp baut mit dem VS-Generator nicht (verschachtelte
+    # Compiler-Detection schlägt fehl). msvc-dev-cmd legt cl.exe + ninja
+    # auf den PATH.
+    env:
+      CMAKE_GENERATOR: Ninja
     steps:
       - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
       - name: Install Vulkan SDK
         uses: jakoch/install-vulkan-sdk-action@v1
         with:
