@@ -78,7 +78,15 @@ pub async fn execute_mode(app: AppHandle, ctx: Arc<AppContext>, mode: Mode) -> R
 pub async fn handle_menu_hotkey(app: AppHandle, ctx: Arc<AppContext>) -> Result<()> {
     let current = ctx.state_bus.current();
     match current {
-        AppState::Idle => {
+        // `Error` shares the `Idle` path: the menu hotkey doubles as the
+        // recovery action. From `Error` we first clear it (`Error → Idle`,
+        // which makes the overlay listener hide the error overlay), then
+        // open the menu exactly like from `Idle`. This is why pipeline
+        // error paths can park in `Error` without trapping the app.
+        AppState::Idle | AppState::Error(_) => {
+            if matches!(current, AppState::Error(_)) {
+                let _ = ctx.state_bus.transition(AppState::Idle);
+            }
             // Eager selection capture for the "Bearbeiten" feature: read
             // the focused app's selection NOW, while it still has focus
             // — showing the menu below steals it. Gated on edit-mode
@@ -176,11 +184,12 @@ async fn start_recording(app: &AppHandle, ctx: &Arc<AppContext>, mode: &Mode) ->
 
     let device_name = ctx.settings.read().audio_input_device.clone();
     let mut recorder = RecorderHandle::start(RecorderConfig { device_name }).inspect_err(|e| {
-        // On error reset state to Idle so no deadlock occurs. Also clear
-        // active_mode, otherwise the menu hotkey would see a stale entry.
+        // Surface the failure: stay in `Error` (the overlay shows it, the
+        // tray turns red) instead of silently snapping back to `Idle`. The
+        // next menu hotkey clears `Error` → `Idle` and reopens the menu.
+        // Clear active_mode so that recovery does not see a stale entry.
         *ctx.active_mode.lock() = None;
         let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
-        let _ = ctx.state_bus.transition(AppState::Idle);
     })?;
 
     // Only spawn the streaming worker for local STT. Cloud modes (xAI,
@@ -444,7 +453,6 @@ async fn finish_recording_and_inject(
 
     let wav = recorder.stop_and_finalize().await.inspect_err(|e| {
         let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
-        let _ = ctx.state_bus.transition(AppState::Idle);
     })?;
 
     // STT — local (with optional mode-override slot) or cloud, depending
@@ -458,7 +466,6 @@ async fn finish_recording_and_inject(
             let provider = mode.cloud_stt_provider.as_deref().unwrap_or("xai");
             make_cloud_transcriber(provider).inspect_err(|e| {
                 let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
-                let _ = ctx.state_bus.transition(AppState::Idle);
             })?
         }
     };
@@ -487,7 +494,6 @@ async fn finish_recording_and_inject(
         .await
         .inspect_err(|e| {
             let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
-            let _ = ctx.state_bus.transition(AppState::Idle);
         })?;
 
     // For edit modes ("Bearbeiten") the LLM input is the captured
@@ -518,7 +524,6 @@ async fn finish_recording_and_inject(
                 .await
                 .inspect_err(|e| {
                     let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
-                    let _ = ctx.state_bus.transition(AppState::Idle);
                 })?
         }
         ProcessingTarget::Cloud => {
@@ -527,7 +532,6 @@ async fn finish_recording_and_inject(
                 .await
                 .inspect_err(|e| {
                     let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
-                    let _ = ctx.state_bus.transition(AppState::Idle);
                 })?
         }
     };
@@ -586,7 +590,6 @@ async fn finish_recording_and_inject(
         .await
         .inspect_err(|e| {
             let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
-            let _ = ctx.state_bus.transition(AppState::Idle);
         })?;
 
     ctx.state_bus.transition(AppState::Idle)?;
@@ -894,13 +897,16 @@ pub fn spawn_state_event_emitter(app: AppHandle) {
     });
 }
 
-/// Spawns a listener that hides the overlay window automatically as soon
-/// as the state switches to `Idle` (or briefly `Error`). This ensures
-/// that the overlay also disappears on pipeline errors (transcription
-/// error, LLM failure) — not only on the happy-path inject path. Making
-/// it visible is explicitly done in `start_recording` (see above), not
-/// here — otherwise the window could briefly pop up again when already
-/// hidden, because a state event reports Recording once more.
+/// Spawns a listener that drives the overlay window's visibility from the
+/// pipeline state: it **shows** the overlay on `Error` (so the failure is
+/// visible — this also covers the inject-failure path, where the overlay
+/// was already hidden right before the libei inject) and **hides** it on
+/// `Idle`. Making it visible during recording is done explicitly in
+/// `start_recording` (see above), not here — otherwise the window could
+/// briefly pop up again when already hidden, because a state event reports
+/// Recording once more. The happy/empty paths hide the overlay themselves
+/// before reaching `Idle`; for the error path this listener is the sole
+/// show/hide driver.
 pub fn spawn_overlay_state_listener(app: AppHandle) {
     let mut rx = {
         let state = app.state::<Arc<AppContext>>();
@@ -912,9 +918,15 @@ pub fn spawn_overlay_state_listener(app: AppHandle) {
                 break;
             }
             let state = rx.borrow().clone();
-            if matches!(state, AppState::Idle | AppState::Error(_)) {
-                if let Some(overlay) = app.get_webview_window("overlay") {
-                    let _ = overlay.hide();
+            if let Some(overlay) = app.get_webview_window("overlay") {
+                match state {
+                    AppState::Error(_) => {
+                        let _ = overlay.show();
+                    }
+                    AppState::Idle => {
+                        let _ = overlay.hide();
+                    }
+                    _ => {}
                 }
             }
         }
@@ -1079,7 +1091,6 @@ mod tests {
             Ok(t) => t,
             Err(e) => {
                 let _ = state_bus.transition(AppState::Error(e.to_string()));
-                let _ = state_bus.transition(AppState::Idle);
                 return Err(e);
             }
         };
@@ -1091,7 +1102,6 @@ mod tests {
                     Ok(t) => t,
                     Err(e) => {
                         let _ = state_bus.transition(AppState::Error(e.to_string()));
-                        let _ = state_bus.transition(AppState::Idle);
                         return Err(e);
                     }
                 }
@@ -1111,7 +1121,6 @@ mod tests {
             .await
             .inspect_err(|e| {
                 let _ = state_bus.transition(AppState::Error(e.to_string()));
-                let _ = state_bus.transition(AppState::Idle);
             })?;
         state_bus.transition(AppState::Idle)?;
         Ok(final_text)
@@ -1150,11 +1159,15 @@ mod tests {
         assert_eq!(recorded.as_slice(), &["Hallo Welt".to_string()]);
     }
 
-    /// Error recovery: a transcriber failure must end up in State::Idle
-    /// (not stuck-in-Transcribing). Defends against the class of bugs
-    /// that would arise without the `inspect_err` cleanup path.
+    /// Error surfacing: a transcriber failure must leave the bus parked in
+    /// `Error(_)` — NOT snap back to `Idle`. The old immediate `→ Idle`
+    /// coalesced in the `watch` channel so the `app://state` emitter never
+    /// saw the error frame and the overlay showed nothing. Parking in
+    /// `Error` is what makes the error visible; recovery happens later via
+    /// the menu hotkey (see
+    /// `menu_hotkey_from_error_clears_to_idle_and_opens_menu`).
     #[tokio::test]
-    async fn pipeline_transcriber_error_returns_state_to_idle() {
+    async fn pipeline_transcriber_error_parks_in_error_state() {
         let bus = StateBus::new();
         bus.transition(AppState::Recording).unwrap();
         let injected = Arc::new(TokioMutex::new(Vec::<String>::new()));
@@ -1168,7 +1181,10 @@ mod tests {
             .expect_err("transcriber failure should propagate");
 
         assert!(matches!(err, VoiceTypeError::Transcription(_)));
-        assert_eq!(bus.current(), AppState::Idle);
+        assert!(
+            matches!(bus.current(), AppState::Error(_)),
+            "STT failure must park in Error, not snap back to Idle"
+        );
         let recorded = injected.lock().await;
         assert!(recorded.is_empty(), "no inject after STT failure");
     }
@@ -1210,5 +1226,34 @@ mod tests {
             "ignore"
         };
         assert_eq!(decision, "ignore");
+    }
+
+    /// Recovery semantics: `handle_menu_hotkey` treats `Error` like `Idle`
+    /// — from `Error` it clears the error (`Error → Idle`) and opens the
+    /// menu, so a parked pipeline error never traps the app. Mirrors the
+    /// branch selection from `handle_menu_hotkey` on the `StateBus`.
+    #[tokio::test]
+    async fn menu_hotkey_from_error_clears_to_idle_and_opens_menu() {
+        let bus = StateBus::new();
+        bus.transition(AppState::Error("boom".into())).unwrap();
+        assert!(matches!(bus.current(), AppState::Error(_)));
+
+        // Decision from `handle_menu_hotkey`: Idle | Error → open menu.
+        let current = bus.current();
+        let opens_menu = matches!(current, AppState::Idle | AppState::Error(_));
+        assert!(
+            opens_menu,
+            "Error must be a recoverable, menu-openable state"
+        );
+
+        // From Error the handler first clears to Idle (legal transition).
+        if matches!(current, AppState::Error(_)) {
+            bus.transition(AppState::Idle).unwrap();
+        }
+        assert_eq!(bus.current(), AppState::Idle);
+
+        // And a fresh recording can start again afterwards.
+        bus.transition(AppState::Recording).unwrap();
+        assert_eq!(bus.current(), AppState::Recording);
     }
 }

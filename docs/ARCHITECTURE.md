@@ -48,12 +48,24 @@ Eine globale State-Machine steuert die Pipeline. Implementiert in
 Idle ─► Recording ─► Transcribing ─┬─► Postprocessing ─► Injecting ─► Idle
                                    └─► Injecting ─► Idle  (Modus ohne LLM)
                                               ▲
-                              Error ◄─ jede Stufe ─► Idle (Recovery)
+                              Error ◄─ jede Stufe (bleibt stehen)
+                                │
+                                └─► Idle  (Recovery via Menü-Hotkey)
 ```
 
 `AppState::can_transition_to(...)` validiert jeden Übergang. Ungültige
 Übergänge geben `VoiceTypeError::InvalidStateTransition` zurück und
 werden in einem dedizierten Test geprüft.
+
+**Fehler bleiben sichtbar:** Ein Pipeline-Fehler überführt den Zustand
+nach `Error(msg)` und **bleibt dort** — er springt nicht sofort zurück
+nach `Idle`. Andernfalls überschriebe das nachfolgende `Idle` den
+`Error`-Frame im `watch`-Kanal (Coalescing), bevor der
+`app://state`-Emitter ihn sieht, und das Overlay zeigte nie einen
+Fehler. Im `Error`-Zustand wird das Tray-Icon rot und das Overlay zeigt
+den Fehlertext (klickbar → Logs). Der nächste Menü-Hotkey räumt
+`Error → Idle` (Recovery) und öffnet das Menü — `handle_menu_hotkey`
+behandelt `Error` daher wie `Idle`.
 
 Der `StateBus` nutzt `tokio::sync::watch` (letzter Wert reicht; mehrere
 Subscriber, keine Backpressure-Probleme). Subscriber: Tray-Icon-Update,
@@ -481,7 +493,8 @@ Sekundär-Windows in `pipeline/mod.rs` und `ipc/recording.rs`:
 | `handle_menu_hotkey` (Idle) | — | `show()` + `set_focus()` |
 | `start_recording` | `show()` | `hide()` (idempotent) |
 | `finish_recording_and_inject` | `hide()` + 80 ms vor libei-Inject | — |
-| `spawn_overlay_state_listener` bei Idle / Error | `hide()` | — |
+| `spawn_overlay_state_listener` bei `Error` | `show()` (Fehler sichtbar) | — |
+| `spawn_overlay_state_listener` bei `Idle` | `hide()` | — |
 | IPC `cancel_menu` (Esc) | — | `hide()` |
 
 ### Overlay-View (`src/views/Overlay.tsx`)
