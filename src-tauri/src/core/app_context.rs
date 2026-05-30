@@ -11,6 +11,7 @@ use crate::core::log_buffer::LogRingBuffer;
 use crate::core::modes::{Mode, ModesRegistry};
 use crate::core::state::StateBus;
 use crate::injection::TextInjector;
+#[cfg(not(target_os = "windows"))]
 use crate::processing::embedded::LlamaEmbeddedProcessor;
 use crate::transcription::local::LocalTranscriber;
 use crate::transcription::Transcriber;
@@ -48,7 +49,9 @@ pub struct AppContext {
     /// first `process()` call; afterwards held for the app's lifetime.
     /// Only used when a mode sets `local_engine = "embedded"`;
     /// otherwise the model cache stays empty and the file on disk
-    /// doesn't have to exist yet.
+    /// doesn't have to exist yet. Linux/macOS-only — embedded llama-cpp-2
+    /// is not compiled on Windows (issue #1 ggml link collision).
+    #[cfg(not(target_os = "windows"))]
     pub local_llm_processor: Arc<LlamaEmbeddedProcessor>,
     /// Phase-3b refactor: cache of override `LocalTranscriber`s per
     /// Whisper model slot. A per-mode `mode.whisper_model_slot`
@@ -57,7 +60,9 @@ pub struct AppContext {
     /// value is the transcriber.
     pub extra_transcribers: Arc<Mutex<HashMap<String, Arc<LocalTranscriber>>>>,
     /// Analogously for `mode.embedded_llm_slot` — cache of override
-    /// `LlamaEmbeddedProcessor`s per GGUF slot.
+    /// `LlamaEmbeddedProcessor`s per GGUF slot. Linux/macOS-only (see
+    /// `local_llm_processor`).
+    #[cfg(not(target_os = "windows"))]
     pub extra_llm_processors: Arc<Mutex<HashMap<String, Arc<LlamaEmbeddedProcessor>>>>,
     /// Handle of the currently running streaming decode worker
     /// (phase 2, only when `transcription = "local"`). Spawned in

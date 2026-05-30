@@ -14,11 +14,14 @@ use crate::core::modes::{InputSource, Mode, OutputAction, ProcessingTarget, Tran
 use crate::core::state::AppState;
 use crate::core::AppContext;
 use crate::injection::{InjectOptions, InjectionStrategy};
+#[cfg(not(target_os = "windows"))]
 use crate::processing::embedded::LlamaEmbeddedProcessor;
 use crate::processing::{make_cloud_processor, make_local_processor, ProcessOpts, Processor};
 use crate::transcription::local::LocalTranscriber;
 use crate::transcription::local_agreement::stable_prefix;
-use crate::transcription::model_downloader::{LlmModelSlot, ModelSlot};
+#[cfg(not(target_os = "windows"))]
+use crate::transcription::model_downloader::LlmModelSlot;
+use crate::transcription::model_downloader::ModelSlot;
 use crate::transcription::{make_cloud_transcriber, TranscribeOpts, Transcriber};
 use serde::Serialize;
 use std::sync::Arc;
@@ -619,12 +622,32 @@ async fn run_local_processing(
     // `Mode::migrate_deprecated_fields`, so this default switch does
     // not affect them. `"ollama"` remains available as opt-in for users
     // with their own daemon installation.
-    let engine = mode.local_engine.as_deref().unwrap_or("embedded");
+    // On Windows the embedded llama.cpp engine is not compiled in (issue
+    // #1 ggml link collision), so an unset engine defaults to ollama there
+    // instead of embedded.
+    let engine = mode
+        .local_engine
+        .as_deref()
+        .unwrap_or(if cfg!(target_os = "windows") {
+            "ollama"
+        } else {
+            "embedded"
+        });
     match engine {
+        #[cfg(not(target_os = "windows"))]
         "embedded" => {
             let processor: Arc<dyn Processor> = resolve_embedded_llm(ctx, mode);
             processor.process(transcript, system_prompt, opts).await
         }
+        // The embedded engine is gated off on Windows; steer the user to
+        // an alternative instead of failing with an opaque error.
+        #[cfg(target_os = "windows")]
+        "embedded" => Err(VoiceTypeError::Mode(format!(
+            "Mode '{}': the embedded local LLM is not available on Windows. \
+             Set local_engine = \"ollama\" (with your own Ollama install) or \
+             switch this mode's processing to a cloud provider.",
+            mode.id
+        ))),
         "ollama" => run_local_processing_ollama(ctx, mode, transcript, system_prompt, opts).await,
         other => Err(VoiceTypeError::Mode(format!(
             "Modus '{}': unbekannte local_engine '{other}' (erlaubt: \"embedded\" | \"ollama\")",
@@ -705,7 +728,10 @@ fn resolve_local_transcriber(ctx: &Arc<AppContext>, mode: &Mode) -> Arc<LocalTra
 }
 
 /// Analogous resolver for the embedded LLM processor
-/// (`mode.embedded_llm_slot`).
+/// (`mode.embedded_llm_slot`). Linux/macOS-only — the embedded engine is
+/// not compiled on Windows (issue #1), where `run_local_processing`
+/// returns a steering error instead of calling this.
+#[cfg(not(target_os = "windows"))]
 fn resolve_embedded_llm(ctx: &Arc<AppContext>, mode: &Mode) -> Arc<LlamaEmbeddedProcessor> {
     let Some(slot_slug) = mode.embedded_llm_slot.as_ref() else {
         return ctx.local_llm_processor.clone();

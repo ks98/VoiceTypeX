@@ -55,13 +55,13 @@ jobs:
             # AppImage uebersprungen: linuxdeploy laeuft in CI nicht
             # (ks98/voicetypex#2, tauri#14796). Nur deb + rpm.
             args: "--bundles deb,rpm"
-          # Windows ist vorerst NICHT im Release: whisper.cpp + llama.cpp
-          # buendeln je ihr eigenes ggml -> LNK2005-Symbolkollision beim
-          # Linken auf MSVC. Tracking: ks98/voicetypex#1. Der gesamte
-          # Vulkan-Build kompiliert bereits; nur der Link bricht. Wieder
-          # aktivieren, sobald geloest:
-          # - platform: windows-latest
-          #   args: ""
+          # Windows: STT (whisper.cpp + Vulkan) + Cloud/Ollama-LLM. Das
+          # embedded llama-cpp-2 ist auf Windows ausgebaut (ks98/voicetypex#1),
+          # damit entfaellt die ggml-LNK2005-Kollision und der MSVC-Link
+          # gelingt. tauri-action baut das NSIS-Bundle (updaterJsonPreferNsis);
+          # args leer = Default-Bundles des Windows-Hosts (nsis).
+          - platform: windows-latest
+            args: ""
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4

@@ -488,5 +488,12 @@
   "settings.section.language": "Language",
   "settings.subnav.language": "Language",
   "settings.language.label": "UI language",
-  "settings.language.hint": "Switches the interface language immediately. Tray menu and default-mode names follow on the next app restart."
+  "settings.language.hint": "Switches the interface language immediately. Tray menu and default-mode names follow on the next app restart.",
+
+  "settings.windows.local_llm.hint": "Local LLM on Windows",
+  "settings.windows.local_llm.body": "The built-in (embedded) LLM is not available on Windows yet. For local post-processing, install Ollama and select it per mode; otherwise use a cloud provider. Speech-to-text still runs fully local.",
+  "mode_editor.llm.engine.windows_no_embedded": "The embedded engine is not available on Windows. This mode uses Ollama — set a model tag below (requires your own Ollama installation), or switch post-processing to a cloud provider.",
+  "wizard.windows_local.title": "Local LLM (optional)",
+  "wizard.windows_local.body": "On Windows the built-in LLM isn't bundled yet. You can skip this step: dictation works fully local, and text cleanup runs via a cloud provider.",
+  "wizard.windows_local.hint": "Want a fully local LLM? Install Ollama and pick it per mode in Settings later."
 }

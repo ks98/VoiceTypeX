@@ -82,7 +82,7 @@ jobs:
         run: pnpm test
 
   build-windows:
-    name: Build-Check (Windows)
+    name: Build + Test (Windows)
     runs-on: windows-latest
     # Ninja statt VS-Generator: das vulkan-shaders-gen-ExternalProject von
     # ggml/llama.cpp baut mit dem VS-Generator nicht (verschachtelte
@@ -132,12 +132,15 @@ jobs:
           workspaces: "./src-tauri -> target"
       - name: pnpm build (frontend + i18n gate)
         run: pnpm build
-      # Nur cargo check (kompiliert, linkt NICHT): der Windows-Build linkt
-      # derzeit nicht wegen der ggml-Symbolkollision whisper.cpp/llama.cpp
-      # (LNK2005) — Tracking: ks98/voicetypex#1. cargo check faengt
-      # Windows-spezifische Compile-Fehler (Pfade, keyring/DPAPI) frueh ab.
-      - name: cargo check
-        run: cargo check --manifest-path src-tauri/Cargo.toml
+      # Windows linkt jetzt: das embedded llama-cpp-2 ist auf Windows
+      # ausgebaut (ks98/voicetypex#1), womit nur whispers statisches ggml
+      # bleibt und die ggml-Symbolkollision (LNK2005) entfaellt. cargo build
+      # fuehrt den vollen Link aus (den cargo check bisher maskierte),
+      # cargo test --lib spiegelt den Linux-Job.
+      - name: cargo build
+        run: cargo build --manifest-path src-tauri/Cargo.toml
+      - name: cargo test
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib
 
   audit:
     name: Supply-Chain-Audit

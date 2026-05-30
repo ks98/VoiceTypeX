@@ -488,5 +488,12 @@
   "settings.update.downloading": "Download… {current} di {total}",
   "settings.update.downloading_indeterminate": "Download… {current}",
   "settings.update.installing": "Installazione — l'app si riavvierà…",
-  "settings.update.error": "Aggiornamento non riuscito: {message}"
+  "settings.update.error": "Aggiornamento non riuscito: {message}",
+
+  "settings.windows.local_llm.hint": "LLM locale su Windows",
+  "settings.windows.local_llm.body": "Il LLM integrato (embedded) non è ancora disponibile su Windows. Per la post-elaborazione locale, installa Ollama e selezionalo per ciascuna modalità; altrimenti usa un provider cloud. Il riconoscimento vocale resta completamente locale.",
+  "mode_editor.llm.engine.windows_no_embedded": "Il motore integrato non è disponibile su Windows. Questa modalità usa Ollama — inserisci un tag del modello qui sotto (richiede una tua installazione di Ollama) oppure passa la post-elaborazione a un provider cloud.",
+  "wizard.windows_local.title": "LLM locale (opzionale)",
+  "wizard.windows_local.body": "Su Windows il LLM integrato non è ancora incluso. Puoi saltare questo passaggio: la dettatura funziona completamente in locale e la pulizia del testo avviene tramite un provider cloud.",
+  "wizard.windows_local.hint": "Vuoi un LLM completamente locale? Installa Ollama e selezionalo per modalità più tardi nelle Impostazioni."
 }
