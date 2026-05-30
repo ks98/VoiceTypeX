@@ -134,13 +134,18 @@ Nutzer bekommen sie nicht angeboten.
 
 ## Plattform-Status
 
-- **Linux** (deb / rpm / AppImage): vollständig im Release, mit
-  Auto-Updater (AppImage).
+- **Linux** (deb / rpm / AppImage): im Release. Der AppImage-Build wurde
+  per `NO_STRIP=true` repariert — Hintergrund in
+  [#2](https://github.com/ks98/voicetypex/issues/2). Der In-App-Auto-Updater
+  (AppImage) ist noch **deaktiviert** (`uploadUpdaterJson: false`), bis der
+  `AppImage Validate`-Workflow ein startendes AppImage bestätigt.
 - **Windows** (NSIS): **im Release** — STT (whisper.cpp + Vulkan) +
-  Cloud/Ollama-LLM, mit Auto-Updater (NSIS). Das embedded llama-cpp-2 ist
-  auf Windows ausgebaut ([#1](https://github.com/ks98/voicetypex/issues/1):
-  ggml-Symbolkollision der zwei ggml-Kopien beim MSVC-Linken), womit der
-  Link gelingt; CI baut+testet Windows voll (`cargo build + test`).
+  Cloud/Ollama-LLM. Das embedded llama-cpp-2 ist auf Windows ausgebaut
+  ([#1](https://github.com/ks98/voicetypex/issues/1): ggml-Symbolkollision
+  der zwei ggml-Kopien beim MSVC-Linken), womit der Link gelingt; CI
+  baut+testet Windows voll (`cargo build + test`). Der NSIS-Auto-Updater
+  ist verdrahtet; die `latest.json` ist — wie bei AppImage — noch
+  deaktiviert (s. oben).
 - **macOS**: out of scope.
 
 ## Erst-Setup-Checkliste (einmalig)
