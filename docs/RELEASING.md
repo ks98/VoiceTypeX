@@ -25,10 +25,11 @@ veröffentlicht und an Nutzer ausgeliefert wird.
    → der In-App-Updater bietet die neue Version an
 ```
 
-> **Windows ist derzeit nicht im Release** (ggml-Symbolkollision beim
-> Linken von whisper.cpp + llama.cpp, MSVC). Tracking:
-> [#1](https://github.com/ks98/voicetypex/issues/1). Sobald gelöst, wird
-> `windows-latest` in `release.yml` wieder aktiviert.
+> **Windows ist wieder im Release** (NSIS-Installer mit STT + Vulkan +
+> Cloud/Ollama-LLM). Das embedded llama-cpp-2 ist auf Windows ausgebaut
+> ([#1](https://github.com/ks98/voicetypex/issues/1): ggml-Symbolkollision
+> beim MSVC-Linken von whisper.cpp + llama.cpp) — lokales LLM läuft dort
+> über einen selbst installierten Ollama-Daemon oder Cloud.
 
 ## Versionierung — eine Quelle
 
@@ -135,11 +136,11 @@ Nutzer bekommen sie nicht angeboten.
 
 - **Linux** (deb / rpm / AppImage): vollständig im Release, mit
   Auto-Updater (AppImage).
-- **Windows** (NSIS): **zurückgestellt** — siehe
-  [#1](https://github.com/ks98/voicetypex/issues/1). Der gesamte
-  Vulkan-Build kompiliert bereits; nur das Linken der zwei ggml-Kopien
-  (whisper.cpp + llama.cpp) bricht auf MSVC. `cargo check` läuft in CI
-  als Smoke-Test weiter.
+- **Windows** (NSIS): **im Release** — STT (whisper.cpp + Vulkan) +
+  Cloud/Ollama-LLM, mit Auto-Updater (NSIS). Das embedded llama-cpp-2 ist
+  auf Windows ausgebaut ([#1](https://github.com/ks98/voicetypex/issues/1):
+  ggml-Symbolkollision der zwei ggml-Kopien beim MSVC-Linken), womit der
+  Link gelingt; CI baut+testet Windows voll (`cargo build + test`).
 - **macOS**: out of scope.
 
 ## Erst-Setup-Checkliste (einmalig)

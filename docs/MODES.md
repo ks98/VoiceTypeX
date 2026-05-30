@@ -43,8 +43,13 @@ weiter unten.
 - *Exaktes Diktat* — wenn die Worte 1:1 so wie gesprochen ankommen sollen
   (z.B. Zitate, technische Begriffe, eigene Code-Identifier). Reiner
   Lokal-Pfad, kein Netz.
-- *Korrigierendes Diktat* — vollständig offline, lokales LLM entfernt
-  Versprecher und Selbstkorrekturen, behält Inhalt 1:1 bei.
+- *Korrigierendes Diktat* — auf Linux/macOS vollständig offline (das
+  embedded LLM entfernt Versprecher und Selbstkorrekturen, behält Inhalt
+  1:1 bei). **Auf Windows** ist das embedded LLM nicht kompiliert
+  (Issue #1) — die TOML ist plattform-identisch, aber zur Laufzeit
+  erfordert der Modus dort einen selbst installierten Ollama-Daemon
+  (`local_engine = "ollama"`) oder einen Cloud-Provider; sonst meldet er
+  beim Auslösen einen klaren Fehler statt abzustürzen.
 - *Förmliche E-Mail* / *Slack/Teams Nachricht* / *GitHub Issue* /
   *Anweisung an Coding-Agent* — Cloud-Pipeline mit Zielton pro Kontext.
   Diese vier teilen die STT-Stage (xAI), unterscheiden sich in
@@ -145,8 +150,9 @@ cloud_llm_model = "grok-4-fast-non-reasoning"
                                # als grok-4 bei Postprocessing-Aufgaben)
 
 # Nur wenn processing = "local":
-local_engine = "embedded"       # "embedded" (llama-cpp-2, Standard) | "ollama" (externer Daemon)
-                                # Default bei null/weglassen: "embedded" — kein Daemon nötig.
+local_engine = "embedded"       # "embedded" (llama-cpp-2, Linux/macOS) | "ollama" (externer Daemon)
+                                # Default bei null/weglassen: "embedded" auf Linux/macOS, "ollama"
+                                # auf Windows (dort ist Embedded nicht kompiliert — Issue #1).
                                 # Alte TOMLs mit `local_llm_model` (Phase 1/2) werden beim
                                 # Laden automatisch auf "ollama" migriert, damit sie nicht
                                 # versehentlich auf den falschen Engine-Pfad umgeleitet werden.

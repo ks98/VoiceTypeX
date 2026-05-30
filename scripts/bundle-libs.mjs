@@ -7,6 +7,11 @@
 // `beforeBundleCommand` in `tauri.conf.json` — laeuft NACH `cargo build`,
 // VOR dem tauri-bundler.
 //
+// Auf Windows ist das embedded llama-cpp-2 nicht kompiliert (Issue #1) —
+// whisper-rs-sys linkt sein ggml statisch, es gibt also kein
+// `llama.dll`/`ggml*.dll`. Das Skript findet dann keine Quelle und ist ein
+// sauberer No-op (Exit 0). Real kopiert wird nur auf Linux/macOS.
+//
 // Quelle ist das KANONISCHE Output-Verzeichnis von llama-cpp-sys-2
 // (`target/<profile>/build/llama-cpp-sys-2-<hash>/out/lib`). Dort liegt
 // immer die vollstaendige, korrekte Symlink-Kette
