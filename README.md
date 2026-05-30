@@ -10,8 +10,11 @@ läuft — derselbe Hotkey stoppt.
 **Beta** — funktional komplett auf **Linux/Wayland (KDE Plasma 6 +
 GNOME 46+)**, **Linux/X11** und **Windows**. Auto-Paste auf Wayland
 über `xdg-desktop-portal.RemoteDesktop` + libei. Settings und Wayland-
-Permission-Token persistent. Distribution-Bundles für Linux
-(`.deb` / `.rpm` / AppImage) + Windows (NSIS) verfügbar. macOS ist
+Permission-Token persistent. Release-Bundles für Linux
+(`.deb` / `.rpm` / AppImage) mit signiertem Auto-Updater verfügbar.
+Das **Windows-Release ist vorübergehend zurückgestellt** — beim Linken
+kollidieren die ggml-Symbole von whisper.cpp + llama.cpp (MSVC LNK2005),
+siehe [Issue #1](https://github.com/ks98/voicetypex/issues/1). macOS ist
 nicht im Scope.
 
 Beta-spezifische Hinweise: siehe Abschnitt

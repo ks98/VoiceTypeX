@@ -53,9 +53,13 @@ jobs:
           # README-Support Plasma 6 / GNOME 46+). Ergibt deb/rpm/AppImage.
           - platform: ubuntu-24.04
             args: ""
-          # Windows: NSIS-Installer.
-          - platform: windows-latest
-            args: ""
+          # Windows ist vorerst NICHT im Release: whisper.cpp + llama.cpp
+          # buendeln je ihr eigenes ggml -> LNK2005-Symbolkollision beim
+          # Linken auf MSVC. Tracking: ks98/voicetypex#1. Der gesamte
+          # Vulkan-Build kompiliert bereits; nur der Link bricht. Wieder
+          # aktivieren, sobald geloest:
+          # - platform: windows-latest
+          #   args: ""
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
