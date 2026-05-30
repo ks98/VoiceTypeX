@@ -1,35 +1,35 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Kopiert die zur Laufzeit benoetigten Shared-Libs (Linux: `libllama.so*`,
-// `libggml*.so*`; Windows: `llama.dll`, `ggml*.dll`) nach
-// `src-tauri/resources/lib/`, damit der tauri-bundler sie via
-// `bundle.resources` ins finale Bundle packt. Getriggert ueber
-// `beforeBundleCommand` in `tauri.conf.json` — laeuft NACH `cargo build`,
-// VOR dem tauri-bundler.
+// Copies the shared libs needed at runtime (Linux: `libllama.so*`,
+// `libggml*.so*`; Windows: `llama.dll`, `ggml*.dll`) to
+// `src-tauri/resources/lib/`, so the tauri-bundler packs them into the
+// final bundle via `bundle.resources`. Triggered via
+// `beforeBundleCommand` in `tauri.conf.json` — runs AFTER `cargo build`,
+// BEFORE the tauri-bundler.
 //
-// Auf Windows ist das embedded llama-cpp-2 nicht kompiliert (Issue #1) —
-// whisper-rs-sys linkt sein ggml statisch, es gibt also kein
-// `llama.dll`/`ggml*.dll`. Das Skript findet dann keine Quelle und ist ein
-// sauberer No-op (Exit 0). Real kopiert wird nur auf Linux/macOS.
+// On Windows the embedded llama-cpp-2 is not compiled (Issue #1) —
+// whisper-rs-sys links its ggml statically, so there is no
+// `llama.dll`/`ggml*.dll`. The script then finds no source and is a
+// clean no-op (Exit 0). Real copying only happens on Linux/macOS.
 //
-// Quelle ist das KANONISCHE Output-Verzeichnis von llama-cpp-sys-2
-// (`target/<profile>/build/llama-cpp-sys-2-<hash>/out/lib`). Dort liegt
-// immer die vollstaendige, korrekte Symlink-Kette
-// (`libfoo.so -> libfoo.so.0 -> libfoo.so.0.9.11`). Das frueher genutzte
-// Top-Level `target/<profile>/` enthaelt durch das Zusammenspiel von
-// `clean-dangling-libs` + gecachtem build.rs teils *dangling* Symlinks —
-// `copyFileSync` folgt ihnen ins Leere (ENOENT). Daher NICHT von dort
-// quellen.
+// The source is the CANONICAL output directory of llama-cpp-sys-2
+// (`target/<profile>/build/llama-cpp-sys-2-<hash>/out/lib`). It always
+// holds the complete, correct symlink chain
+// (`libfoo.so -> libfoo.so.0 -> libfoo.so.0.9.11`). The previously used
+// top-level `target/<profile>/` contains, due to the interplay of
+// `clean-dangling-libs` + a cached build.rs, partly *dangling* symlinks —
+// `copyFileSync` follows them into the void (ENOENT). Therefore do NOT
+// source from there.
 //
-// Symlinks werden ALS Symlinks uebernommen (eine reale Datei + Kette),
-// damit der Runtime-Loader die SONAME (z.B. `libllama.so.0`) aufloest und
-// das Bundle nicht jede Lib dreifach enthaelt.
+// Symlinks are carried over AS symlinks (one real file + chain), so the
+// runtime loader resolves the SONAME (e.g. `libllama.so.0`) and the
+// bundle does not contain every lib three times.
 //
-// - **Linux**: Files landen in `$ORIGIN/resources/lib/`, gefunden via
-//   rpath-Kaskade (`src-tauri/build.rs`).
-// - **Windows**: `$INSTDIR\resources\lib\` — der DLL-Loader sucht dort
-//   nicht automatisch (NSIS-Hook, siehe `docs/PLATFORMS.md`). Das
-//   Windows-Release ist derzeit zurueckgestellt (ks98/voicetypex#1).
+// - **Linux**: Files land in `$ORIGIN/resources/lib/`, found via the
+//   rpath cascade (`src-tauri/build.rs`).
+// - **Windows**: `$INSTDIR\resources\lib\` — the DLL loader does not
+//   search there automatically (NSIS hook, see `docs/PLATFORMS.md`). The
+//   Windows release is currently deferred (ks98/voicetypex#1).
 
 import {
   existsSync,
@@ -55,12 +55,12 @@ const PATTERNS = IS_WINDOWS
   ? [/^ggml(-[a-z0-9_]+)?\.dll$/, /^llama\.dll$/]
   : [/^libggml(-[a-z0-9_]+)?\.so(\.[\d.]+)?$/, /^libllama\.so(\.[\d.]+)?$/];
 
-// Marker-Datei, an der wir das richtige out-Verzeichnis erkennen.
+// Marker file by which we recognize the correct out directory.
 const MARKER = IS_WINDOWS
   ? /^llama\.dll$/
   : /^libllama\.so(\.[\d.]+)?$/;
 
-// Unterordner im build-out, in denen die Libs liegen (Plattform-abhaengig).
+// Subdirectories in the build-out where the libs reside (platform-dependent).
 const OUT_SUBDIRS = IS_WINDOWS
   ? ["out/build/bin", "out/bin", "out/lib"]
   : ["out/lib"];
@@ -78,7 +78,7 @@ function markerMtime(dir) {
   return newest;
 }
 
-// Neuestes llama-cpp-sys-2-out-Verzeichnis mit den Libs (release vor debug).
+// Newest llama-cpp-sys-2-out directory with the libs (release before debug).
 function findSourceDir() {
   const found = [];
   for (const profile of ["release", "debug"]) {
@@ -103,8 +103,8 @@ const source = findSourceDir();
 if (!source) {
   const marker = IS_WINDOWS ? "llama.dll" : "libllama.so*";
   console.warn(
-    `[bundle-libs] Kein llama-cpp-sys-2 out-Verzeichnis mit ${marker} ` +
-      "gefunden — Cargo-Build muss vorher laufen. Skript ist No-Op.",
+    `[bundle-libs] No llama-cpp-sys-2 out directory with ${marker} ` +
+      "found — cargo build must run first. Script is a no-op.",
   );
   process.exit(0);
 }
@@ -120,12 +120,12 @@ for (const name of readdirSync(source)) {
   try {
     const st = lstatSync(src);
     if (st.isSymbolicLink()) {
-      // Symlink-Kette erhalten: relatives Ziel uebernehmen.
+      // Preserve the symlink chain: carry over the relative target.
       rmSync(dst, { force: true });
       symlinkSync(readlinkSync(src), dst);
       linked += 1;
     } else if (st.isFile()) {
-      // Reale Datei: nur kopieren, wenn neu/geaendert (Groesse).
+      // Real file: only copy if new/changed (size).
       if (existsSync(dst) && !lstatSync(dst).isSymbolicLink() && statSync(dst).size === st.size) {
         continue;
       }
@@ -134,11 +134,11 @@ for (const name of readdirSync(source)) {
       copied += 1;
     }
   } catch (e) {
-    console.error(`[bundle-libs] ${name} fehlgeschlagen:`, e);
+    console.error(`[bundle-libs] ${name} failed:`, e);
     process.exit(1);
   }
 }
 
 console.log(
-  `[bundle-libs] ${copied} Libs + ${linked} Symlinks aus ${source} nach ${RESOURCES_LIB}.`,
+  `[bundle-libs] ${copied} libs + ${linked} symlinks from ${source} to ${RESOURCES_LIB}.`,
 );

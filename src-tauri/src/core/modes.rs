@@ -292,7 +292,7 @@ impl Mode {
                 "embedded" | "ollama" => {}
                 other => {
                     return Err(VoiceTypeError::Mode(format!(
-                        "Mode '{}': local_engine '{other}' unbekannt (erlaubt: \"embedded\", \"ollama\")",
+                        "Mode '{}': local_engine '{other}' unknown (allowed: \"embedded\", \"ollama\")",
                         self.id
                     )));
                 }
@@ -310,7 +310,7 @@ impl Mode {
                 && self.local_llm_model.is_none()
             {
                 return Err(VoiceTypeError::Mode(format!(
-                    "Mode '{}': local_engine=ollama, aber weder ollama_model_tag noch local_llm_model gesetzt",
+                    "Mode '{}': local_engine=ollama, but neither ollama_model_tag nor local_llm_model set",
                     self.id
                 )));
             }
@@ -386,7 +386,7 @@ impl Mode {
             tracing::warn!(
                 mode_id = %self.id,
                 value = ?val,
-                "TOML-Feld `local_llm_model` ist deprecated — automatisch nach `ollama_model_tag` migriert"
+                "TOML field `local_llm_model` is deprecated — automatically migrated to `ollama_model_tag`"
             );
             self.ollama_model_tag = val;
         }
@@ -396,7 +396,7 @@ impl Mode {
         {
             tracing::warn!(
                 mode_id = %self.id,
-                "Mode hat Ollama-Indizien aber kein `local_engine` — setze explizit auf \"ollama\" (Migration: Embedded ist neuer Default)"
+                "Mode has Ollama indicators but no `local_engine` — setting it explicitly to \"ollama\" (migration: embedded is the new default)"
             );
             self.local_engine = Some("ollama".to_string());
         }
@@ -429,7 +429,7 @@ pub fn load_modes_from_dir(dir: &Path) -> Result<Vec<Mode>> {
 
         if let Some(prev) = by_id.get(&mode.id) {
             return Err(VoiceTypeError::Mode(format!(
-                "Doppelte Modus-ID '{}' in {} und (vorher) {}",
+                "Duplicate mode ID '{}' in {} and (previously) {}",
                 mode.id,
                 path.display(),
                 prev.name

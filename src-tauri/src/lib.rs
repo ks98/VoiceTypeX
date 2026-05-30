@@ -304,12 +304,12 @@ pub fn run() {
 
             tracing::info!(
                 display_server = %session.display_server,
-                "VoiceTypeX gestartet (Phase 3 — Editor + Onboarding)"
+                "VoiceTypeX started (Phase 3 — Editor + Onboarding)"
             );
             Ok(())
         })
         .run(tauri::generate_context!())
-        .expect("Tauri-App konnte nicht gestartet werden");
+        .expect("Tauri app failed to start");
 }
 
 fn init_tracing(buffer: &LogRingBuffer) {

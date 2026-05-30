@@ -128,7 +128,7 @@ impl Processor for AnthropicProcessor {
 
             if text.is_empty() {
                 return Err(VoiceTypeError::Processing(
-                    "Anthropic-Antwort enthielt keinen Text-Block".into(),
+                    "Anthropic response contained no text block".into(),
                 ));
             }
             Ok(text)

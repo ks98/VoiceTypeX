@@ -92,7 +92,7 @@ impl LlamaEmbeddedProcessor {
         }
         if !self.model_path.exists() {
             return Err(VoiceTypeError::Processing(format!(
-                "LLM-Modell-Datei fehlt: {} (bitte ueber Settings herunterladen)",
+                "LLM model file missing: {} (download it via Settings)",
                 self.model_path.display()
             )));
         }
@@ -195,7 +195,7 @@ fn run_llama_blocking(
         // tokens for the answer. The dictation use case should never
         // hit this, but we check defensively.
         return Err(VoiceTypeError::Processing(format!(
-            "Prompt zu lang ({prompt_len} Tokens) — Diktat verkuerzen oder ctx_size erhoehen"
+            "Prompt too long ({prompt_len} tokens) — shorten the dictation or increase ctx_size"
         )));
     }
 

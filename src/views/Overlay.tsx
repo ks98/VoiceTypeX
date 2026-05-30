@@ -69,8 +69,8 @@ export default function Overlay(): JSX.Element {
       <div
         className={
           "h-full w-full rounded-lg vtx-glass shadow-2xl px-4 py-2.5 flex flex-col justify-center gap-1 " +
-          // E1: gleicher Container, key-basierter Inhalt — Cross-Fade.
-          // A4: bei error muessen Klicks ankommen (Detail-Pfad).
+          // E1: same container, key-based content — cross-fade.
+          // A4: on error, clicks must register (detail path).
           (isError ? "pointer-events-auto" : "")
         }
       >

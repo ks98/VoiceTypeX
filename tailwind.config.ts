@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import type { Config } from "tailwindcss";
 
-// Tokens kommen als CSS-Custom-Properties aus src/styles/globals.css
-// (Light unter :root, Dark unter html.dark). Die Mapping-Funktion gibt
-// rgb(var(...) / <alpha-value>) zurück, damit Tailwind's Opacity-
-// Modifier (bg-canvas/80) weiter funktionieren.
+// Tokens come as CSS custom properties from src/styles/globals.css
+// (Light under :root, Dark under html.dark). The mapping function returns
+// rgb(var(...) / <alpha-value>) so that Tailwind's opacity
+// modifiers (bg-canvas/80) keep working.
 const v = (name: string) => `rgb(var(--${name}-rgb) / <alpha-value>)`;
 
 const config: Config = {
@@ -50,10 +50,10 @@ const config: Config = {
           "monospace",
         ],
       },
-      // Zusätzliche kleinere Stufe für Begleittext (Sidebar-Subtitle,
-      // Menu-Hotkey-Hint, Mode-Description im Menu, Initials-Badge).
-      // 11px Lower-Bound nach Lesbarkeits-Empfehlung; alle ehemaligen
-      // text-[10px]/[11px]-Magic-Werte fallen darauf.
+      // Additional smaller size for supporting text (sidebar subtitle,
+      // menu hotkey hint, mode description in the menu, initials badge).
+      // 11px lower bound per readability recommendation; all former
+      // text-[10px]/[11px] magic values fall back to it.
       fontSize: {
         xxs: ["11px", "14px"],
       },

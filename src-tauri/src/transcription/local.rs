@@ -91,7 +91,7 @@ impl LocalTranscriber {
             .ok_or_else(|| VoiceTypeError::Transcription("Model path not UTF-8".into()))?;
         if !self.model_path.exists() {
             return Err(VoiceTypeError::Transcription(format!(
-                "Modell-Datei fehlt: {path_str} (siehe Modell-Downloader)"
+                "Model file missing: {path_str} (see the model downloader)"
             )));
         }
         let ctx = WhisperContext::new_with_params(path_str, WhisperContextParameters::default())
@@ -205,7 +205,7 @@ fn run_whisper_blocking(
     let guard = ctx.read();
     let context = guard.as_ref().ok_or_else(|| {
         VoiceTypeError::Transcription(format!(
-            "Whisper-Context nicht geladen ({})",
+            "Whisper context not loaded ({})",
             model_path.display()
         ))
     })?;
@@ -242,7 +242,7 @@ fn run_whisper_blocking(
     if profile == DecodeProfile::Streaming {
         if let Some(ctx_frames) = dynamic_audio_ctx_frames(samples.len()) {
             params.set_audio_ctx(ctx_frames);
-            tracing::debug!(audio_ctx = ctx_frames, "Streaming-Pass audio_ctx gesetzt");
+            tracing::debug!(audio_ctx = ctx_frames, "streaming pass audio_ctx set");
         }
     }
 
@@ -285,7 +285,7 @@ fn run_whisper_blocking(
     tracing::info!(
         n_threads,
         from_setting = n_threads_override.is_some(),
-        "Whisper n_threads gesetzt"
+        "Whisper n_threads set"
     );
 
     if let Some(lang) = language.as_deref() {
@@ -311,7 +311,7 @@ fn run_whisper_blocking(
         } else {
             tracing::warn!(
                 vad_model = %p.display(),
-                "VAD-Modell-Datei fehlt — laufe ohne VAD"
+                "VAD model file missing — running without VAD"
             );
             None
         }
@@ -323,7 +323,7 @@ fn run_whisper_blocking(
         params.set_vad_params(vad_params);
         params.set_vad_model_path(Some(vad_path_str));
         params.enable_vad(true);
-        tracing::debug!(vad_model = vad_path_str, "Silero-VAD aktiv");
+        tracing::debug!(vad_model = vad_path_str, "Silero-VAD active");
     }
 
     state
@@ -340,7 +340,7 @@ fn run_whisper_blocking(
     let mut text = String::new();
     for i in 0..n_segments {
         let segment = state.get_segment(i).ok_or_else(|| {
-            VoiceTypeError::Transcription(format!("get_segment({i}) lieferte None"))
+            VoiceTypeError::Transcription(format!("get_segment({i}) returned None"))
         })?;
         let segment_text = segment
             .to_str_lossy()
@@ -360,13 +360,13 @@ fn decode_wav_to_f32_mono_16k(wav_bytes: &[u8]) -> Result<Vec<f32>> {
     let spec = reader.spec();
     if spec.sample_rate != 16_000 {
         return Err(VoiceTypeError::Transcription(format!(
-            "Erwarte 16 kHz, bekam {} Hz",
+            "Expected 16 kHz, got {} Hz",
             spec.sample_rate
         )));
     }
     if spec.channels != 1 {
         return Err(VoiceTypeError::Transcription(format!(
-            "Erwarte Mono, bekam {} Channels",
+            "Expected mono, got {} channels",
             spec.channels
         )));
     }

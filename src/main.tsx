@@ -22,9 +22,7 @@ subscribeSystemTheme(() => {
 
 const rootEl = document.getElementById("root");
 if (!rootEl) {
-  throw new Error(
-    "Root-Element #root nicht gefunden — index.html beschaedigt?",
-  );
+  throw new Error("Root element #root not found — index.html corrupted?");
 }
 
 // Window routing: Tauri starts three windows from the same

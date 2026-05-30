@@ -37,7 +37,7 @@ where
         match operation().await {
             Ok(value) => {
                 if attempt > 0 {
-                    tracing::info!(attempt, "Retry erfolgreich");
+                    tracing::info!(attempt, "retry succeeded");
                 }
                 return Ok(value);
             }
@@ -47,7 +47,7 @@ where
                     max = max_attempts,
                     backoff_ms,
                     kind = ?e.kind(),
-                    "Transient-Fehler — Retry"
+                    "transient error — retrying"
                 );
                 tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
                 backoff_ms = backoff_ms.saturating_mul(BACKOFF_MULTIPLIER);
@@ -59,7 +59,9 @@ where
 
     // Only reachable when all attempts were retryable and failed.
     Err(last_err.unwrap_or_else(|| {
-        VoiceTypeError::Other(anyhow::anyhow!("Retry-Loop ohne Erfolgs- oder Fehler-Pfad"))
+        VoiceTypeError::Other(anyhow::anyhow!(
+            "retry loop ended without a success or error path"
+        ))
     }))
 }
 

@@ -1,16 +1,16 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Release-Pipeline. Wird durch einen Tag `v*` ausgeloest (per
-# `pnpm release <bump>` erzeugt -> `git push --follow-tags`).
+# Release pipeline. Triggered by a tag `v*` (created via
+# `pnpm release <bump>` -> `git push --follow-tags`).
 #
-# Ablauf: git-cliff erzeugt die Release-Notes -> tauri-action baut die
-# Bundles (Linux: deb/rpm/AppImage, Windows: NSIS), signiert die
-# Updater-Artefakte mit dem minisign-Key, legt ein GitHub-Release als
-# DRAFT an (Review-Gate) und laedt Assets + latest.json hoch.
-# Veroeffentlichen ist ein bewusster manueller Klick ("Publish release"
-# oder `gh release edit <tag> --draft=false`) — erst dann zeigt
-# /releases/latest/download/latest.json auf die neue Version und der
-# In-App-Updater bietet sie an.
+# Flow: git-cliff generates the release notes -> tauri-action builds the
+# bundles (Linux: deb/rpm/AppImage, Windows: NSIS), signs the
+# updater artifacts with the minisign key, creates a GitHub release as a
+# DRAFT (review gate) and uploads assets + latest.json.
+# Publishing is a deliberate manual click ("Publish release"
+# or `gh release edit <tag> --draft=false`) — only then does
+# /releases/latest/download/latest.json point to the new version and the
+# in-app updater offers it.
 
 name: Release
 
@@ -20,7 +20,7 @@ on:
       - "v*"
 
 permissions:
-  contents: write # tauri-action: Release anlegen + Assets hochladen (GITHUB_TOKEN)
+  contents: write # tauri-action: create release + upload assets (GITHUB_TOKEN)
 
 jobs:
   changelog:
@@ -31,7 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # git-cliff braucht volle Historie + Tags
+          fetch-depth: 0 # git-cliff needs full history + tags
       - name: Generate release notes
         id: git-cliff
         uses: orhun/git-cliff-action@v4
@@ -48,31 +48,31 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Linux: ubuntu-24.04, weil glslc dort ein sauberes apt-Paket ist.
-          # Setzt eine glibc-2.39-Untergrenze (deckt sich mit dem
-          # README-Support Plasma 6 / GNOME 46+). Ergibt deb/rpm/AppImage.
+          # Linux: ubuntu-24.04, because glslc is a clean apt package there.
+          # Sets a glibc-2.39 lower bound (matches the
+          # README support Plasma 6 / GNOME 46+). Produces deb/rpm/AppImage.
           - platform: ubuntu-24.04
-            # AppImage wieder aktiv. Der fruehere CI-Fehler war NICHT FUSE,
-            # sondern linuxdeploys gebuendeltes strip (binutils 2.35), das an
-            # den .relr.dyn-Sektionen moderner System-Libs (glibc >=2.36)
-            # stirbt ("unknown type [0x13]"). NO_STRIP=true (Build-Step unten)
-            # ueberspringt den strip-Pass; --verbose zeigt linuxdeploys sonst
-            # verschluckten stderr. (ks98/voicetypex#2, tauri#14796)
+            # AppImage active again. The earlier CI failure was NOT FUSE,
+            # but linuxdeploy's bundled strip (binutils 2.35), which dies on
+            # the .relr.dyn sections of modern system libs (glibc >=2.36)
+            # ("unknown type [0x13]"). NO_STRIP=true (build step below)
+            # skips the strip pass; --verbose surfaces the stderr that
+            # linuxdeploy otherwise swallows. (ks98/voicetypex#2, tauri#14796)
             args: "--bundles deb,rpm,appimage --verbose"
-          # Windows: STT (whisper.cpp + Vulkan) + Cloud/Ollama-LLM. Das
-          # embedded llama-cpp-2 ist auf Windows ausgebaut (ks98/voicetypex#1),
-          # damit entfaellt die ggml-LNK2005-Kollision und der MSVC-Link
-          # gelingt. tauri-action baut das NSIS-Bundle (updaterJsonPreferNsis);
-          # args leer = Default-Bundles des Windows-Hosts (nsis).
+          # Windows: STT (whisper.cpp + Vulkan) + cloud/Ollama LLM. The
+          # embedded llama-cpp-2 is stripped out on Windows (ks98/voicetypex#1),
+          # which removes the ggml-LNK2005 collision and lets the MSVC link
+          # succeed. tauri-action builds the NSIS bundle (updaterJsonPreferNsis);
+          # empty args = default bundles of the Windows host (nsis).
           - platform: windows-latest
             args: ""
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
 
-      # MSVC + Ninja für den Windows-Vulkan-Build: das vulkan-shaders-gen-
-      # ExternalProject von ggml/llama.cpp baut mit dem VS-Generator nicht.
-      # Nur Windows — auf Linux bleibt der Default-Generator.
+      # MSVC + Ninja for the Windows Vulkan build: the vulkan-shaders-gen
+      # ExternalProject of ggml/llama.cpp does not build with the VS generator.
+      # Windows only — on Linux the default generator stays.
       - name: Set up MSVC environment (Windows)
         if: matrix.platform == 'windows-latest'
         uses: ilammy/msvc-dev-cmd@v1
@@ -80,9 +80,9 @@ jobs:
         if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: |
-          # Ninja statt VS-Generator (vulkan-shaders-gen-ExternalProject);
-          # Long-Paths + kurzes Target-Dir gegen MSVC MAX_PATH (260) im
-          # verschachtelten Shader-Build (C1083, leerer Dateiname).
+          # Ninja instead of VS generator (vulkan-shaders-gen ExternalProject);
+          # long paths + short target dir against MSVC MAX_PATH (260) in the
+          # nested shader build (C1083, empty filename).
           echo "CMAKE_GENERATOR=Ninja" >> $env:GITHUB_ENV
           echo "CARGO_TARGET_DIR=C:\t" >> $env:GITHUB_ENV
           New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force | Out-Null
@@ -90,9 +90,9 @@ jobs:
         if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: |
-          # ggml aktiviert ccache automatisch, wenn gefunden; ccache + MSVC
-          # /Zi bricht den verschachtelten vulkan-shaders-gen-Build (C1083).
-          # ccache + sccache verstecken -> GGML_CCACHE aus.
+          # ggml enables ccache automatically when found; ccache + MSVC
+          # /Zi breaks the nested vulkan-shaders-gen build (C1083).
+          # Hide ccache + sccache -> GGML_CCACHE off.
           foreach ($tool in 'ccache', 'sccache') {
             Get-Command $tool -All -ErrorAction SilentlyContinue | ForEach-Object {
               Write-Host "Disabling $($_.Source)"
@@ -100,7 +100,7 @@ jobs:
             }
           }
 
-      # --- System-Abhaengigkeiten (Tauri + Vulkan-GPU-Build) -------------
+      # --- System dependencies (Tauri + Vulkan GPU build) ----------------
       - name: Install Linux system dependencies
         if: matrix.platform == 'ubuntu-24.04'
         run: |
@@ -112,15 +112,15 @@ jobs:
             libasound2-dev libxdo-dev libudev-dev \
             libxcb1-dev libxcb-xtest0-dev libxcb-xfixes0-dev \
             libdbus-1-dev libclang-dev patchelf
-      # Kein FUSE2-Step noetig: der tauri-bundler ruft linuxdeploy ohnehin
-      # mit --appimage-extract-and-run + APPIMAGE_EXTRACT_AND_RUN=1 auf,
-      # mountet also nichts. Der frueher hier installierte libfuse2t64 war
-      # ein No-Op (der echte AppImage-Fix ist NO_STRIP, s. Build-Step).
+      # No FUSE2 step needed: the tauri-bundler invokes linuxdeploy anyway
+      # with --appimage-extract-and-run + APPIMAGE_EXTRACT_AND_RUN=1,
+      # so it mounts nothing. The libfuse2t64 previously installed here was
+      # a no-op (the real AppImage fix is NO_STRIP, see build step).
 
-      # glslc + Vulkan-Header fuer whisper.cpp/llama.cpp. Version PINNEN —
-      # ein ungepinntes "latest" hat shaderc-2025.x-Regressionen, die den
-      # ggml-Vulkan-Shader-Build brechen. Beim ersten CI-Lauf gegen
-      # whisper-rs 0.16 / llama-cpp-2 0.1.146 validieren, dann ggf. bumpen.
+      # glslc + Vulkan headers for whisper.cpp/llama.cpp. PIN the version —
+      # an unpinned "latest" has shaderc-2025.x regressions that break the
+      # ggml-Vulkan shader build. Validate on the first CI run against
+      # whisper-rs 0.16 / llama-cpp-2 0.1.146, then bump if needed.
       - name: Install Vulkan SDK (Windows)
         if: matrix.platform == 'windows-latest'
         uses: jakoch/install-vulkan-sdk-action@v1
@@ -147,43 +147,43 @@ jobs:
           workspaces: "./src-tauri -> target"
 
       # --- Build + Release ----------------------------------------------
-      # tauri-action ruft `tauri build`, das beforeBuildCommand (pnpm build,
-      # inkl. i18n:check) und beforeBundleCommand (bundle-libs.mjs, kopiert
-      # die GPU-Libs nach resources/lib) selbst ausfuehrt — KEINE separaten
-      # Build-Schritte noetig. Default-Features (gpu-vulkan); kein
-      # --all-features (das zoege embedded-cuda-dynamic rein, braucht CUDA).
+      # tauri-action calls `tauri build`, which runs the beforeBuildCommand
+      # (pnpm build, incl. i18n:check) and beforeBundleCommand (bundle-libs.mjs,
+      # copies the GPU libs to resources/lib) itself — NO separate
+      # build steps needed. Default features (gpu-vulkan); no
+      # --all-features (that would pull in embedded-cuda-dynamic, needs CUDA).
       - name: Build bundles + create release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # linuxdeploys gebuendeltes strip (binutils 2.35) bricht an den
-          # .relr.dyn-Sektionen moderner System-Libs -> strip-Pass
-          # ueberspringen. Wird von linuxdeploy gelesen (NICHT von Tauri) und
-          # kann NICHT in tauri.conf.json stehen. -> ks98/voicetypex#2
+          # linuxdeploy's bundled strip (binutils 2.35) breaks on the
+          # .relr.dyn sections of modern system libs -> skip the strip
+          # pass. Read by linuxdeploy (NOT by Tauri) and
+          # CANNOT live in tauri.conf.json. -> ks98/voicetypex#2
           NO_STRIP: "true"
-          # linuxdeploy findet die NEEDED-Libs libllama.so.0/libggml*.so nicht
-          # (Tauri-Resource resources/lib, kein Standard-Linker-Pfad) -> Pfad
-          # ergaenzen, damit es sie aufloest + nach usr/lib deployed.
+          # linuxdeploy does not find the NEEDED libs libllama.so.0/libggml*.so
+          # (Tauri resource resources/lib, not a standard linker path) -> add
+          # the path so it resolves them + deploys them to usr/lib.
           # -> ks98/voicetypex#2
           LD_LIBRARY_PATH: ${{ github.workspace }}/src-tauri/resources/lib
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "VoiceTypeX ${{ github.ref_name }}"
           releaseBody: ${{ needs.changelog.outputs.body }}
-          # Draft = Review-Gate: Assets + latest.json laden hoch, werden aber
-          # erst beim manuellen Publish fuer den Updater sichtbar.
+          # Draft = review gate: assets + latest.json upload, but only
+          # become visible to the updater on the manual publish.
           releaseDraft: true
-          # -rc/-beta-Tags als Prerelease markieren -> /releases/latest/
-          # ueberspringt sie, stabile Nutzer bekommen sie nicht angeboten.
+          # Mark -rc/-beta tags as prerelease -> /releases/latest/
+          # skips them, stable users are not offered them.
           prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') }}
-          # Wir bauen NSIS (nicht WiX) auf Windows -> NSIS in latest.json.
-          # latest.json noch NICHT hochladen: der AppImage-Build ist gerade
-          # erst (per NO_STRIP) repariert und noch nicht auf Lauffaehigkeit
-          # validiert (White-Screen-Risiko). Scharfschalten, sobald der
-          # appimage-validate-Workflow ein startendes AppImage bestaetigt.
-          # (deb/rpm koennten mit tauri-plugin-updater 2.10.1 ebenfalls
-          # self-updaten — separater Pfad.) -> ks98/voicetypex#2
+          # We build NSIS (not WiX) on Windows -> NSIS in latest.json.
+          # Do NOT upload latest.json yet: the AppImage build was just
+          # (via NO_STRIP) fixed and is not yet validated for
+          # runnability (white-screen risk). Arm it once the
+          # appimage-validate workflow confirms a launching AppImage.
+          # (deb/rpm could also self-update with tauri-plugin-updater 2.10.1
+          # — separate path.) -> ks98/voicetypex#2
           uploadUpdaterJson: false
           args: ${{ matrix.args }}

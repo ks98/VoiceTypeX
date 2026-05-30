@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! OpenAI Whisper API — `POST https://api.openai.com/v1/audio/transcriptions`.
-//! Whisper-API-Standard, multipart/form-data. Default-Modell `whisper-1`.
+//! Whisper API standard, multipart/form-data. Default model `whisper-1`.
 
 use crate::core::error::Result;
 use crate::transcription::cloud::whisper_compatible::WhisperCompatibleClient;

@@ -54,7 +54,7 @@ describe("translate", () => {
   });
 
   it("picks plural .other for count=0 in en", () => {
-    // EN behandelt 0 als "other" (CLDR-Konvention).
+    // EN treats 0 as "other" (CLDR convention).
     expect(translate("logs.missed", { count: 0 }, ctxEn)).toBe(
       "0 new entries while paused",
     );
@@ -101,7 +101,7 @@ describe("translate", () => {
   });
 
   it("ignores count when not a number", () => {
-    // count="three" → kein Plural-Pfad, direkter Key-Lookup.
+    // count="three" → no plural path, direct key lookup.
     const dict: Dictionary = { plain: "Plain {count}" };
     expect(
       translate(

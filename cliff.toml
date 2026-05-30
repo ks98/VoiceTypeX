@@ -1,24 +1,24 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# git-cliff Konfiguration fuer VoiceTypeX — generiert CHANGELOG.md und den
-# GitHub-Release-Body aus Conventional Commits.
+# git-cliff configuration for VoiceTypeX — generates CHANGELOG.md and the
+# GitHub release body from Conventional Commits.
 #
-# Erzeugen:
-#   git cliff --latest --strip header -o release_notes.md   # nur das aktuelle Tag (CI-Release-Body)
-#   git cliff -o CHANGELOG.md                                # vollstaendiger Changelog
-#   git cliff --unreleased                                   # Vorschau der noch ungetaggten Commits
+# Generate:
+#   git cliff --latest --strip header -o release_notes.md   # only the current tag (CI release body)
+#   git cliff -o CHANGELOG.md                                # full changelog
+#   git cliff --unreleased                                   # preview of the still-untagged commits
 #
-# WICHTIG: Wenn ein NEUER Commit-Type eingefuehrt wird, hier in
-# `commit_parsers` ergaenzen — sonst faellt er in den Catch-all und
-# verschwindet aus dem Changelog (das gilt insb. fuer das projekteigene
-# `tune:`, das hier explizit als eigene Gruppe gefuehrt wird).
+# IMPORTANT: When a NEW commit type is introduced, add it here in
+# `commit_parsers` — otherwise it falls into the catch-all and
+# disappears from the changelog (this applies in particular to the project's own
+# `tune:`, which is listed here explicitly as its own group).
 
 [changelog]
 header = """
 # Changelog
 
-Alle nennenswerten Aenderungen an VoiceTypeX. Format orientiert an
-[Keep a Changelog](https://keepachangelog.com/), Versionierung nach
+All notable changes to VoiceTypeX. Format based on
+[Keep a Changelog](https://keepachangelog.com/), versioning per
 [Semantic Versioning](https://semver.org/).
 """
 body = """
@@ -40,13 +40,13 @@ trim = true
 footer = ""
 
 [git]
-# Nur Conventional Commits beruecksichtigen; alles andere rausfiltern.
+# Only consider Conventional Commits; filter out everything else.
 conventional_commits = true
 filter_unconventional = true
 split_commits = false
-# Reihenfolge der Gruppen wird ueber das versteckte `<!-- N -->`-Praefix
-# gesteuert (group_by sortiert lexikografisch), das `striptags` im Template
-# fuer die Anzeige wieder entfernt.
+# Group order is controlled via the hidden `<!-- N -->` prefix
+# (group_by sorts lexicographically), which `striptags` in the template
+# removes again for display.
 commit_parsers = [
     { message = "^feat", group = "<!-- 0 -->🚀 Features" },
     { message = "^fix", group = "<!-- 1 -->🐛 Bug Fixes" },
@@ -56,15 +56,15 @@ commit_parsers = [
     { message = "^docs", group = "<!-- 5 -->📝 Documentation" },
     { message = "^diag", group = "<!-- 6 -->🔍 Diagnostics" },
     { message = "^chore\\(deps\\)", group = "<!-- 7 -->📦 Dependencies" },
-    # Rausch-Typen tauchen nicht im User-Changelog auf.
+    # Noise types do not appear in the user changelog.
     { message = "^chore\\(release\\)", skip = true },
     { message = "^chore", skip = true },
     { message = "^test", skip = true },
     { message = "^ci", skip = true },
     { message = "^build", skip = true },
-    # Catch-all: alles bisher Unerfasste explizit verwerfen, damit keine
-    # gruppenlosen Eintraege im Changelog landen. Neue Types VORHER oben
-    # ergaenzen.
+    # Catch-all: explicitly discard everything not yet captured, so that no
+    # group-less entries end up in the changelog. Add new types ABOVE
+    # beforehand.
     { message = ".*", skip = true },
 ]
 protect_breaking_commits = false

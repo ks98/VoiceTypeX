@@ -115,11 +115,11 @@ pub async fn run_global_shortcuts_session(
                         tracing::info!(
                             id = %first.id(),
                             trigger = %trigger,
-                            "Wayland-Hotkey effektiver Trigger gelesen"
+                            "Wayland hotkey effective trigger read"
                         );
                         *cache.write() = Some(trigger);
                     } else {
-                        tracing::warn!("list_shortcuts: leere Liste — Cache bleibt None");
+                        tracing::warn!("list_shortcuts: empty list — cache stays None");
                     }
                 }
                 Err(e) => {

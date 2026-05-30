@@ -4,16 +4,16 @@
 @tailwind utilities;
 
 /*
- * Design-Tokens — "Editorial Calm".
+ * Design tokens — "Editorial Calm".
  *
- * Tokens leben als CSS-Custom-Properties (RGB-Triplets ohne Kommas, damit
- * sie sich mit Tailwinds `<alpha-value>`-Modifier kombinieren lassen).
- * Tailwind mapt diese Variablen in tailwind.config.ts auf semantische
- * Klassen (bg-canvas, text-fg, border-outline, …).
+ * Tokens live as CSS custom properties (RGB triplets without commas, so
+ * they compose with Tailwind's `<alpha-value>` modifier).
+ * Tailwind maps these variables to semantic classes in tailwind.config.ts
+ * (bg-canvas, text-fg, border-outline, …).
  *
- * Light ist der Default; .dark auf <html> aktiviert das Dunkel-Theme.
- * Die Klasse wird in src/lib/theme.ts synchron vor React-Render gesetzt,
- * damit kein Flash-of-Wrong-Theme entsteht.
+ * Light is the default; .dark on <html> activates the dark theme.
+ * The class is set synchronously in src/lib/theme.ts before the React
+ * render, so there is no flash-of-wrong-theme.
  */
 @layer base {
   :root {
@@ -24,10 +24,10 @@
     --outline-strong-rgb: 200 204 212; /* #C8CCD4 */
     --fg-rgb: 21 24 29; /* #15181D */
     --fg-muted-rgb: 92 100 112; /* #5C6470 */
-    /* fg-faint bewusst etwas dunkler als rein dekorativ: wird als Hint-
-     * Farbe in Field.tsx benutzt, das ist Body-Text und braucht WCAG AA
-     * (>=4.5:1). 0x70788A auf canvas #FBFBFD ergibt ~4.1:1 — knapp AA
-     * fuer Small Text, sicher AA fuer >=14pt. */
+    /* fg-faint deliberately a bit darker than purely decorative: used as
+     * the hint color in Field.tsx, which is body text and needs WCAG AA
+     * (>=4.5:1). 0x70788A on canvas #FBFBFD yields ~4.1:1 — just under AA
+     * for small text, safely AA for >=14pt. */
     --fg-faint-rgb: 112 120 138; /* #70788A */
     --brand-rgb: 61 90 254; /* #3D5AFE */
     --brand-hover-rgb: 46 72 224; /* #2E48E0 */
@@ -99,11 +99,11 @@
 }
 
 /*
- * Recording-Pulse fuer das Aufnahme-Overlay. Ein einzelner Dot pulsiert
- * als ehrliche "Recording laeuft"-Status-LED — die frueher hier
- * verwendete Equalizer-Animation suggerierte Audio-Pegel-Reaktion, die
- * tatsaechlich nicht existierte (Renderer hat den Pegel nicht). 1.2s-
- * Cycle: scale + opacity-Atmen, eindeutig als LED erkennbar.
+ * Recording pulse for the recording overlay. A single dot pulses as an
+ * honest "recording in progress" status LED — the equalizer animation
+ * used here earlier suggested an audio-level reaction that did not
+ * actually exist (the renderer has no level). 1.2s cycle: scale +
+ * opacity breathing, clearly recognizable as an LED.
  */
 @keyframes vtx-rec-pulse {
   0%,
@@ -118,8 +118,8 @@
 }
 
 /*
- * Sanftes Fade-In fuer key-basierte Re-Mounts (Phase-Cross-Fade im
- * Overlay, Partial-Word-Refresh nach LA-2-Revision).
+ * Soft fade-in for key-based re-mounts (phase cross-fade in the overlay,
+ * partial-word refresh after an LA-2 revision).
  */
 @keyframes vtx-fadein {
   from {
@@ -131,10 +131,10 @@
 }
 
 /*
- * Glass-Backdrop-Utility fuer Floating-Windows (Overlay/Menu). Default
- * nutzt backdrop-blur; auf Compositors ohne backdrop-filter-Support
- * (sway, Hyprland ohne Plugin) faellt es auf eine dichtere, solide
- * Variante zurueck, damit der Hintergrund nicht durchscheint.
+ * Glass-backdrop utility for floating windows (overlay/menu). Default
+ * uses backdrop-blur; on compositors without backdrop-filter support
+ * (sway, Hyprland without a plugin) it falls back to a denser, solid
+ * variant so the background does not show through.
  */
 .vtx-glass {
   background-color: rgb(var(--canvas-rgb) / 0.8);

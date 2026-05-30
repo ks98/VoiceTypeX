@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Groq Whisper — `POST https://api.groq.com/openai/v1/audio/transcriptions`.
-//! OpenAI-Whisper-API-kompatibel. Default-Modell `whisper-large-v3-turbo`
-//! (Groq's schnellste Variante).
+//! OpenAI Whisper API-compatible. Default model `whisper-large-v3-turbo`
+//! (Groq's fastest variant).
 
 use crate::core::error::Result;
 use crate::transcription::cloud::whisper_compatible::WhisperCompatibleClient;

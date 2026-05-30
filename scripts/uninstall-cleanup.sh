@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# VoiceTypeX — vollständiger Uninstall-Cleanup für Linux/macOS.
+# VoiceTypeX — full uninstall cleanup for Linux/macOS.
 #
-# Was der OS-Paket-Manager NICHT macht:
-#   - User-Daten unter ~/.config/<identifier>/ entfernen (Absicht: Re-
-#     install soll Modi und Settings behalten).
-#   - OS-Keychain-Einträge unter service="voicetypex" löschen.
-#   - Autostart-Eintrag entfernen, falls der User Autostart aktiviert hatte.
+# What the OS package manager does NOT do:
+#   - Remove user data under ~/.config/<identifier>/ (by design: a re-
+#     install should keep your modes and settings).
+#   - Delete OS keychain entries under service="voicetypex".
+#   - Remove the autostart entry, if the user had enabled autostart.
 #
-# Dieses Skript räumt diese Spuren weg. Es macht KEINE Aktion ohne
-# explizite Bestätigung; jeder Block fragt einzeln nach.
+# This script clears those leftovers. It performs NO action without
+# explicit confirmation; each block asks individually.
 #
-# Aufruf:
+# Usage:
 #   bash scripts/uninstall-cleanup.sh
 #
-# Voraussetzungen: bash (>=4), optional `secret-tool` (libsecret-tools)
-# für die Keyring-Löschung. Ohne secret-tool gibt's eine Warnung mit
-# Anleitung, wie der User es manuell in seahorse/kwallet macht.
+# Requirements: bash (>=4), optionally `secret-tool` (libsecret-tools)
+# for the keyring deletion. Without secret-tool you get a warning with
+# instructions on how to do it manually in seahorse/kwallet.
 
 set -u
 
@@ -25,7 +25,7 @@ IDENTIFIER="de.kevin-stenzel.voicetypex"
 SERVICE="voicetypex"
 PROVIDERS=("xai" "openai" "anthropic" "groq" "deepgram")
 
-# Plattform-Erkennung — bestimmt die Pfade.
+# Platform detection — determines the paths.
 case "$(uname -s)" in
     Linux*)
         CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/$IDENTIFIER"
@@ -40,8 +40,8 @@ case "$(uname -s)" in
         IS_MAC=1
         ;;
     *)
-        echo "Plattform $(uname -s) wird von diesem Skript nicht unterstützt."
-        echo "Für Windows nutze scripts/uninstall-cleanup.ps1."
+        echo "Platform $(uname -s) is not supported by this script."
+        echo "For Windows, use scripts/uninstall-cleanup.ps1."
         exit 1
         ;;
 esac
@@ -64,144 +64,144 @@ print_header() {
 }
 
 echo ""
-echo "VoiceTypeX Uninstall-Cleanup"
+echo "VoiceTypeX Uninstall Cleanup"
 echo ""
-echo "Konfiguration:"
-echo "  Config-Dir: $CONFIG_DIR"
-echo "  Data-Dir:   $DATA_DIR"
+echo "Configuration:"
+echo "  Config dir: $CONFIG_DIR"
+echo "  Data dir:   $DATA_DIR"
 echo "  Autostart:  $AUTOSTART_DIR"
-echo "  Keychain-Service: $SERVICE"
+echo "  Keychain service: $SERVICE"
 echo ""
-echo "Vor dem ersten Schritt: stelle sicher, dass VoiceTypeX NICHT läuft."
+echo "Before the first step: make sure VoiceTypeX is NOT running."
 echo ""
-if ! confirm "Mit dem Cleanup fortfahren?"; then
-    echo "Abgebrochen."
+if ! confirm "Continue with the cleanup?"; then
+    echo "Aborted."
     exit 0
 fi
 
-# ─── 1. User-Daten (Config + Daten) ────────────────────────────────────
-print_header "Schritt 1/4 — User-Daten (Settings, Modi, Secrets, Wayland-Token)"
+# ─── 1. User data (config + data) ──────────────────────────────────────
+print_header "Step 1/4 — User data (settings, modes, secrets, Wayland token)"
 if [[ -d "$CONFIG_DIR" ]]; then
-    echo "Folgende Inhalte werden gelöscht:"
+    echo "The following contents will be deleted:"
     find "$CONFIG_DIR" -maxdepth 2 -mindepth 1 -printf "  %p\n" 2>/dev/null | head -20
     SIZE=$(du -sh "$CONFIG_DIR" 2>/dev/null | cut -f1)
-    echo "  (Gesamtgröße: $SIZE)"
-    if confirm "Config-Dir komplett entfernen?"; then
+    echo "  (Total size: $SIZE)"
+    if confirm "Remove the config dir completely?"; then
         rm -rf "$CONFIG_DIR"
-        echo "  → Config-Dir entfernt."
+        echo "  → Config dir removed."
     else
-        echo "  → übersprungen."
+        echo "  → skipped."
     fi
 else
-    echo "  (Config-Dir existiert nicht — nichts zu tun.)"
+    echo "  (Config dir does not exist — nothing to do.)"
 fi
 
-# Models liegen unter app_config_dir bei VoiceTypeX, NICHT unter app_data_dir.
-# DATA_DIR ist nur als Vorsichtsmaßnahme — falls Tauri-Plugins doch
-# dorthin schreiben.
+# Models live under app_config_dir for VoiceTypeX, NOT under app_data_dir.
+# DATA_DIR is only a precaution — in case Tauri plugins write there
+# after all.
 if [[ "$DATA_DIR" != "$CONFIG_DIR" && -d "$DATA_DIR" ]]; then
     SIZE=$(du -sh "$DATA_DIR" 2>/dev/null | cut -f1)
     echo ""
-    echo "Zusätzlich gefunden: $DATA_DIR ($SIZE)"
-    if confirm "Data-Dir ebenfalls entfernen?"; then
+    echo "Additionally found: $DATA_DIR ($SIZE)"
+    if confirm "Remove the data dir as well?"; then
         rm -rf "$DATA_DIR"
-        echo "  → Data-Dir entfernt."
+        echo "  → Data dir removed."
     fi
 fi
 
-# ─── 2. OS-Keychain ────────────────────────────────────────────────────
-print_header "Schritt 2/4 — OS-Keychain-Einträge (API-Keys)"
-echo "VoiceTypeX speichert API-Keys best-effort zusätzlich im OS-Keychain"
-echo "unter service=\"$SERVICE\". Provider: ${PROVIDERS[*]}"
+# ─── 2. OS keychain ────────────────────────────────────────────────────
+print_header "Step 2/4 — OS keychain entries (API keys)"
+echo "VoiceTypeX stores API keys best-effort additionally in the OS keychain"
+echo "under service=\"$SERVICE\". Providers: ${PROVIDERS[*]}"
 echo ""
 
 if [[ $IS_MAC -eq 1 ]]; then
-    # macOS: security-Command
-    if confirm "Mit /usr/bin/security alle ${#PROVIDERS[@]} Provider-Einträge löschen?"; then
+    # macOS: security command
+    if confirm "Delete all ${#PROVIDERS[@]} provider entries with /usr/bin/security?"; then
         for p in "${PROVIDERS[@]}"; do
             if security delete-generic-password -s "$SERVICE" -a "$p" 2>/dev/null; then
-                echo "  → $p: gelöscht"
+                echo "  → $p: deleted"
             else
-                echo "  → $p: nicht gefunden (ok)"
+                echo "  → $p: not found (ok)"
             fi
         done
     fi
 elif command -v secret-tool >/dev/null 2>&1; then
-    # Linux mit libsecret/secret-tool
-    if confirm "Mit secret-tool alle ${#PROVIDERS[@]} Provider-Einträge aus libsecret/gnome-keyring löschen?"; then
+    # Linux with libsecret/secret-tool
+    if confirm "Delete all ${#PROVIDERS[@]} provider entries from libsecret/gnome-keyring with secret-tool?"; then
         for p in "${PROVIDERS[@]}"; do
             if secret-tool clear service "$SERVICE" username "$p" 2>/dev/null; then
-                echo "  → $p: gelöscht"
+                echo "  → $p: deleted"
             else
-                echo "  → $p: nicht gefunden oder Backend-Fehler (ok)"
+                echo "  → $p: not found or backend error (ok)"
             fi
         done
     fi
 else
-    echo "  secret-tool nicht installiert (Paket: libsecret-tools)."
+    echo "  secret-tool is not installed (package: libsecret-tools)."
     echo ""
-    echo "  Manuell entfernen:"
-    echo "    • GNOME-Keyring: seahorse öffnen → Suche \"$SERVICE\" → löschen"
-    echo "    • KWallet:       kwalletmanager5/6 → \"Passwörter\" → \"$SERVICE\" → löschen"
+    echo "  Remove manually:"
+    echo "    • GNOME Keyring: open seahorse → search \"$SERVICE\" → delete"
+    echo "    • KWallet:       kwalletmanager5/6 → \"Passwords\" → \"$SERVICE\" → delete"
     echo ""
-    echo "  Oder libsecret-tools installieren und dieses Skript erneut ausführen:"
+    echo "  Or install libsecret-tools and run this script again:"
     echo "    sudo apt-get install libsecret-tools"
 fi
 
-# Zusätzlich KWallet, falls separat installiert (KDE-Setups)
+# Additionally KWallet, if installed separately (KDE setups)
 if command -v kwallet-query >/dev/null 2>&1; then
     echo ""
-    echo "  KWallet erkannt — falls Keys dort liegen (statt in libsecret):"
+    echo "  KWallet detected — in case keys live there (instead of in libsecret):"
     echo "    kwallet-query -l kdewallet | grep -i $SERVICE"
-    echo "  und Einträge in kwalletmanager-gui löschen."
+    echo "  and delete the entries in the kwalletmanager GUI."
 fi
 
-# ─── 3. Autostart-Eintrag ──────────────────────────────────────────────
-print_header "Schritt 3/4 — Autostart-Eintrag"
+# ─── 3. Autostart entry ────────────────────────────────────────────────
+print_header "Step 3/4 — Autostart entry"
 AUTOSTART_FOUND=0
 if [[ -d "$AUTOSTART_DIR" ]]; then
-    # tauri-plugin-autostart legt typischerweise einen .desktop-File mit
-    # dem App-Identifier oder ProductName an. Wir suchen beide Varianten.
+    # tauri-plugin-autostart typically creates a .desktop file named after
+    # the app identifier or ProductName. We look for both variants.
     for pattern in "$IDENTIFIER.desktop" "VoiceTypeX.desktop" "voicetypex.desktop" "*VoiceType*.desktop"; do
         for match in "$AUTOSTART_DIR"/$pattern; do
             if [[ -f "$match" ]]; then
                 AUTOSTART_FOUND=1
-                echo "  Gefunden: $match"
-                if confirm "Entfernen?"; then
+                echo "  Found: $match"
+                if confirm "Remove?"; then
                     rm -f "$match"
-                    echo "    → entfernt."
+                    echo "    → removed."
                 fi
             fi
         done
     done
 fi
 if [[ $AUTOSTART_FOUND -eq 0 ]]; then
-    echo "  Kein Autostart-Eintrag gefunden — nichts zu tun."
+    echo "  No autostart entry found — nothing to do."
 fi
 
-# ─── 4. Hinweise zu nicht-räumbaren Spuren ─────────────────────────────
-print_header "Schritt 4/4 — Manuelle Schritte"
+# ─── 4. Notes on leftovers that cannot be cleaned ──────────────────────
+print_header "Step 4/4 — Manual steps"
 echo ""
-echo "Folgende Spuren kann dieses Skript NICHT entfernen:"
+echo "This script CANNOT remove the following leftovers:"
 echo ""
-echo "  • Wayland-Portal-Permission für Auto-Paste (xdg-desktop-portal)"
-echo "    → KDE Plasma 6: System-Settings → Apps → Anwendungsberechtigungen"
-echo "                    → \"Tastendrücke senden\" / \"RemoteDesktop\""
-echo "                    → VoiceTypeX entfernen"
+echo "  • Wayland portal permission for auto-paste (xdg-desktop-portal)"
+echo "    → KDE Plasma 6: System Settings → Apps → Application Permissions"
+echo "                    → \"Send keystrokes\" / \"RemoteDesktop\""
+echo "                    → remove VoiceTypeX"
 echo "    → GNOME:        gsettings list-recursively | grep desktop-portal"
-echo "                    + Cleanup via dconf-editor"
+echo "                    + cleanup via dconf-editor"
 echo ""
-echo "  • KDE-Globale-Verknüpfung (Hotkey-Zuweisung)"
-echo "    → System-Settings → Globale Verknüpfungen → VoiceTypeX → Reset"
+echo "  • KDE global shortcut (hotkey assignment)"
+echo "    → System Settings → Global Shortcuts → VoiceTypeX → Reset"
 echo ""
-echo "  • OS-Paket-Manager-Eintrag selbst (falls noch nicht entfernt)"
+echo "  • OS package manager entry itself (if not already removed)"
 echo "    → Debian/Ubuntu:  sudo apt remove voice-type-x"
 echo "    → Fedora/RHEL:    sudo dnf remove voice-type-x"
-echo "    → AppImage:       AppImage-Datei einfach löschen"
+echo "    → AppImage:       simply delete the AppImage file"
 echo ""
 
-print_header "Fertig"
+print_header "Done"
 echo ""
-echo "VoiceTypeX-Spuren auf diesem System wurden bestmöglich entfernt."
-echo "Bei Fragen oder Problemen: docs/PLATFORMS.md → Deinstallation."
+echo "VoiceTypeX leftovers on this system have been removed as best as possible."
+echo "For questions or problems: docs/PLATFORMS.md → Uninstallation."
 echo ""

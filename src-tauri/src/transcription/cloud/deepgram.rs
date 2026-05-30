@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Deepgram STT.
 //!
-//! Eigene API: POST https://api.deepgram.com/v1/listen
-//!   Header `Authorization: Token {api_key}` (NICHT Bearer)
+//! Own API: POST https://api.deepgram.com/v1/listen
+//!   Header `Authorization: Token {api_key}` (NOT Bearer)
 //!   Header `Content-Type: audio/wav`
-//!   Body: RAW Audio-Bytes (kein multipart!)
+//!   Body: RAW audio bytes (no multipart!)
 //! Response (json): results.channels[0].alternatives[0].transcript
 
 use crate::core::error::{Result, VoiceTypeError};

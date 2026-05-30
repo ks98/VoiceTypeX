@@ -77,7 +77,7 @@ impl WaylandLibeiInjector {
         match &*guard {
             SessionState::Active { cmd_tx } => return Some(cmd_tx.clone()),
             SessionState::Failed { reason } => {
-                tracing::trace!(reason = %reason, "libei-Fallback weiterhin aktiv");
+                tracing::trace!(reason = %reason, "libei fallback still active");
                 return None;
             }
             SessionState::Uninitialized => {}
@@ -102,7 +102,7 @@ impl WaylandLibeiInjector {
         };
         tracing::info!(
             has_token = restore_token.is_some(),
-            "RemoteDesktop-Session aufgebaut + EIS-FD bezogen"
+            "RemoteDesktop session set up + EIS FD obtained"
         );
 
         // Persist the new token if the compositor delivered one.
@@ -144,13 +144,13 @@ impl WaylandLibeiInjector {
             }
             Ok(Ok(false)) => {
                 *guard = SessionState::Failed {
-                    reason: "Worker meldet Setup-Failure".into(),
+                    reason: "worker reports setup failure".into(),
                 };
                 None
             }
             Ok(Err(_)) => {
                 *guard = SessionState::Failed {
-                    reason: "Worker-ready-Channel geschlossen".into(),
+                    reason: "worker-ready channel closed".into(),
                 };
                 None
             }
@@ -187,7 +187,7 @@ impl TextInjector for WaylandLibeiInjector {
         // `injection_method = "keystrokes"` looks like clipboard.
         if opts.strategy == InjectionStrategy::Keystrokes {
             tracing::info!(
-                "Wayland: injection_method=keystrokes nicht unterstuetzt, nutze libei+Clipboard"
+                "Wayland: injection_method=keystrokes not supported, using libei+clipboard"
             );
         }
         if matches!(opts.action, OutputAction::Append | OutputAction::Prepend) {
@@ -217,7 +217,7 @@ impl TextInjector for WaylandLibeiInjector {
                 tokio::time::sleep(Duration::from_millis(60)).await;
 
                 if let Err(e) = cmd_tx.send(KeyCommand::CtrlV) {
-                    tracing::warn!(error = %e, "libei-Cmd-Channel zu — Fallback auf Notification");
+                    tracing::warn!(error = %e, "libei cmd channel closed — falling back to notification");
                     self.notify_manual_paste();
                 } else {
                     // Short pause so the compositor can process the

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Audio-Aufnahme, Resampling, Cues.
+//! Audio capture, resampling, cues.
 
 pub mod cues;
 pub mod recorder;

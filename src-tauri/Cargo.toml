@@ -4,7 +4,7 @@ name = "voicetypex"
 version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0-or-later"
-description = "Plattformuebergreifendes Diktier-Tool mit Cursor-Insertion"
+description = "Cross-platform dictation tool with cursor insertion"
 authors = ["Kevin Stenzel <mail@kevin-stenzel.de>"]
 repository = "https://github.com/ks98/voicetypex"
 readme = "../README.md"
@@ -19,7 +19,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2.0", features = [] }
 
 [dependencies]
-# Tauri-Core und Plugins
+# Tauri core and plugins
 tauri = { version = "2.1", features = ["tray-icon", "image-png"] }
 tauri-plugin-autostart = "2.0"
 tauri-plugin-clipboard-manager = "2.0"
@@ -29,21 +29,21 @@ tauri-plugin-global-shortcut = "2.0"
 tauri-plugin-notification = "2.0"
 tauri-plugin-os = "2.0"
 tauri-plugin-store = "2.1"
-# Auto-Updater fuer AppImage (Linux) + NSIS (Windows). Self-Update gibt
-# es NUR fuer diese beiden Targets — deb/rpm laufen ueber Download bzw.
-# Paketmanager. Braucht `plugins.updater` (endpoints + pubkey) in
-# tauri.conf.json, sonst Runtime-Panic beim Plugin-Init.
+# Auto-updater for AppImage (Linux) + NSIS (Windows). Self-update exists
+# ONLY for these two targets — deb/rpm go via download or
+# package manager. Needs `plugins.updater` (endpoints + pubkey) in
+# tauri.conf.json, otherwise runtime panic on plugin init.
 tauri-plugin-updater = "2.0"
-# Relaunch nach dem Updater-Install (downloadAndInstall -> relaunch) —
-# noetig fuer den sauberen Neustart nach dem AppImage-Self-Replace.
+# Relaunch after the updater install (downloadAndInstall -> relaunch) —
+# needed for the clean restart after the AppImage self-replace.
 tauri-plugin-process = "2.0"
 
-# Serialisierung
+# Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 toml = "0.8"
 
-# Async und Fehlerbehandlung
+# Async and error handling
 tokio = { version = "1.41", features = ["full"] }
 async-trait = "0.1"
 anyhow = "1.0"
@@ -53,12 +53,12 @@ thiserror = "2.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# OS-Keychain (BYOK API-Keys, niemals im Klartext).
-# Ohne Backend-Feature faellt keyring 3.x auf einen RAM-Mock-Store
-# zurueck (keine Persistenz) — der KEK ueberlebt dann keinen Neustart
-# und secrets.json wird unentschluesselbar. Die Plattform-Backends sind
-# target-gated, daher koennen alle drei Features parallel gesetzt werden.
-# `crypto-rust` vermeidet eine System-libssl-Build-Abhaengigkeit.
+# OS keychain (BYOK API keys, never in cleartext).
+# Without a backend feature, keyring 3.x falls back to a RAM mock store
+# (no persistence) — the KEK then does not survive a restart
+# and secrets.json becomes undecryptable. The platform backends are
+# target-gated, so all three features can be set in parallel.
+# `crypto-rust` avoids a system libssl build dependency.
 keyring = { version = "3", features = [
     "sync-secret-service",
     "crypto-rust",
@@ -66,100 +66,100 @@ keyring = { version = "3", features = [
     "apple-native",
 ] }
 
-# Encryption-at-rest fuer die secrets.json. AES-256-GCM auf Linux mit
-# einem Random-KEK aus dem OS-Keyring (libsecret/kwallet). Windows nutzt
-# DPAPI direkt (siehe target-spezifische deps unten). macOS bleibt
-# vorerst out-of-scope (Stub mit klar gekennzeichneter Klartext-Warnung).
+# Encryption-at-rest for the secrets.json. AES-256-GCM on Linux with
+# a random KEK from the OS keyring (libsecret/kwallet). Windows uses
+# DPAPI directly (see target-specific deps below). macOS stays
+# out-of-scope for now (stub with a clearly marked cleartext warning).
 aes-gcm = "0.10"
 base64 = "0.22"
 
-# Audio-Aufnahme (cpal) und WAV-IO (hound)
+# Audio recording (cpal) and WAV IO (hound)
 cpal = "0.15"
 hound = "3.5"
 
-# Resampling 44.1k/48k -> 16 kHz Mono fuer Whisper-Eingabe
+# Resampling 44.1k/48k -> 16 kHz mono for Whisper input
 rubato = "0.16"
 
-# Audio-Wiedergabe der Recording-Cues
+# Audio playback of the recording cues
 rodio = { version = "0.20", default-features = false, features = ["wav"] }
 
-# Lokales STT via whisper.cpp (Rust-Bindings).
-# 0.16 bringt Silero-VAD-API (enable_vad / set_vad_model_path /
-# set_vad_params) und Streaming-Callbacks, beides Pflicht-Bausteine
-# fuer die Local-Pipeline-Modernisierung.
+# Local STT via whisper.cpp (Rust bindings).
+# 0.16 brings the Silero VAD API (enable_vad / set_vad_model_path /
+# set_vad_params) and streaming callbacks, both mandatory building blocks
+# for the local pipeline modernization.
 whisper-rs = "0.16"
 
-# HTTP-Client + Streaming + Hashing fuer Modell-Download
+# HTTP client + streaming + hashing for model download
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream", "json", "multipart"] }
 sha2 = "0.10"
 futures-util = "0.3"
 
-# Atomare Primitiven
+# Atomic primitives
 parking_lot = "0.12"
 
-# Filesystem-Watch fuer modes/-Hot-Reload
+# Filesystem watch for modes/ hot-reload
 notify = "6"
 
-# Cross-Plattform-Keystroke-Injection (Paste-Shortcut + Direct-Keystroke-Modus)
+# Cross-platform keystroke injection (paste shortcut + direct-keystroke mode)
 enigo = "0.3"
 
-# DPAPI fuer das Secret-Storage auf Windows (CryptProtectData /
-# CryptUnprotectData). User-bound, machine-bound — Standardweg fuer
-# Cleartext-Krypto auf Desktop-Windows.
+# DPAPI for the secret storage on Windows (CryptProtectData /
+# CryptUnprotectData). User-bound, machine-bound — the standard way for
+# cleartext crypto on desktop Windows.
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.62", features = ["Win32_Security_Cryptography", "Win32_Foundation"] }
 
 # Wayland: xdg-desktop-portal (GlobalShortcuts + RemoteDesktop) via DBus.
-# Nur auf Linux gelinkt, weil sonst libdbus auf Windows/macOS Probleme macht.
+# Only linked on Linux, because otherwise libdbus causes problems on Windows/macOS.
 [target.'cfg(target_os = "linux")'.dependencies]
 ashpd = { version = "0.11", default-features = false, features = ["tokio"] }
-# reis: pure-Rust libei/EI-Protokoll fuer Tastendruck-Simulation auf Wayland
-# (siehe CLAUDE.md §11 Phase 5 Teil 2). Vorbild: lan-mouse. Pin auf konkrete
-# Minor-Version, weil 0.x — Upgrade-Strategie: explizite Aufgabe, kein
-# automatisches Mit-Updaten via cargo update.
+# reis: pure-Rust libei/EI protocol for keystroke simulation on Wayland
+# (see CLAUDE.md §11 Phase 5 Part 2). Model: lan-mouse. Pin to a concrete
+# minor version, because 0.x — upgrade strategy: explicit task, no
+# automatic co-updating via cargo update.
 reis = { version = "=0.6.1", features = ["tokio"] }
-# xkbcommon: Keysym-zu-Keycode-Mapping fuer Layout-bewusste Tastendruecke
-# (z.B. Strg+V auf QWERTZ vs. QWERTY). Wird vom reis-Beispiel genutzt
-# und ist die kanonische Wahl.
+# xkbcommon: keysym-to-keycode mapping for layout-aware keystrokes
+# (e.g. Ctrl+V on QWERTZ vs. QWERTY). Used by the reis example
+# and is the canonical choice.
 xkbcommon = "0.7"
-# arboard: liest die PRIMARY-Selection (markierter Text) fuer die
-# Bearbeiten-Modi direkt aus — auf X11 nativ, auf Wayland via
-# wlr/ext-data-control (Feature `wayland-data-control`), fokus-unabhaengig
-# und ohne Ctrl+C-Simulation. Bereits transitiv via
-# tauri-plugin-clipboard-manager im Baum; hier direkt nutzbar gemacht.
+# arboard: reads the PRIMARY selection (highlighted text) for the
+# edit modes directly — natively on X11, on Wayland via
+# wlr/ext-data-control (feature `wayland-data-control`), focus-independent
+# and without Ctrl+C simulation. Already in the tree transitively via
+# tauri-plugin-clipboard-manager; made directly usable here.
 arboard = { version = "3", features = ["wayland-data-control"] }
 
-# Lokales LLM via llama.cpp (Rust-Bindings) — Phase 3b. NUR Linux/macOS.
-# Auf Windows NICHT kompiliert: whisper-rs-sys und llama-cpp-sys-2 bundlen
-# je ihr eigenes ggml; auf MSVC kollidieren die zwei ggml-Kopien beim
-# Linken (LNK2005 — Issue #1). Linux/ELF toleriert das (llamas ggml liegt
-# in einer separaten .so), MSVC nicht. Ohne llama-cpp-2 bleibt auf Windows
-# nur whispers statisches ggml -> der Build linkt. Windows shippt STT +
-# Cloud-LLM + optional Ollama statt des embedded LLM.
-# Features: vulkan (GPU), sampler (idiomatische Sampling-API), dynamic-link
-# (llama.cpp als Shared-Lib; auf Linux liegt ggml dadurch in separater .so).
-# default-features=false: ohne openmp (libomp-Build-Dep) + android-shared-stdcxx.
+# Local LLM via llama.cpp (Rust bindings) — Phase 3b. ONLY Linux/macOS.
+# NOT compiled on Windows: whisper-rs-sys and llama-cpp-sys-2 each bundle
+# their own ggml; on MSVC the two ggml copies collide at
+# link time (LNK2005 — Issue #1). Linux/ELF tolerates this (llama's ggml is
+# in a separate .so), MSVC does not. Without llama-cpp-2, Windows is left
+# with only whisper's static ggml -> the build links. Windows ships STT +
+# cloud LLM + optionally Ollama instead of the embedded LLM.
+# Features: vulkan (GPU), sampler (idiomatic sampling API), dynamic-link
+# (llama.cpp as a shared lib; on Linux this puts ggml in a separate .so).
+# default-features=false: without openmp (libomp build dep) + android-shared-stdcxx.
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 llama-cpp-2 = { version = "0.1.146", default-features = false, features = ["vulkan", "sampler", "dynamic-link"] }
 
 [features]
-# Default ab Phase 3a: 'gpu-vulkan' — Vulkan deckt iGPU + AMD + Intel
-# Arc + NVIDIA (~95 % der Consumer-Hardware) mit *einem* Binary. Wenn
-# kein Vulkan-Device verfuegbar ist, faellt whisper.cpp automatisch
-# auf CPU zurueck (kein Code-Pfad noetig). Build-Zeit-Voraussetzung
-# auf Linux: libvulkan-dev (Headers). Runtime: libvulkan1 + Treiber
-# (mesa-vulkan-drivers fuer iGPU, vendor-Treiber fuer dGPU).
+# Default from Phase 3a: 'gpu-vulkan' — Vulkan covers iGPU + AMD + Intel
+# Arc + NVIDIA (~95 % of consumer hardware) with *one* binary. If
+# no Vulkan device is available, whisper.cpp automatically falls
+# back to CPU (no code path needed). Build-time prerequisite
+# on Linux: libvulkan-dev (headers). Runtime: libvulkan1 + drivers
+# (mesa-vulkan-drivers for iGPU, vendor drivers for dGPU).
 #
-# `fast-cpu` (OpenBLAS) bleibt als Opt-in fuer User die kein Vulkan
-# wollen — z.B. Server-Container, headless-Setups, Lizenz-Constraint-
-# Sensitiv. Build via `cargo build --no-default-features --features
+# `fast-cpu` (OpenBLAS) stays as an opt-in for users who don't want
+# Vulkan — e.g. server containers, headless setups, license-constraint-
+# sensitive. Build via `cargo build --no-default-features --features
 # custom-protocol,fast-cpu`.
 #
-# `gpu-cuda` ist optional fuer NVIDIA-Power-User; produziert ein
-# separates Bundle (CI-Matrix). Phase 3b ergaenzt dlopen-CUDA fuer
-# das LLM via llama-cpp-2 — STT bleibt aber bei Vulkan/CPU im
-# Default-Binary, weil whisper-rs noch kein dynamic-backends-Feature
-# hat.
+# `gpu-cuda` is optional for NVIDIA power users; produces a
+# separate bundle (CI matrix). Phase 3b adds dlopen CUDA for
+# the LLM via llama-cpp-2 — but STT stays on Vulkan/CPU in the
+# default binary, because whisper-rs does not yet have a dynamic-backends
+# feature.
 default = ["custom-protocol", "gpu-vulkan"]
 custom-protocol = ["tauri/custom-protocol"]
 fast-cpu = ["whisper-rs/openblas"]
@@ -167,16 +167,16 @@ gpu-vulkan = ["whisper-rs/vulkan"]
 gpu-cuda = ["whisper-rs/cuda"]
 gpu-metal = ["whisper-rs/metal"]
 gpu-coreml = ["whisper-rs/coreml"]
-# Phase 3b — opt-in fuer NVIDIA-Builder. Aktiviert `dynamic-backends`
-# bei llama-cpp-2: GGML-Backends (cpu, vulkan, cuda) werden als
-# separate ggml-*.so/.dll-Files gebaut und zur Laufzeit via dlopen
-# geladen. Damit kann ein Builder mit CUDA-Toolkit + libvulkan-dev
-# ein Bundle erzeugen, das auf User-Maschinen automatisch CUDA nutzt
-# wenn die NVIDIA-Treiber vorhanden sind, und sonst transparent auf
-# Vulkan/CPU fallbackt. Build:
+# Phase 3b — opt-in for NVIDIA builders. Enables `dynamic-backends`
+# on llama-cpp-2: GGML backends (cpu, vulkan, cuda) are built as
+# separate ggml-*.so/.dll files and loaded at runtime via dlopen.
+# This lets a builder with CUDA toolkit + libvulkan-dev
+# produce a bundle that automatically uses CUDA on user machines
+# when the NVIDIA drivers are present, and otherwise transparently falls
+# back to Vulkan/CPU. Build:
 #   cargo build --release --features embedded-cuda-dynamic
-# Erfordert CUDA-Toolkit auf der Build-Maschine — auf reinen Vulkan-
-# Buildern fehlt das, daher nicht im Default-Feature-Set.
+# Requires the CUDA toolkit on the build machine — pure Vulkan
+# builders lack it, hence not in the default feature set.
 embedded-cuda-dynamic = [
     "llama-cpp-2/dynamic-backends",
     "llama-cpp-2/cuda",

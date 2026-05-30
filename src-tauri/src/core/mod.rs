@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Kern-Bausteine: State-Machine, Konfiguration, Modus-Modell, Fehler-Taxonomie.
+//! Core building blocks: state machine, configuration, mode model, error taxonomy.
 
 pub mod app_context;
 pub mod config;

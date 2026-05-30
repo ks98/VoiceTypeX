@@ -1,32 +1,31 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Build-Script.
+//! Build script.
 //!
-//! - Ruft `tauri_build::build()` fuer die Standard-Tauri-Setup-Schritte.
-//! - Fuegt unter Linux rpath-Entries zum Binary, damit die zur Laufzeit
-//!   benoetigten Shared-Libs (`libllama.so`, `libggml*.so` vom
-//!   llama-cpp-sys-2-Build mit `dynamic-link`-Feature) auch nach dem
-//!   Tauri-Bundling gefunden werden.
+//! - Calls `tauri_build::build()` for the standard Tauri setup steps.
+//! - On Linux, adds rpath entries to the binary so the shared libs
+//!   needed at runtime (`libllama.so`, `libggml*.so` from the
+//!   llama-cpp-sys-2 build with the `dynamic-link` feature) are still
+//!   found after Tauri bundling.
 //!
-//! Wir setzen mehrere rpath-Entries als Fallback-Kaskade, weil der
-//! Tauri-Bundler abhaengig vom Bundle-Format (.deb/.rpm/AppImage)
-//! die Resources an unterschiedliche Pfade legt. Linker-Verhalten:
-//! nicht-existierende Pfade werden zur Laufzeit einfach ignoriert,
-//! kein Fehler.
+//! We set several rpath entries as a fallback cascade, because the
+//! Tauri bundler places the resources at different paths depending on
+//! the bundle format (.deb/.rpm/AppImage). Linker behavior:
+//! non-existent paths are simply ignored at runtime, no error.
 
 fn main() {
     tauri_build::build();
 
     #[cfg(target_os = "linux")]
     {
-        // 1. `$ORIGIN` — Libs direkt neben der Binary (klassische
-        //    Portable-Install-Variante, AppImage haengt so).
-        // 2. `$ORIGIN/lib` — eine Ebene unter dem Binary (Tauri legt
-        //    bundle.resources teils so ab).
-        // 3. `$ORIGIN/../lib/voicetypex` — FHS-Linux, .deb-Standard:
-        //    Binary in /usr/bin/, Libs in /usr/lib/voicetypex/.
-        // 4. `$ORIGIN/../lib` — Generic LSB-Layout fuer .rpm.
-        // Mehrfache Eintraege schaden nicht; der dynamische Linker
-        // probiert sie in Reihenfolge, nimmt den ersten Treffer.
+        // 1. `$ORIGIN` — libs right next to the binary (classic
+        //    portable-install variant, how the AppImage is laid out).
+        // 2. `$ORIGIN/lib` — one level below the binary (Tauri puts
+        //    bundle.resources here in some cases).
+        // 3. `$ORIGIN/../lib/voicetypex` — FHS Linux, .deb standard:
+        //    binary in /usr/bin/, libs in /usr/lib/voicetypex/.
+        // 4. `$ORIGIN/../lib` — generic LSB layout for .rpm.
+        // Multiple entries do no harm; the dynamic linker tries them
+        // in order and takes the first hit.
         println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN");
         println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN/lib");
         println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN/../lib/voicetypex");

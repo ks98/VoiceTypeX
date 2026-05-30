@@ -21,7 +21,7 @@ use std::sync::Arc;
 pub fn make_cloud_processor(provider: &str) -> Result<Arc<dyn Processor>> {
     let key = SecretStore::get(provider)?.ok_or_else(|| {
         VoiceTypeError::Processing(format!(
-            "API-Key fuer Provider '{provider}' nicht gesetzt — bitte in den Einstellungen hinterlegen"
+            "No API key set for provider '{provider}' — add it under Settings"
         ))
     })?;
     match provider {
@@ -29,7 +29,7 @@ pub fn make_cloud_processor(provider: &str) -> Result<Arc<dyn Processor>> {
         "openai" => Ok(Arc::new(cloud::openai::OpenAIProcessor::new(key))),
         "anthropic" => Ok(Arc::new(cloud::anthropic::AnthropicProcessor::new(key))),
         other => Err(VoiceTypeError::Processing(format!(
-            "Unbekannter LLM-Provider: {other}"
+            "Unknown LLM provider: {other}"
         ))),
     }
 }

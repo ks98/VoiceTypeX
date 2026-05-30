@@ -94,7 +94,7 @@ impl OpenAICompatibleClient {
                 .into_iter()
                 .next()
                 .map(|c| c.message.content)
-                .ok_or_else(|| VoiceTypeError::Processing("Keine choices in Response".into()))
+                .ok_or_else(|| VoiceTypeError::Processing("No choices in response".into()))
         })
         .await
     }

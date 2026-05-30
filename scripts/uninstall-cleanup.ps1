@@ -1,21 +1,20 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# VoiceTypeX — vollständiger Uninstall-Cleanup für Windows.
+# VoiceTypeX — complete uninstall cleanup for Windows.
 #
-# Was der NSIS-Uninstaller NICHT macht:
-#   - User-Daten unter %APPDATA%\<identifier>\ entfernen (Absicht:
-#     Re-Install soll Modi und Settings behalten).
-#   - Windows-Credential-Manager-Einträge unter target="voicetypex"
-#     löschen.
-#   - Autostart-Registry-Eintrag entfernen, falls aktiviert war.
+# What the NSIS uninstaller does NOT do:
+#   - Remove user data under %APPDATA%\<identifier>\ (by design:
+#     a re-install should keep modes and settings).
+#   - Delete Windows Credential Manager entries under target="voicetypex".
+#   - Remove the autostart registry entry, if it was enabled.
 #
-# Dieses Skript räumt diese Spuren weg. Es macht KEINE Aktion ohne
-# explizite Bestätigung; jeder Block fragt einzeln nach.
+# This script clears away those leftovers. It performs NO action without
+# explicit confirmation; each block prompts individually.
 #
-# Aufruf (PowerShell als normaler User, NICHT als Admin):
+# Usage (PowerShell as a normal user, NOT as Admin):
 #   powershell -ExecutionPolicy Bypass -File scripts\uninstall-cleanup.ps1
 #
-# Falls ExecutionPolicy-Fehler:
+# In case of ExecutionPolicy errors:
 #   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 #   .\scripts\uninstall-cleanup.ps1
 
@@ -25,9 +24,9 @@ $Identifier = 'de.kevin-stenzel.voicetypex'
 $Service    = 'voicetypex'
 $Providers  = @('xai', 'openai', 'anthropic', 'groq', 'deepgram')
 
-# Tauri-Default auf Windows: %APPDATA%\<identifier>\config\, plus
-# %APPDATA%\<identifier>\data\ fuer app_data_dir. Wir raeumen beides,
-# falls vorhanden.
+# Tauri default on Windows: %APPDATA%\<identifier>\config\, plus
+# %APPDATA%\<identifier>\data\ for app_data_dir. We clean up both,
+# if present.
 $AppData    = [Environment]::GetFolderPath('ApplicationData')
 $ConfigDir  = Join-Path $AppData "$Identifier\config"
 $DataDir    = Join-Path $AppData "$Identifier\data"
@@ -48,24 +47,24 @@ function Write-Header {
 }
 
 Write-Host ""
-Write-Host "VoiceTypeX Uninstall-Cleanup" -ForegroundColor Cyan
+Write-Host "VoiceTypeX Uninstall Cleanup" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Konfiguration:"
-Write-Host "  Config-Dir:       $ConfigDir"
-Write-Host "  Data-Dir:         $DataDir"
-Write-Host "  Credential-Mgr:   target=$Service"
-Write-Host "  Autostart-RegKey: HKCU:\Software\Microsoft\Windows\CurrentVersion\Run\VoiceTypeX"
+Write-Host "Configuration:"
+Write-Host "  Config dir:       $ConfigDir"
+Write-Host "  Data dir:         $DataDir"
+Write-Host "  Credential Mgr:   target=$Service"
+Write-Host "  Autostart RegKey: HKCU:\Software\Microsoft\Windows\CurrentVersion\Run\VoiceTypeX"
 Write-Host ""
-Write-Host "Vor dem ersten Schritt: stelle sicher, dass VoiceTypeX NICHT laeuft." -ForegroundColor Yellow
+Write-Host "Before the first step: make sure VoiceTypeX is NOT running." -ForegroundColor Yellow
 Write-Host ""
 
-if (-not (Confirm-Action "Mit dem Cleanup fortfahren?")) {
-    Write-Host "Abgebrochen."
+if (-not (Confirm-Action "Continue with the cleanup?")) {
+    Write-Host "Aborted."
     exit 0
 }
 
-# --- 1. User-Daten ------------------------------------------------------
-Write-Header "Schritt 1/4 - User-Daten (Settings, Modi, Secrets, Wayland-Token)"
+# --- 1. User data -------------------------------------------------------
+Write-Header "Step 1/4 - User data (settings, modes, secrets, Wayland token)"
 
 foreach ($dir in @($ConfigDir, $DataDir, $RootDir)) {
     if (Test-Path $dir) {
@@ -77,71 +76,70 @@ foreach ($dir in @($ConfigDir, $DataDir, $RootDir)) {
         $sizeMb = if ($size) { [math]::Round($size / 1MB, 1) } else { 0 }
 
         Write-Host ""
-        Write-Host "Gefunden: $dir ($sizeMb MB)"
-        Write-Host "Inhalt:"
+        Write-Host "Found: $dir ($sizeMb MB)"
+        Write-Host "Contents:"
         Get-ChildItem $dir -ErrorAction SilentlyContinue |
             Select-Object -First 10 |
             ForEach-Object { Write-Host "  $($_.FullName)" }
 
-        if (Confirm-Action "Komplett entfernen?") {
+        if (Confirm-Action "Remove completely?") {
             try {
                 Remove-Item -Path $dir -Recurse -Force
-                Write-Host "  -> entfernt." -ForegroundColor Green
+                Write-Host "  -> removed." -ForegroundColor Green
             } catch {
-                Write-Host "  -> Fehler: $_" -ForegroundColor Red
+                Write-Host "  -> Error: $_" -ForegroundColor Red
             }
         } else {
-            Write-Host "  -> uebersprungen."
+            Write-Host "  -> skipped."
         }
     }
 }
 
-# Falls $RootDir nach den Sub-Loeschungen leer ist, auch wegraeumen.
+# If $RootDir is empty after the sub-deletions, clean it up too.
 if ((Test-Path $RootDir) -and (-not (Get-ChildItem $RootDir -ErrorAction SilentlyContinue))) {
     Remove-Item -Path $RootDir -Force -ErrorAction SilentlyContinue
 }
 
-# --- 2. Credential-Manager ---------------------------------------------
-Write-Header "Schritt 2/4 - Windows Credential Manager (API-Keys)"
-Write-Host "VoiceTypeX speichert API-Keys best-effort im Credential-Manager"
-Write-Host "unter target=`"$Service`". Provider: $($Providers -join ', ')"
+# --- 2. Credential Manager ---------------------------------------------
+Write-Header "Step 2/4 - Windows Credential Manager (API keys)"
+Write-Host "VoiceTypeX stores API keys best-effort in the Credential Manager"
+Write-Host "under target=`"$Service`". Providers: $($Providers -join ', ')"
 Write-Host ""
 
-if (Confirm-Action "Mit cmdkey alle $($Providers.Count) Provider-Eintraege loeschen?") {
+if (Confirm-Action "Delete all $($Providers.Count) provider entries via cmdkey?") {
     foreach ($p in $Providers) {
-        # windows-native-keyring-store (Backend von keyring-3 auf Windows)
-        # bildet target_name als "<user>.<service>" mit Default-Delimiter
-        # ".", siehe docs.rs/windows-native-keyring-store. Unsere Calls
-        # `keyring::Entry::new("voicetypex", "xai")` landen damit unter
+        # windows-native-keyring-store (backend of keyring-3 on Windows)
+        # forms the target_name as "<user>.<service>" with the default
+        # delimiter ".", see docs.rs/windows-native-keyring-store. Our calls
+        # `keyring::Entry::new("voicetypex", "xai")` thus end up under
         # target="xai.voicetypex".
         #
-        # Aus Robustheit gegen Backend-Wechsel oder Custom-target-Modifier
-        # probieren wir nach dem kanonischen Format noch die historischen
-        # Schreibweisen — wenn nichts greift, ist der Eintrag schlicht
-        # nicht da.
+        # For robustness against a backend change or custom target modifier,
+        # after the canonical format we also try the historical spellings —
+        # if none match, the entry simply isn't there.
         $canonical = "${p}.${Service}"
         $candidates = @($canonical, "${Service}.${p}", "${Service}:${p}", $p)
         $deleted = $false
         foreach ($target in $candidates) {
             $output = cmdkey /delete:$target 2>&1
             if ($LASTEXITCODE -eq 0) {
-                Write-Host "  -> ${p}: geloescht (target=$target)" -ForegroundColor Green
+                Write-Host "  -> ${p}: deleted (target=$target)" -ForegroundColor Green
                 $deleted = $true
                 break
             }
         }
         if (-not $deleted) {
-            Write-Host "  -> ${p}: kein Eintrag gefunden (ok)"
+            Write-Host "  -> ${p}: no entry found (ok)"
         }
     }
     Write-Host ""
-    Write-Host "Vollstaendige Liste verbleibender VoiceTypeX-Eintraege:"
+    Write-Host "Complete list of remaining VoiceTypeX entries:"
     cmdkey /list | Select-String -Pattern "$Service" -SimpleMatch |
         ForEach-Object { Write-Host "  $_" }
 }
 
-# --- 3. Autostart-RegKey ------------------------------------------------
-Write-Header "Schritt 3/4 - Autostart-Eintrag (Registry)"
+# --- 3. Autostart RegKey ------------------------------------------------
+Write-Header "Step 3/4 - Autostart entry (Registry)"
 $RunKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 $AutostartFound = $false
 
@@ -150,36 +148,36 @@ if (Test-Path $RunKey) {
     foreach ($name in @('VoiceTypeX', 'voicetypex', $Identifier)) {
         if ($entries.PSObject.Properties.Name -contains $name) {
             $AutostartFound = $true
-            Write-Host "  Gefunden: $name = $($entries.$name)"
-            if (Confirm-Action "Entfernen?") {
+            Write-Host "  Found: $name = $($entries.$name)"
+            if (Confirm-Action "Remove?") {
                 Remove-ItemProperty -Path $RunKey -Name $name
-                Write-Host "    -> entfernt." -ForegroundColor Green
+                Write-Host "    -> removed." -ForegroundColor Green
             }
         }
     }
 }
 if (-not $AutostartFound) {
-    Write-Host "  Kein Autostart-Eintrag gefunden - nichts zu tun."
+    Write-Host "  No autostart entry found - nothing to do."
 }
 
-# --- 4. Manuelle Hinweise ----------------------------------------------
-Write-Header "Schritt 4/4 - Manuelle Schritte"
+# --- 4. Manual notes ---------------------------------------------------
+Write-Header "Step 4/4 - Manual steps"
 Write-Host ""
-Write-Host "Folgende Spuren kann dieses Skript NICHT entfernen:"
+Write-Host "This script CANNOT remove the following leftovers:"
 Write-Host ""
-Write-Host "  - WebView2-Profil-Cache (Browser-State der App-Webviews):"
+Write-Host "  - WebView2 profile cache (browser state of the app webviews):"
 Write-Host "    %LocalAppData%\$Identifier\EBWebView\"
-Write-Host "    -> manuell loeschen, falls gewuenscht"
+Write-Host "    -> delete manually, if desired"
 Write-Host ""
-Write-Host "  - NSIS-Uninstaller-Eintrag in Programme/Features:"
-Write-Host "    -> Win+R 'appwiz.cpl' -> VoiceTypeX -> Deinstallieren"
+Write-Host "  - NSIS uninstaller entry in Programs/Features:"
+Write-Host "    -> Win+R 'appwiz.cpl' -> VoiceTypeX -> Uninstall"
 Write-Host ""
-Write-Host "  - Start-Menu-Eintrag (wird vom NSIS-Uninstaller entfernt):"
+Write-Host "  - Start Menu entry (removed by the NSIS uninstaller):"
 Write-Host "    %APPDATA%\Microsoft\Windows\Start Menu\Programs\VoiceTypeX"
 Write-Host ""
 
-Write-Header "Fertig"
+Write-Header "Done"
 Write-Host ""
-Write-Host "VoiceTypeX-Spuren auf diesem System wurden bestmoeglich entfernt." -ForegroundColor Green
-Write-Host "Bei Fragen oder Problemen: docs\PLATFORMS.md -> Deinstallation."
+Write-Host "VoiceTypeX leftovers on this system have been removed as thoroughly as possible." -ForegroundColor Green
+Write-Host "For questions or problems: docs\PLATFORMS.md -> Uninstallation."
 Write-Host ""

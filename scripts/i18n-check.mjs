@@ -1,28 +1,28 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Build-Gate fuer das i18n-System.
+// Build gate for the i18n system.
 //
-// Prueft drei Eigenschaften:
+// Checks three properties:
 //
-//   1. **Locale-Parity**: alle Locales haben dieselben Keys wie en.json
-//      (Source-of-Truth). Fehlende oder ueberzaehlige Keys werden
-//      gemeldet.
+//   1. **Locale-Parity**: all locales have the same keys as en.json
+//      (source-of-truth). Missing or surplus keys are
+//      reported.
 //
-//   2. **Used-but-undefined**: jeder `t("...")`-Aufruf im Source-Code
-//      referenziert einen Key, der in en.json existiert. Plural-Base-
-//      Keys (z.B. `t("logs.missed", { count: N })`) gelten als
-//      bekannt, wenn `<key>.one`/`.other`/etc. in en.json existiert.
+//   2. **Used-but-undefined**: every `t("...")` call in the source code
+//      references a key that exists in en.json. Plural-base
+//      keys (e.g. `t("logs.missed", { count: N })`) count as
+//      known if `<key>.one`/`.other`/etc. exists in en.json.
 //
-//   3. **Template-Literal-Prefix-Check**: `t(\`app.tabs.${id}\`)`-Calls
-//      werden auf den statischen Praefix reduziert; es muss mindestens
-//      ein Key in en.json mit diesem Praefix existieren — sonst ist
-//      der Praefix vermutlich vertippt.
+//   3. **Template-Literal-Prefix-Check**: `t(\`app.tabs.${id}\`)` calls
+//      are reduced to their static prefix; there must be at least
+//      one key in en.json with this prefix — otherwise the
+//      prefix is probably a typo.
 //
-// Exit-Codes:
-//   0: alles ok (Warnings erlaubt)
-//   1: User-Fehler (fehlende Keys, used-but-undefined, broken prefix)
-//   2: Tool-Fehler (JSON-Parse, fehlende Datei, FS-Crash)
+// Exit codes:
+//   0: all ok (warnings allowed)
+//   1: user error (missing keys, used-but-undefined, broken prefix)
+//   2: tool error (JSON parse, missing file, FS crash)
 
 import { readFile, readdir } from "node:fs/promises";
 import { resolve, join, relative } from "node:path";
@@ -62,14 +62,14 @@ async function findSourceFiles(dir) {
 }
 
 // Match t("..."), t('...'), t(`...`). Capture the literal content.
-// Lookbehind statt `\b`, weil `\b` zwischen `$`/`_` und `t` triggert
-// (was bei TS-Identifiern wie `$t(` falsche Treffer waere). Non-greedy,
-// kein Escape-Handling — Translation-Keys haben keine Quotes drin.
+// Lookbehind instead of `\b`, because `\b` triggers between `$`/`_` and `t`
+// (which would be a false match for TS identifiers like `$t(`). Non-greedy,
+// no escape handling — translation keys have no quotes in them.
 const T_CALL_RE = /(?<![A-Za-z0-9_$])t\(\s*(["'`])([^"'`]*?)\1/g;
 
-// CLDR-Plural-Kategorien. Wird benutzt, um zu pruegfen, ob ein
-// referenzierter Base-Key (`t("logs.missed", {count:5})`) via einer
-// dieser Suffix-Varianten in en.json verfuegbar ist.
+// CLDR plural categories. Used to check whether a
+// referenced base key (`t("logs.missed", {count:5})`) is available
+// via one of these suffix variants in en.json.
 const PLURAL_FORMS = ["zero", "one", "two", "few", "many", "other"];
 
 function keyOrPluralBaseExists(key, truthKeys) {
@@ -104,11 +104,11 @@ function setDiff(a, b) {
 }
 
 async function main() {
-  // Source-of-truth zuerst.
+  // Source-of-truth first.
   const truth = await loadLocale(SOURCE_OF_TRUTH);
   const truthKeys = truth.keys;
 
-  // Alle anderen Locales.
+  // All other locales.
   const localeFiles = (await readdir(LOCALES_DIR))
     .filter((f) => f.endsWith(".json"))
     .filter((f) => f !== SOURCE_OF_TRUTH);

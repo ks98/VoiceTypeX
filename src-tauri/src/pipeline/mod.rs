@@ -290,7 +290,7 @@ async fn streaming_worker(
         let f16k = match crate::audio::recorder::to_16k_mono(&raw, meta) {
             Ok(s) if !s.is_empty() => s,
             Ok(_) => {
-                tracing::warn!(iteration, "to_16k_mono lieferte leeres Ergebnis");
+                tracing::warn!(iteration, "to_16k_mono returned an empty result");
                 sleep(Duration::from_millis(STREAMING_INTERVAL_MS)).await;
                 continue;
             }
@@ -317,7 +317,7 @@ async fn streaming_worker(
                     iteration,
                     elapsed_ms,
                     text_len = curr_text.len(),
-                    "Streaming-Pass fertig"
+                    "streaming pass done"
                 );
 
                 // Keep LocalAgreement-2 for telemetry (it shows how
@@ -334,7 +334,7 @@ async fn streaming_worker(
                     iteration,
                     stable_len = stable.len(),
                     curr_len = curr_text.len(),
-                    "LA-2-Konvergenz (Telemetrie)"
+                    "LA-2 convergence (telemetry)"
                 );
 
                 if !curr_text.is_empty() && curr_text != committed {
@@ -348,7 +348,7 @@ async fn streaming_worker(
                     if let Err(e) = emit_result {
                         tracing::warn!(error = %e, "Partial emit failed");
                     } else {
-                        tracing::info!(iteration, len = committed.len(), "Partial emittiert");
+                        tracing::info!(iteration, len = committed.len(), "partial emitted");
                     }
                 }
                 prev_text = curr_text;
@@ -418,7 +418,7 @@ async fn finish_recording_and_inject(
         processing = ?mode.processing,
         cloud_stt = ?mode.cloud_stt_provider,
         cloud_llm = ?mode.cloud_llm_provider,
-        "Pipeline-Start (Modus-Eigenschaften)"
+        "pipeline start (mode properties)"
     );
 
     // Clear active_mode already here — from this point the pipeline is
@@ -596,7 +596,7 @@ async fn finish_recording_and_inject(
         })?;
 
     ctx.state_bus.transition(AppState::Idle)?;
-    tracing::info!(mode = %mode.id, len = final_text.len(), "Pipeline abgeschlossen");
+    tracing::info!(mode = %mode.id, len = final_text.len(), "pipeline complete");
 
     Ok(())
 }
@@ -650,7 +650,7 @@ async fn run_local_processing(
         ))),
         "ollama" => run_local_processing_ollama(ctx, mode, transcript, system_prompt, opts).await,
         other => Err(VoiceTypeError::Mode(format!(
-            "Modus '{}': unbekannte local_engine '{other}' (erlaubt: \"embedded\" | \"ollama\")",
+            "Mode '{}': unknown local_engine '{other}' (allowed: \"embedded\" | \"ollama\")",
             mode.id
         ))),
     }
@@ -673,7 +673,7 @@ async fn run_local_processing_ollama(
         .or_else(|| mode.local_llm_model.clone())
         .ok_or_else(|| {
             VoiceTypeError::Mode(format!(
-                "Modus '{}': processing=local engine=ollama, aber kein ollama_model_tag gesetzt",
+                "Mode '{}': processing=local engine=ollama, but no ollama_model_tag set",
                 mode.id
             ))
         })?;
@@ -718,7 +718,7 @@ fn resolve_local_transcriber(ctx: &Arc<AppContext>, mode: &Mode) -> Arc<LocalTra
     tracing::info!(
         slot = %slot_slug,
         mode_id = %mode.id,
-        "LocalTranscriber-Override fuer Modus erstellt"
+        "LocalTranscriber override created for mode"
     );
     let mut cache = ctx.extra_transcribers.lock();
     cache
@@ -754,7 +754,7 @@ fn resolve_embedded_llm(ctx: &Arc<AppContext>, mode: &Mode) -> Arc<LlamaEmbedded
     tracing::info!(
         slot = %slot_slug,
         mode_id = %mode.id,
-        "LlamaEmbeddedProcessor-Override fuer Modus erstellt"
+        "LlamaEmbeddedProcessor override created for mode"
     );
     let mut cache = ctx.extra_llm_processors.lock();
     cache
@@ -766,7 +766,7 @@ fn resolve_embedded_llm(ctx: &Arc<AppContext>, mode: &Mode) -> Arc<LlamaEmbedded
 async fn run_cloud_processing(mode: &Mode, transcript: &str) -> Result<String> {
     let provider = mode.cloud_llm_provider.as_deref().ok_or_else(|| {
         VoiceTypeError::Mode(format!(
-            "Modus '{}': processing=cloud, aber kein cloud_llm_provider gesetzt",
+            "Mode '{}': processing=cloud, but no cloud_llm_provider set",
             mode.id
         ))
     })?;
@@ -810,7 +810,7 @@ pub fn register_menu_hotkey(app: &AppHandle, ctx: Arc<AppContext>) -> Result<()>
                 let _ = app
                     .notification()
                     .builder()
-                    .title("VoiceTypeX — Fehler")
+                    .title("VoiceTypeX — Error")
                     .body(e.to_string())
                     .show();
             }
@@ -846,7 +846,7 @@ pub fn spawn_wayland_hotkey_session(app: AppHandle, ctx: Arc<AppContext>) {
     let preferred = ctx.settings.read().menu_hotkey.clone();
     let specs = vec![WaylandShortcutSpec {
         id: "open_menu".to_string(),
-        description: "VoiceTypeX: Modus-Menue oeffnen / Aufnahme stoppen".to_string(),
+        description: "VoiceTypeX: open mode menu / stop recording".to_string(),
         preferred_trigger: preferred,
     }];
 

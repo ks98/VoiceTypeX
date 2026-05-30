@@ -117,7 +117,7 @@ impl WorkerState {
         if self.is_ready() {
             if let Some(tx) = self.ready_tx.take() {
                 tracing::info!(
-                    "libei: alle Vorbedingungen erfuellt (keyboard + keymap + resumed) — Auto-Paste bereit"
+                    "libei: all preconditions met (keyboard + keymap + resumed) — auto-paste ready"
                 );
                 let _ = tx.send(true);
             }
@@ -145,14 +145,14 @@ impl WorkerState {
                     connection: _,
                     serial,
                 } => {
-                    tracing::info!(serial, "libei: Connection etabliert");
+                    tracing::info!(serial, "libei: connection established");
                     self.last_serial = serial;
                 }
                 _ => {}
             },
             ei::Event::Connection(_connection, request) => match request {
                 ei::connection::Event::Seat { seat } => {
-                    tracing::debug!("libei: Seat-Objekt empfangen");
+                    tracing::debug!("libei: Seat object received");
                     self.seats.insert(seat, SeatData::default());
                 }
                 ei::connection::Event::Ping { ping } => {
@@ -177,12 +177,12 @@ impl WorkerState {
                         } else {
                             tracing::warn!(
                                 caps = ?data.capabilities.keys().collect::<Vec<_>>(),
-                                "libei: Seat done OHNE ei_keyboard-Capability — Auto-Paste nicht moeglich"
+                                "libei: Seat done WITHOUT ei_keyboard capability — auto-paste not possible"
                             );
                         }
                     }
                     ei::seat::Event::Device { device } => {
-                        tracing::debug!("libei: Device-Objekt empfangen");
+                        tracing::debug!("libei: Device object received");
                         self.devices.insert(device, DeviceData::default());
                     }
                     _ => {}
@@ -203,18 +203,18 @@ impl WorkerState {
                         tracing::info!(?interfaces, "libei: Device done");
                         if let Some(keyboard) = data.interface::<ei::Keyboard>() {
                             tracing::info!(
-                                "libei: Keyboard-Interface gefunden — warte auf Resumed-Event"
+                                "libei: keyboard interface found — waiting for Resumed event"
                             );
                             self.active_keyboard = Some((device, keyboard));
                             self.try_signal_ready();
                         } else {
                             tracing::warn!(
-                                "libei: Device done OHNE ei_keyboard-Interface — Auto-Paste nicht moeglich"
+                                "libei: Device done WITHOUT ei_keyboard interface — auto-paste not possible"
                             );
                         }
                     }
                     ei::device::Event::Resumed { serial } => {
-                        tracing::info!(serial, "libei: Device resumed — sender darf tippen");
+                        tracing::info!(serial, "libei: Device resumed — sender may type");
                         self.last_serial = serial;
                         self.keyboard_resumed = true;
                         // `start_emulating` once per the lan-mouse
@@ -235,10 +235,7 @@ impl WorkerState {
                         self.try_signal_ready();
                     }
                     ei::device::Event::Paused { serial } => {
-                        tracing::warn!(
-                            serial,
-                            "libei: Device paused — sender darf nicht mehr tippen"
-                        );
+                        tracing::warn!(serial, "libei: Device paused — sender must stop typing");
                         self.last_serial = serial;
                         self.keyboard_resumed = false;
                         self.emulation_active = false;

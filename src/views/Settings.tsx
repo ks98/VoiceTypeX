@@ -156,7 +156,7 @@ export default function Settings(): JSX.Element {
     const picked = await open({
       multiple: false,
       directory: false,
-      filters: [{ name: "Whisper-Modell (GGML)", extensions: ["bin", "gguf"] }],
+      filters: [{ name: "Whisper model (GGML)", extensions: ["bin", "gguf"] }],
     });
     if (typeof picked === "string") {
       void update({ whisper_model_path: picked });

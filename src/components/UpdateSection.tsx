@@ -7,9 +7,9 @@ import Button from "./Button";
 import { ipcGetAppVersion } from "../lib/tauri";
 import { useT, type TranslateFn } from "../i18n";
 
-// Self-Update gilt nur fuer AppImage (Linux) + NSIS (Windows). deb/rpm
-// haben keinen Updater-Pfad — daher der Hinweis im `hint`. Download
-// laeuft erst auf Klick (grosses Bundle, evtl. getaktete Verbindung).
+// Self-update only applies to AppImage (Linux) + NSIS (Windows). deb/rpm
+// have no updater path — hence the note in `hint`. Download
+// only starts on click (large bundle, possibly metered connection).
 type Status =
   | "idle"
   | "checking"
@@ -80,8 +80,8 @@ export default function UpdateSection(): JSX.Element {
           setStatus("installing");
         }
       });
-      // AppImage wird im Speicher ersetzt -> Neustart noetig; auf Windows
-      // uebernimmt der NSIS-Installer und startet danach neu.
+      // AppImage is replaced in memory -> restart needed; on Windows
+      // the NSIS installer takes over and restarts afterwards.
       await relaunch();
     } catch (e) {
       setErrorMsg(String(e));

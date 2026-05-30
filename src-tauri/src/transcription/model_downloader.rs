@@ -368,7 +368,7 @@ where
 
     let response = reqwest::get(url)
         .await
-        .map_err(|e| VoiceTypeError::Transcription(format!("HTTP-Fehler {url}: {e}")))?;
+        .map_err(|e| VoiceTypeError::Transcription(format!("HTTP error {url}: {e}")))?;
     if !response.status().is_success() {
         return Err(VoiceTypeError::Transcription(format!(
             "Download HTTP-Status {}: {}",
@@ -408,14 +408,14 @@ where
         if !actual_hash.eq_ignore_ascii_case(expected) {
             tokio::fs::remove_file(&tmp_path).await.ok();
             return Err(VoiceTypeError::Transcription(format!(
-                "Hash mismatch fuer {label}: expected={expected}, got={actual_hash}"
+                "Hash mismatch for {label}: expected={expected}, got={actual_hash}"
             )));
         }
     } else {
         tracing::info!(
             file = %label,
             sha256 = %actual_hash,
-            "Heruntergeladen — kein Reference-Hash, ueberspringe Verifikation"
+            "Downloaded — no reference hash, skipping verification"
         );
     }
 
@@ -465,7 +465,7 @@ mod tests {
         ] {
             assert!(
                 slot.expected_sha256().is_some(),
-                "{slot:?} hat keinen gepinten SHA-256 — Integritaetsverifikation faellt aus"
+                "{slot:?} has no pinned SHA-256 — integrity verification disabled"
             );
         }
     }
@@ -476,7 +476,7 @@ mod tests {
         for model in [VadModel::SileroV6_2_0] {
             assert!(
                 model.expected_sha256().is_some(),
-                "{model:?} hat keinen gepinten SHA-256"
+                "{model:?} has no pinned SHA-256"
             );
         }
     }
@@ -502,7 +502,7 @@ mod tests {
         ] {
             assert!(
                 slot.expected_sha256().is_some(),
-                "{slot:?} hat keinen gepinten SHA-256"
+                "{slot:?} has no pinned SHA-256"
             );
         }
     }

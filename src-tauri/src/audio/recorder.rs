@@ -115,9 +115,7 @@ impl RecorderHandle {
         tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
             let raw_samples = std::mem::take(&mut *samples_arc.lock());
             if raw_samples.is_empty() {
-                return Err(VoiceTypeError::Audio(
-                    "Keine Audio-Daten aufgenommen".into(),
-                ));
+                return Err(VoiceTypeError::Audio("No audio data recorded".into()));
             }
             let mono = stereo_to_mono(&raw_samples, meta.channels);
             let resampled = resample_to_16k(&mono, meta.sample_rate)?;
@@ -254,7 +252,7 @@ fn run_recorder_thread(
         }
         other => {
             return Err(VoiceTypeError::Audio(format!(
-                "Sample-Format {other:?} nicht unterstuetzt"
+                "Sample format {other:?} not supported"
             )));
         }
     }
@@ -325,7 +323,7 @@ fn resample_to_16k(mono: &[f32], source_rate: u32) -> Result<Vec<f32>> {
     output
         .into_iter()
         .next()
-        .ok_or_else(|| VoiceTypeError::Audio("Resampler lieferte 0 Channels".into()))
+        .ok_or_else(|| VoiceTypeError::Audio("resampler returned 0 channels".into()))
 }
 
 /// Encode f32 mono samples (16 kHz) as WAV (PCM s16le).

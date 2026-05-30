@@ -1,15 +1,15 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Leichtgewichtige Checks bei jedem Push auf main und jedem Pull Request:
-# Lint, Test, Build-Check und Supply-Chain-Audit. Der schwere
-# Bundle-Build laeuft NUR auf Tags (siehe release.yml).
+# Lightweight checks on every push to main and every Pull Request:
+# Lint, Test, Build-Check and Supply-Chain-Audit. The heavy
+# Bundle-Build runs ONLY on Tags (see release.yml).
 
 name: CI
 
 on:
   push:
     branches: [main]
-    # Reine Doku-Aenderungen loesen den schweren nativen Build nicht aus.
+    # Doc-only changes do not trigger the heavy native build.
     paths-ignore:
       - "**/*.md"
       - "docs/**"
@@ -22,7 +22,7 @@ on:
       - "LICENSE"
       - "COPYING"
 
-# Laufende PR-Checks abbrechen, wenn ein neuer Commit gepusht wird.
+# Cancel in-flight PR checks when a new commit is pushed.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -51,9 +51,9 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # generate_context!() bettet frontendDist (../dist) ein -> dist muss
-      # vor cargo clippy/test existieren. pnpm build erzeugt es (und führt
-      # das i18n:check-prebuild-Gate aus).
+      # generate_context!() embeds frontendDist (../dist) -> dist must
+      # exist before cargo clippy/test. pnpm build produces it (and runs
+      # the i18n:check-prebuild gate).
       - name: Build frontend (dist for generate_context!)
         run: pnpm build
       - uses: dtolnay/rust-toolchain@stable
@@ -70,10 +70,10 @@ jobs:
         run: pnpm lint
       - name: prettier
         run: pnpm format:check
-      # clippy hat oben den ggml/llama-Build erzeugt; vor dem ZWEITEN Build
-      # (cargo test) die dangling libggml*/libllama-Links raeumen, sonst
-      # panict llama-cpp-sys-2 0.1.146 (Os code 17, AlreadyExists) — derselbe
-      # TOC/TOU-Bug, den scripts/clean-dangling-libs.mjs adressiert.
+      # clippy produced the ggml/llama build above; before the SECOND build
+      # (cargo test) clean up the dangling libggml*/libllama links, otherwise
+      # llama-cpp-sys-2 0.1.146 panics (Os code 17, AlreadyExists) — the same
+      # TOC/TOU bug that scripts/clean-dangling-libs.mjs addresses.
       - name: Clean dangling GPU libs before the second build
         run: node scripts/clean-dangling-libs.mjs
       - name: cargo test
@@ -84,14 +84,14 @@ jobs:
   build-windows:
     name: Build + Test (Windows)
     runs-on: windows-latest
-    # Ninja statt VS-Generator: das vulkan-shaders-gen-ExternalProject von
-    # ggml/llama.cpp baut mit dem VS-Generator nicht (verschachtelte
-    # Compiler-Detection schlägt fehl). msvc-dev-cmd legt cl.exe + ninja
-    # auf den PATH.
+    # Ninja instead of VS generator: the vulkan-shaders-gen-ExternalProject of
+    # ggml/llama.cpp does not build with the VS generator (nested
+    # compiler detection fails). msvc-dev-cmd puts cl.exe + ninja
+    # on the PATH.
     env:
       CMAKE_GENERATOR: Ninja
-      # Kurzes Target-Dir gegen MSVC MAX_PATH (260): der verschachtelte
-      # vulkan-shaders-gen-Build erzeugt sonst Pfade > 260 Zeichen (C1083).
+      # Short target dir to avoid MSVC MAX_PATH (260): otherwise the nested
+      # vulkan-shaders-gen build produces paths > 260 characters (C1083).
       CARGO_TARGET_DIR: C:\t
     steps:
       - uses: actions/checkout@v4
@@ -102,9 +102,9 @@ jobs:
       - name: Disable ccache (breaks the ggml-vulkan nested MSVC build)
         shell: pwsh
         run: |
-          # ggml aktiviert ccache automatisch, wenn gefunden; ccache + MSVC
-          # /Zi bricht den verschachtelten vulkan-shaders-gen-Build (C1083,
-          # leerer Dateiname). ccache + sccache verstecken -> GGML_CCACHE aus.
+          # ggml enables ccache automatically when found; ccache + MSVC
+          # /Zi breaks the nested vulkan-shaders-gen build (C1083,
+          # empty file name). Hide ccache + sccache -> GGML_CCACHE off.
           foreach ($tool in 'ccache', 'sccache') {
             Get-Command $tool -All -ErrorAction SilentlyContinue | ForEach-Object {
               Write-Host "Disabling $($_.Source)"
@@ -132,11 +132,11 @@ jobs:
           workspaces: "./src-tauri -> target"
       - name: pnpm build (frontend + i18n gate)
         run: pnpm build
-      # Windows linkt jetzt: das embedded llama-cpp-2 ist auf Windows
-      # ausgebaut (ks98/voicetypex#1), womit nur whispers statisches ggml
-      # bleibt und die ggml-Symbolkollision (LNK2005) entfaellt. cargo build
-      # fuehrt den vollen Link aus (den cargo check bisher maskierte),
-      # cargo test --lib spiegelt den Linux-Job.
+      # Windows links now: the embedded llama-cpp-2 is removed on Windows
+      # (ks98/voicetypex#1), leaving only whisper's static ggml
+      # and eliminating the ggml symbol collision (LNK2005). cargo build
+      # runs the full link (which cargo check previously masked),
+      # cargo test --lib mirrors the Linux job.
       - name: cargo build
         run: cargo build --manifest-path src-tauri/Cargo.toml
       - name: cargo test
@@ -151,11 +151,11 @@ jobs:
       - name: cargo-audit
         run: |
           cargo install --locked cargo-audit
-          # --deny warnings macht auch yanked-Crates und Informational-
-          # Advisories zu Fehlern. Die --ignore-Liste suppressed bekannte
-          # transitive Unmaintained-Advisories aus dem Tauri-/GTK-Stack,
-          # die wir nicht selbst fixen koennen. Bei jedem Tauri-/GTK-Update
-          # pruefen, ob Eintraege entfallen.
+          # --deny warnings also turns yanked crates and informational
+          # advisories into errors. The --ignore list suppresses known
+          # transitive unmaintained advisories from the Tauri/GTK stack
+          # that we cannot fix ourselves. On every Tauri/GTK update
+          # check whether entries can be dropped.
           cargo audit --file src-tauri/Cargo.lock --deny warnings \
             --ignore RUSTSEC-2024-0370 --ignore RUSTSEC-2024-0411 \
             --ignore RUSTSEC-2024-0412 --ignore RUSTSEC-2024-0413 \

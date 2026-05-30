@@ -1,20 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Räumt vor jedem Build die `libggml*.so*` und `libllama.so*` aus
-// `src-tauri/target/debug/` (+ deps/, examples/).
+// Cleans up the `libggml*.so*` and `libllama.so*` files from
+// `src-tauri/target/debug/` (+ deps/, examples/) before every build.
 //
-// Hintergrund: llama-cpp-sys-2 0.1.146's build.rs hat einen TOC/TOU-
-// Bug — `Path::exists()` folgt Symlinks und liefert false fuer
-// dangling Links, `std::fs::hard_link()` schlaegt aber fehl, weil der
-// Symlink-Eintrag noch da ist. Resultat: `Os { code: 17, kind:
-// AlreadyExists }`-Panic.
+// Background: llama-cpp-sys-2 0.1.146's build.rs has a TOC/TOU
+// bug — `Path::exists()` follows symlinks and returns false for
+// dangling links, but `std::fs::hard_link()` fails because the
+// symlink entry is still there. Result: `Os { code: 17, kind:
+// AlreadyExists }` panic.
 //
-// Hooks in package.json: `predev` und `prebuild`. Pflegt sich selbst
-// solange dieses Script existiert.
+// Hooks in package.json: `predev` and `prebuild`. Maintains itself
+// as long as this script exists.
 //
-// Cross-Platform: pure Node, kein `find`. Auf Windows matched das
-// Pattern nichts (dort heisst's `.dll`, der Bug existiert auch nicht),
-// also harmloser No-Op.
+// Cross-platform: pure Node, no `find`. On Windows the pattern
+// matches nothing (there they're named `.dll`, and the bug doesn't
+// exist either), so it's a harmless no-op.
 
 import { readdirSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
@@ -40,8 +40,8 @@ function cleanDir(dir) {
   try {
     entries = readdirSync(dir);
   } catch {
-    // Verzeichnis existiert nicht (erster Build, oder release-target
-    // noch nie gebaut) → kein Problem, einfach weiter.
+    // Directory doesn't exist (first build, or release target
+    // never built yet) → no problem, just continue.
     return 0;
   }
   let removed = 0;
@@ -52,7 +52,7 @@ function cleanDir(dir) {
       unlinkSync(full);
       removed += 1;
     } catch {
-      // Datei verschwand zwischen readdir und unlink — nicht fatal.
+      // File vanished between readdir and unlink — not fatal.
     }
   }
   return removed;
@@ -65,6 +65,6 @@ for (const dir of TARGETS) {
 
 if (total > 0) {
   console.log(
-    `[clean-dangling-libs] ${total} stale ggml/llama-Library-Eintrag(e) entfernt.`,
+    `[clean-dangling-libs] removed ${total} stale ggml/llama library entr${total === 1 ? "y" : "ies"}.`,
   );
 }
