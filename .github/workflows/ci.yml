@@ -73,9 +73,15 @@ jobs:
     # auf den PATH.
     env:
       CMAKE_GENERATOR: Ninja
+      # Kurzes Target-Dir gegen MSVC MAX_PATH (260): der verschachtelte
+      # vulkan-shaders-gen-Build erzeugt sonst Pfade > 260 Zeichen (C1083).
+      CARGO_TARGET_DIR: C:\t
     steps:
       - uses: actions/checkout@v4
       - uses: ilammy/msvc-dev-cmd@v1
+      - name: Enable Windows long paths
+        shell: pwsh
+        run: New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force | Out-Null
       - name: Disable ccache (breaks the ggml-vulkan nested MSVC build)
         shell: pwsh
         run: |
