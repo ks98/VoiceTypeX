@@ -14,6 +14,7 @@ import {
   type WhisperBackendInfo,
 } from "../lib/tauri";
 import { recommendLlmSlot } from "../lib/recommend";
+import { isWindows } from "../lib/platform";
 import { useSettingsStore } from "../store";
 import Banner from "./Banner";
 import Button from "./Button";
@@ -232,18 +233,36 @@ export default function OnboardingWizard({
               onSaveKey={onSaveKey}
             />
           ) : step === 4 ? (
-            <StepLlmDownload
-              hardware={hardware}
-              currentSlot={settings?.llm_default_slot ?? ""}
-              onPickSlot={(s) => void onPickLlmSlot(s)}
-              onDownload={onLlmDownload}
-              downloadStarted={
-                llmStatus.kind !== "idle" || settings?.llm_model_path
-                  ? true
-                  : false
-              }
-              modelPath={settings?.llm_model_path ?? null}
-            />
+            isWindows() ? (
+              // Embedded LLM is Linux/macOS-only (issue #1). On Windows we
+              // skip the GGUF download and explain the Ollama/cloud path.
+              <div className="flex flex-col gap-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-fg">
+                    {t("wizard.windows_local.title")}
+                  </h3>
+                  <p className="text-sm text-fg-muted mt-1">
+                    {t("wizard.windows_local.body")}
+                  </p>
+                  <p className="text-xs text-fg-faint mt-2">
+                    {t("wizard.windows_local.hint")}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <StepLlmDownload
+                hardware={hardware}
+                currentSlot={settings?.llm_default_slot ?? ""}
+                onPickSlot={(s) => void onPickLlmSlot(s)}
+                onDownload={onLlmDownload}
+                downloadStarted={
+                  llmStatus.kind !== "idle" || settings?.llm_model_path
+                    ? true
+                    : false
+                }
+                modelPath={settings?.llm_model_path ?? null}
+              />
+            )
           ) : (
             <StepFinish
               backend={backend}

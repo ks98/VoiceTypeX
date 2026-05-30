@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import type { Mode } from "../lib/types";
 import { ipcCreateMode, ipcUpdateMode } from "../lib/tauri";
+import { isWindows } from "../lib/platform";
 import Button from "./Button";
 import Banner from "./Banner";
 import { useT, type TranslateFn } from "../i18n";
@@ -125,8 +126,15 @@ export default function ModeEditor({
   const isCloudLLM = draft.processing === "cloud";
   const needsSystemPrompt = draft.processing !== "none";
   const isSelectionInput = draft.input === "selection";
-  const localEngine: "embedded" | "ollama" =
-    draft.local_engine === "ollama" ? "ollama" : "embedded";
+  // Embedded llama-cpp-2 is not compiled on Windows (issue #1), so a
+  // local-LLM mode there can only use Ollama. Force ollama on Windows; it
+  // is persisted via `local_engine` on save, so a Windows-authored local
+  // mode never carries `engine = "embedded"` (which would error at run time).
+  const localEngine: "embedded" | "ollama" = isWindows()
+    ? "ollama"
+    : draft.local_engine === "ollama"
+      ? "ollama"
+      : "embedded";
   const needsOllamaTag = isLocalLLM && localEngine === "ollama";
 
   const samplingValid =
@@ -426,23 +434,34 @@ export default function ModeEditor({
 
             {isLocalLLM ? (
               <>
-                <Field
-                  label={t("mode_editor.llm.engine.label")}
-                  hint={t("mode_editor.llm.engine.hint")}
-                >
-                  <select
-                    className={inputCls}
-                    value={localEngine}
-                    onChange={(e) => update("local_engine", e.target.value)}
+                {/* Embedded engine is Linux/macOS-only (issue #1). On
+                    Windows the engine is forced to Ollama, so we hide the
+                    selector and show a short hint instead. */}
+                {isWindows() ? (
+                  <Field label={t("mode_editor.llm.engine.label")}>
+                    <p className="text-xs text-fg-muted">
+                      {t("mode_editor.llm.engine.windows_no_embedded")}
+                    </p>
+                  </Field>
+                ) : (
+                  <Field
+                    label={t("mode_editor.llm.engine.label")}
+                    hint={t("mode_editor.llm.engine.hint")}
                   >
-                    <option value="embedded">
-                      {t("mode_editor.llm.engine.opt_embedded")}
-                    </option>
-                    <option value="ollama">
-                      {t("mode_editor.llm.engine.opt_ollama")}
-                    </option>
-                  </select>
-                </Field>
+                    <select
+                      className={inputCls}
+                      value={localEngine}
+                      onChange={(e) => update("local_engine", e.target.value)}
+                    >
+                      <option value="embedded">
+                        {t("mode_editor.llm.engine.opt_embedded")}
+                      </option>
+                      <option value="ollama">
+                        {t("mode_editor.llm.engine.opt_ollama")}
+                      </option>
+                    </select>
+                  </Field>
+                )}
 
                 {localEngine === "embedded" ? (
                   <Field

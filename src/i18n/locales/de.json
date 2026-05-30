@@ -488,5 +488,12 @@
   "settings.update.downloading": "Lädt… {current} von {total}",
   "settings.update.downloading_indeterminate": "Lädt… {current}",
   "settings.update.installing": "Installiere — die App startet neu…",
-  "settings.update.error": "Update fehlgeschlagen: {message}"
+  "settings.update.error": "Update fehlgeschlagen: {message}",
+
+  "settings.windows.local_llm.hint": "Lokales LLM unter Windows",
+  "settings.windows.local_llm.body": "Das eingebaute (embedded) LLM ist unter Windows noch nicht verfügbar. Für lokale Nachbearbeitung installiere Ollama und wähle es pro Modus aus; ansonsten nutze einen Cloud-Anbieter. Die Spracherkennung läuft wie gewohnt vollständig lokal.",
+  "mode_editor.llm.engine.windows_no_embedded": "Die Embedded-Engine ist unter Windows nicht verfügbar. Dieser Modus nutzt Ollama — trage unten einen Modell-Tag ein (erfordert eine eigene Ollama-Installation) oder stelle die Nachbearbeitung auf einen Cloud-Anbieter um.",
+  "wizard.windows_local.title": "Lokales LLM (optional)",
+  "wizard.windows_local.body": "Unter Windows ist das eingebaute LLM noch nicht enthalten. Du kannst diesen Schritt überspringen: Das Diktat läuft vollständig lokal, die Textbearbeitung über einen Cloud-Anbieter.",
+  "wizard.windows_local.hint": "Du willst ein vollständig lokales LLM? Installiere Ollama und wähle es später pro Modus in den Einstellungen."
 }
