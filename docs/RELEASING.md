@@ -1,61 +1,61 @@
-# Release- & Update-Management
+# Release & Update Management
 
-Maintainer-Runbook: wie eine Version geschnitten, gebaut, signiert,
-veröffentlicht und an Nutzer ausgeliefert wird.
+Maintainer runbook: how a version gets cut, built, signed, published, and
+delivered to users.
 
-## Überblick
+## Overview
 
 ```
-  pnpm release minor          # bumpt Version, committet, taggt vX.Y.Z
+  pnpm release minor          # bumps version, commits, tags vX.Y.Z
         │
         ▼  git push --follow-tags
   ┌──────────────────────────────────────────────────────────────┐
-  │ .github/workflows/release.yml  (Trigger: Tag v*)              │
+  │ .github/workflows/release.yml  (trigger: tag v*)              │
   │                                                               │
-  │  1. git-cliff (cliff.toml)  → Release-Notes aus den Commits   │
+  │  1. git-cliff (cliff.toml)  → release notes from the commits  │
   │  2. tauri-action (ubuntu-24.04):                              │
-  │       • baut deb / rpm / AppImage                             │
-  │       • signiert die Updater-Artefakte (minisign)            │
-  │       • erstellt ein GitHub-Release als DRAFT                 │
-  │       • lädt Assets + latest.json hoch                        │
+  │       • builds deb / rpm / AppImage                           │
+  │       • signs the updater artifacts (minisign)                │
+  │       • creates a GitHub release as a DRAFT                   │
+  │       • uploads assets + latest.json                          │
   └──────────────────────────────────────────────────────────────┘
         │
-        ▼  Du prüfst das Draft-Release und klickst „Publish"
-   → /releases/latest/download/latest.json wird live
-   → der In-App-Updater bietet die neue Version an
+        ▼  You review the draft release and click "Publish"
+   → /releases/latest/download/latest.json goes live
+   → the in-app updater offers the new version
 ```
 
-> **Windows ist wieder im Release** (NSIS-Installer mit STT + Vulkan +
-> Cloud/Ollama-LLM). Das embedded llama-cpp-2 ist auf Windows ausgebaut
-> ([#1](https://github.com/ks98/voicetypex/issues/1): ggml-Symbolkollision
-> beim MSVC-Linken von whisper.cpp + llama.cpp) — lokales LLM läuft dort
-> über einen selbst installierten Ollama-Daemon oder Cloud.
+> **Windows is back in the release** (NSIS installer with STT + Vulkan +
+> Cloud/Ollama LLM). The embedded llama-cpp-2 has been removed on Windows
+> ([#1](https://github.com/ks98/voicetypex/issues/1): ggml symbol collision
+> when MSVC links whisper.cpp + llama.cpp) — a local LLM runs there
+> through a self-installed Ollama daemon or via the cloud.
 
-## Versionierung — eine Quelle
+## Versioning — a single source
 
-`src-tauri/Cargo.toml` (`[package] version`) ist die **Single Source of
-Truth**. Die App zeigt diese Version (`env!("CARGO_PKG_VERSION")`), und
-`tauri.conf.json` hat **kein** `version`-Feld (es erbt aus Cargo.toml).
+`src-tauri/Cargo.toml` (`[package] version`) is the **single source of
+truth**. The app displays this version (`env!("CARGO_PKG_VERSION")`), and
+`tauri.conf.json` has **no** `version` field (it inherits from Cargo.toml).
 
-`scripts/bump-version.mjs` (via `pnpm release`) hält die zwei weiteren
-Stellen synchron, die Cargo nicht selbst erbt: `package.json` und den
-`voicetypex`-Eintrag in `Cargo.lock`.
+`scripts/bump-version.mjs` (via `pnpm release`) keeps in sync the two
+remaining spots that Cargo does not inherit on its own: `package.json` and
+the `voicetypex` entry in `Cargo.lock`.
 
 ```bash
 pnpm release patch          # 0.1.0 -> 0.1.1
 pnpm release minor          # 0.1.0 -> 0.2.0
 pnpm release major          # 0.1.0 -> 1.0.0
-pnpm release 1.0.0-rc.1      # explizite Version (auch Pre-Release)
-pnpm release patch --dry-run # nur anzeigen, nichts schreiben
-pnpm release patch --no-git  # Dateien bumpen, ohne commit/tag
+pnpm release 1.0.0-rc.1      # explicit version (also pre-release)
+pnpm release patch --dry-run # only show, write nothing
+pnpm release patch --no-git  # bump files, without commit/tag
 ```
 
-Default (ohne `--no-git`): committet `chore(release): vX.Y.Z` und setzt
-das annotierte Tag `vX.Y.Z`. Der **Push bleibt ein bewusster manueller
-Schritt** (`git push --follow-tags`).
+Default (without `--no-git`): commits `chore(release): vX.Y.Z` and creates
+the annotated tag `vX.Y.Z`. The **push remains a deliberate manual step**
+(`git push --follow-tags`).
 
-**Erstes Release** (Version unverändert, z. B. 0.1.0): das Script
-verweigert eine identische Version — Tag von Hand setzen:
+**First release** (version unchanged, e.g. 0.1.0): the script refuses an
+identical version — set the tag by hand:
 
 ```bash
 git tag -a v0.1.0 -m "v0.1.0" && git push --follow-tags
@@ -63,95 +63,95 @@ git tag -a v0.1.0 -m "v0.1.0" && git push --follow-tags
 
 ## Changelog
 
-`cliff.toml` (git-cliff) erzeugt die Release-Notes aus
-[Conventional Commits](https://www.conventionalcommits.org/). Gruppen:
+`cliff.toml` (git-cliff) generates the release notes from
+[Conventional Commits](https://www.conventionalcommits.org/). Groups:
 Features (`feat`), Bug Fixes (`fix`), Performance (`perf`), Tuning
-(`tune` — projekteigen), Refactor, Documentation, Diagnostics (`diag`),
-Dependencies (`chore(deps)`). Rausch-Typen (`chore`, `test`, `ci`,
-`build`, `chore(release)`) erscheinen **nicht** im Changelog.
+(`tune` — project-specific), Refactor, Documentation, Diagnostics (`diag`),
+Dependencies (`chore(deps)`). Noise types (`chore`, `test`, `ci`,
+`build`, `chore(release)`) do **not** appear in the changelog.
 
-> **Neuer Commit-Type?** In `cliff.toml` unter `commit_parsers`
-> ergänzen — sonst verschwindet er im Catch-all.
+> **A new commit type?** Add it in `cliff.toml` under `commit_parsers` —
+> otherwise it disappears into the catch-all.
 
-Lokale Vorschau: `git cliff --unreleased` bzw. `git cliff --latest`.
+Local preview: `git cliff --unreleased` or `git cliff --latest`.
 
-## CI-Struktur
+## CI structure
 
-- **`ci.yml`** — bei jedem Push auf `main` und jedem PR: `cargo fmt`,
+- **`ci.yml`** — on every push to `main` and every PR: `cargo fmt`,
   `clippy`, `pnpm lint`/`format:check`, `cargo test`, `vitest`,
-  `cargo audit`/`pnpm audit`. Linux (vollständig) + Windows
-  (`cargo check`-Smoke-Test) + Audit.
-- **`release.yml`** — nur auf Tags `v*`: Changelog + tauri-action.
+  `cargo audit`/`pnpm audit`. Linux (full) + Windows
+  (`cargo check` smoke test) + audit.
+- **`release.yml`** — only on `v*` tags: changelog + tauri-action.
 
-## Auto-Update
+## Auto-update
 
-Self-Update läuft **pro Kanal** — es gibt nicht „einen" Updater:
+Self-update runs **per channel** — there is no single "one" updater:
 
-| Paket | Update-Weg |
+| Package | Update path |
 |---|---|
-| **AppImage** (Linux) | In-App-Updater (*Einstellungen → Diagnose → Updates*) |
-| **NSIS** (Windows, sobald reaktiviert) | In-App-Updater |
-| **`.deb`** | Paketmanager bzw. Re-Download vom GitHub-Release |
-| **`.rpm`** | Paketmanager bzw. Re-Download vom GitHub-Release |
+| **AppImage** (Linux) | In-app updater (*Settings → Diagnostics & tests → Updates*) |
+| **NSIS** (Windows, once reactivated) | In-app updater |
+| **`.deb`** | Package manager or re-download from the GitHub release |
+| **`.rpm`** | Package manager or re-download from the GitHub release |
 
-Der In-App-Updater (`tauri-plugin-updater` + `tauri-plugin-process`)
-prüft den **Endpoint**:
+The in-app updater (`tauri-plugin-updater` + `tauri-plugin-process`)
+queries the **endpoint**:
 
 ```
 https://github.com/ks98/voicetypex/releases/latest/download/latest.json
 ```
 
-`/releases/latest/` zeigt immer auf das neueste **veröffentlichte**
-(nicht-Draft, nicht-Prerelease) Release — deshalb wirkt der Draft-Gate:
-solange ein Release Draft ist, sieht der Updater es nicht. Der Download
-ist **klick-gated** (volles Bundle, keine Deltas) und vor der
-Installation **minisign-verifiziert**.
+`/releases/latest/` always points to the newest **published**
+(non-draft, non-prerelease) release — which is why the draft gate works:
+as long as a release is a draft, the updater does not see it. The download
+is **click-gated** (full bundle, no deltas) and **minisign-verified**
+before installation.
 
-## Signing-Key (kritisch)
+## Signing key (critical)
 
-Der Updater verifiziert jedes Update gegen eine **minisign-/Ed25519**-
-Signatur — unabhängig von OS-Code-Signierung (Authenticode/SmartScreen).
+The updater verifies every update against a **minisign/Ed25519**
+signature — independent of OS code signing (Authenticode/SmartScreen).
 
-- **Private Key:** `~/.tauri/voicetypex-updater.key` (chmod 600,
-  passwortlos). **Niemals committen.** Inhalt liegt als GitHub-Secret
-  `TAURI_SIGNING_PRIVATE_KEY` (Settings → Secrets → Actions).
-- **Public Key:** in `tauri.conf.json` unter `plugins.updater.pubkey`
-  eingebettet (nicht geheim).
-- **Rotation:** nur **vor** dem ersten veröffentlichten Release gefahrlos
-  möglich. Danach würde ein neuer Key die Updates für **bereits
-  installierte** Nutzer brechen (sie verifizieren gegen den alten
-  Public Key). Den Private Key sicher aufbewahren.
+- **Private key:** `~/.tauri/voicetypex-updater.key` (chmod 600,
+  passwordless). **Never commit it.** Its contents live as the GitHub
+  secret `TAURI_SIGNING_PRIVATE_KEY` (Settings → Secrets → Actions).
+- **Public key:** embedded in `tauri.conf.json` under
+  `plugins.updater.pubkey` (not secret).
+- **Rotation:** only safe **before** the first published release.
+  Afterwards, a new key would break updates for **already installed**
+  users (they verify against the old public key). Keep the private key in
+  a safe place.
 
-Neuen Key erzeugen (falls nötig, vor dem ersten Release):
-`pnpm tauri signer generate -w ~/.tauri/voicetypex-updater.key`, dann
-Pubkey in `tauri.conf.json` und Private Key ins GitHub-Secret.
+Generate a new key (if needed, before the first release):
+`pnpm tauri signer generate -w ~/.tauri/voicetypex-updater.key`, then put
+the pubkey in `tauri.conf.json` and the private key in the GitHub secret.
 
-## Pre-Releases
+## Pre-releases
 
-`-rc.N` / `-beta.N`-Tags werden in `release.yml` als GitHub-Prerelease
-markiert und damit von `/releases/latest/` **übersprungen** — stabile
-Nutzer bekommen sie nicht angeboten.
+`-rc.N` / `-beta.N` tags are marked as a GitHub prerelease in `release.yml`
+and are thus **skipped** by `/releases/latest/` — stable users are not
+offered them.
 
-## Plattform-Status
+## Platform status
 
-- **Linux** (deb / rpm / AppImage): im Release. Der AppImage-Build wurde
-  per `NO_STRIP=true` repariert — Hintergrund in
-  [#2](https://github.com/ks98/voicetypex/issues/2). Der In-App-Auto-Updater
-  (AppImage) ist noch **deaktiviert** (`uploadUpdaterJson: false`), bis der
-  `AppImage Validate`-Workflow ein startendes AppImage bestätigt.
-- **Windows** (NSIS): **im Release** — STT (whisper.cpp + Vulkan) +
-  Cloud/Ollama-LLM. Das embedded llama-cpp-2 ist auf Windows ausgebaut
-  ([#1](https://github.com/ks98/voicetypex/issues/1): ggml-Symbolkollision
-  der zwei ggml-Kopien beim MSVC-Linken), womit der Link gelingt; CI
-  baut+testet Windows voll (`cargo build + test`). Der NSIS-Auto-Updater
-  ist verdrahtet; die `latest.json` ist — wie bei AppImage — noch
-  deaktiviert (s. oben).
+- **Linux** (deb / rpm / AppImage): in the release. The AppImage build was
+  fixed via `NO_STRIP=true` — background in
+  [#2](https://github.com/ks98/voicetypex/issues/2). The in-app
+  auto-updater (AppImage) is still **disabled** (`uploadUpdaterJson: false`)
+  until the `AppImage Validate` workflow confirms a launching AppImage.
+- **Windows** (NSIS): **in the release** — STT (whisper.cpp + Vulkan) +
+  Cloud/Ollama LLM. The embedded llama-cpp-2 has been removed on Windows
+  ([#1](https://github.com/ks98/voicetypex/issues/1): ggml symbol collision
+  between the two ggml copies when MSVC links), which lets the link
+  succeed; CI builds and tests Windows fully (`cargo build + test`). The
+  NSIS auto-updater is wired up; the `latest.json` is — as with AppImage —
+  still disabled (see above).
 - **macOS**: out of scope.
 
-## Erst-Setup-Checkliste (einmalig)
+## Initial setup checklist (one-time)
 
-1. `gh auth login` (Scopes `repo`, `workflow`).
-2. GitHub-Secret `TAURI_SIGNING_PRIVATE_KEY` setzen:
+1. `gh auth login` (scopes `repo`, `workflow`).
+2. Set the GitHub secret `TAURI_SIGNING_PRIVATE_KEY`:
    `gh secret set TAURI_SIGNING_PRIVATE_KEY --repo ks98/voicetypex < ~/.tauri/voicetypex-updater.key`
-3. Optional: `v*` als *Protected Tag* (Settings → Tags), damit nur
-   Maintainer Releases schneiden.
+3. Optional: mark `v*` as a *Protected Tag* (Settings → Tags) so that only
+   maintainers can cut releases.

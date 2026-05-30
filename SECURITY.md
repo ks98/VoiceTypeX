@@ -2,104 +2,103 @@
 
 # Security Model — VoiceTypeX
 
-Diese Datei beschreibt das Bedrohungsmodell, die getroffenen Massnahmen
-und die bekannten Grenzen der aktuellen Beta-Version.
+This file describes the threat model, the mitigations in place, and the
+known limitations of the current beta version.
 
 ## Threat Model
 
 **In-Scope:**
 
-- **Disk-Forensics ohne User-Account-Zugriff** — gestohlenes Notebook,
-  Backup-Image auf einem Cloud-Drive, andere User auf demselben System.
-  Adressiert via Encryption-at-rest fuer API-Keys (siehe unten).
-- **Cloud-Backup-Sync von `~/.config/`** (Dropbox/iCloud/Syncthing).
-  API-Keys liegen dort verschluesselt; auf einem Linux-Setup ohne
-  Keyring liegen sie im Plaintext-Fallback (UI warnt den User).
-- **MITM-Proxy oder fehl-konfiguriertes Enterprise-Gateway** zwischen
-  App und Cloud-Provider. Verhindert via TLS (rustls in `reqwest`),
-  SHA-256-gepinnte Modell-Downloads, und Filterung von Provider-
-  Response-Bodies vor dem User-sichtbaren Log/UI.
-- **Versehentliches Loggen sensibler Daten** durch zukuenftige Code-
-  Aenderungen. Der `LogRingBuffer` zeichnet die `tracing`-Events
-  **ungefiltert** auf — er erzwingt also keine Redaction. Dass keine
-  Audio-Bytes, Transkripte, LLM-Antworten oder API-Keys im
-  user-sichtbaren Logs-Tab landen, ist heute eine **Konvention** des
-  Backend-Codes (die Provider-Clients loggen nur Status-Codes,
-  Provider-Namen und Dauer-Metriken), nicht eine technisch erzwungene
-  Garantie. Eine feldbasierte Redaction im `StringVisitor` ist als
-  Haerte-Schritt vorgemerkt.
-- **XSS-Eskalation in einem Webview** (z.B. ueber einen zukuenftigen
-  Markdown-Renderer im Logs-Tab). Adressiert via Content-Security-
-  Policy mit `script-src 'self'` und expliziter `connect-src`-
-  Allowlist; ein XSS-Bug kann die IPC-Schnittstelle nicht erreichen.
+- **Disk forensics without user-account access** — a stolen laptop, a
+  backup image on a cloud drive, or other users on the same system.
+  Addressed via encryption-at-rest for API keys (see below).
+- **Cloud backup sync of `~/.config/`** (Dropbox/iCloud/Syncthing).
+  API keys are stored there encrypted; on a Linux setup without a
+  keyring they fall back to plaintext (the UI warns the user).
+- **MITM proxy or misconfigured enterprise gateway** between the app and
+  the cloud provider. Prevented via TLS (rustls in `reqwest`),
+  SHA-256-pinned model downloads, and filtering of provider response
+  bodies before they reach the user-visible log/UI.
+- **Accidental logging of sensitive data** through future code changes.
+  The `LogRingBuffer` records `tracing` events **unfiltered** — so it
+  does not enforce redaction. The fact that no audio bytes, transcripts,
+  LLM responses, or API keys end up in the user-visible Logs tab is today
+  a **convention** of the backend code (the provider clients log only
+  status codes, provider names, and timing metrics), not a
+  technically enforced guarantee. Field-based redaction in the
+  `StringVisitor` is planned as a hardening step.
+- **XSS escalation in a webview** (e.g. via a future Markdown renderer in
+  the Logs tab). Addressed via a Content Security Policy with
+  `script-src 'self'` and an explicit `connect-src` allowlist; an XSS
+  bug cannot reach the IPC interface.
 
 **Out-of-Scope (Limitations):**
 
-- **Kompromittierter User-Account oder Root**. Wer den User-Account
-  hat, kann auch den OS-Keyring lesen — lokale Crypto schuetzt nicht
-  gegen Privilege-Bypass durch den eigentlichen Owner.
-- **Memory-Dump des laufenden Prozesses**. API-Keys liegen waehrend
-  des Betriebs als `String` im RAM (kein `secrecy`/`zeroize`). Geplant
-  fuer 1.0.
-- **Repository-Compromise auf Hugging Face**. SHA-256-Pinning haengt
-  vom in `src-tauri/src/transcription/model_downloader.rs` eingetragenen
-  Hash ab; wenn Hugging Face manipulierte Modelle mit identischer
-  Pruefsumme ausliefern wuerde, wuerden wir es nicht merken. Mitigiert
-  durch reputable HF-Repos (`ggerganov/whisper.cpp`, `ggml-org/whisper-vad`)
-  und Pinning auf konkrete File-Hashes.
-- **macOS**. Liegt nicht im Beta-Scope. Wer die App auf macOS startet,
-  faellt im Secret-Storage auf Plaintext zurueck (Code-FIXME zeigt auf
-  die `Security.framework`-Integration fuer 1.0).
-- **Compromised Compositor unter Wayland**. Der persistente
-  `restore_token` fuer libei-Tastatur-Inject liegt mit chmod 0600 auf
-  Disk. Wer das File lesen kann, kann den Token gegen denselben
-  Compositor replayen — das ist gewollt, sonst funktioniert
-  Auto-Paste nach App-Restart nicht ohne erneuten Permission-Dialog.
+- **Compromised user account or root**. Anyone who has the user account
+  can also read the OS keyring — local crypto does not protect against a
+  privilege bypass by the actual owner.
+- **Memory dump of the running process**. API keys live in RAM as a
+  `String` during operation (no `secrecy`/`zeroize`). Planned for 1.0.
+- **Repository compromise on Hugging Face**. SHA-256 pinning depends on
+  the hash recorded in
+  `src-tauri/src/transcription/model_downloader.rs`; if Hugging Face were
+  to serve tampered models with an identical checksum, we would not
+  notice. Mitigated by using reputable HF repos
+  (`ggerganov/whisper.cpp`, `ggml-org/whisper-vad`) and pinning to
+  specific file hashes.
+- **macOS**. Outside the beta scope. Anyone who launches the app on macOS
+  falls back to plaintext for secret storage (a code FIXME points to the
+  `Security.framework` integration for 1.0).
+- **Compromised compositor under Wayland**. The persistent
+  `restore_token` for libei keyboard injection lives on disk with chmod
+  0600. Anyone who can read the file can replay the token against the
+  same compositor — this is intentional, otherwise auto-paste would not
+  work after an app restart without another permission dialog.
 
 ## Secret Storage at Rest
 
-API-Keys (BYOK: xAI, OpenAI, Anthropic, Groq, Deepgram) liegen in
+API keys (BYOK: xAI, OpenAI, Anthropic, Groq, Deepgram) are stored in
 `~/.config/de.kevin-stenzel.voicetypex/secrets.json` (`chmod 0600`).
-Das File hat ein versionsiertes JSON-Format und ist
-plattformabhaengig verschluesselt:
+The file uses a versioned JSON format and is encrypted in a
+platform-dependent way:
 
-| Plattform | Methode | Schluessel-Material |
+| Platform  | Method  | Key material        |
 |-----------|---------|---------------------|
-| Windows   | DPAPI (`CryptProtectData`) | User- und Maschinen-gebunden |
-| Linux     | AES-256-GCM | 32-Byte-Random-KEK im OS-Keyring (libsecret / kwallet) |
-| Linux ohne Keyring | Plaintext + UI-Warning | — |
-| macOS     | Plaintext + Warning (Beta) | siehe FIXME im Code |
+| Windows   | DPAPI (`CryptProtectData`) | User- and machine-bound |
+| Linux     | AES-256-GCM | 32-byte random KEK in the OS keyring (libsecret / kwallet) |
+| Linux without keyring | Plaintext + UI warning | — |
+| macOS     | Plaintext + warning (beta) | see FIXME in the code |
 
-Schluessel-Migration:
+Key migration:
 
-- Pre-Beta-Files (v1, flach `{"provider":"key"}`) werden beim ersten
-  Start nach Update erkannt und sofort mit der aktiven Verschluesselung
-  ueberschrieben.
-- Wechsel von Plain auf AES-GCM (z.B. nach Keyring-Installation):
-  wird ebenfalls automatisch migriert.
-- Wechsel von AES-GCM/DPAPI auf Plain (z.B. Keyring nach System-Wechsel
-  nicht mehr verfuegbar): Backend meldet klare Fehlermeldung, Store
-  startet leer; User muss API-Keys neu eingeben. **Kein stillschweigender
-  Datenverlust**.
+- Pre-beta files (v1, flat `{"provider":"key"}`) are detected on the
+  first launch after an update and immediately overwritten with the
+  active encryption.
+- Switching from plaintext to AES-GCM (e.g. after installing a keyring):
+  also migrated automatically.
+- Switching from AES-GCM/DPAPI to plaintext (e.g. the keyring is no
+  longer available after a system change): the backend returns a clear
+  error message, the store starts empty, and the user must re-enter the
+  API keys. **No silent data loss**.
 
-Tests in `src-tauri/src/secrets.rs::tests` decken AES-GCM-Roundtrip,
-falsche-KEK-Rejection, kurze-Blob-Rejection, v1-Format-Erkennung und
-die Stabilitaet der On-Disk-Method-Namen ab.
+Tests in `src-tauri/src/secrets.rs::tests` cover the AES-GCM round trip,
+wrong-KEK rejection, short-blob rejection, v1-format detection, and the
+stability of the on-disk method names.
 
 ## Transport Layer Security
 
-- **rustls** statt openSSL fuer `reqwest`-Clients (`reqwest = { ...,
+- **rustls** instead of OpenSSL for `reqwest` clients (`reqwest = { ...,
   features = ["rustls-tls", ...] }`).
-- **TLS-Cert-Pinning** ist NICHT aktiv. Wir verlassen uns auf das System-
-  CA-Bundle. Korrumpierte Enterprise-Root-CAs koennen MITM machen — als
-  Mitigation prueft jedes Modell zusaetzlich seinen SHA-256.
-- **HTTP-Timeouts** sind an allen sechs Cloud-Provider-Konstruktoren
-  gesetzt (60-300 s). `reqwest`-Builder-Fehler panicen frueh statt
-  silent einen timeout-losen Fallback-Client zu erzeugen.
+- **TLS cert pinning** is NOT active. We rely on the system CA bundle.
+  Corrupted enterprise root CAs can perform MITM — as a mitigation, every
+  model additionally verifies its SHA-256.
+- **HTTP timeouts** are set on all six cloud-provider constructors
+  (60–300 s). `reqwest` builder errors panic early instead of silently
+  creating a timeout-less fallback client.
 
 ## Content Security Policy
 
-Auf allen drei Webviews (`main`, `overlay`, `menu`) aktiv:
+Active on all three webviews (`main`, `overlay`, `menu`):
 
 ```
 default-src 'self';
@@ -113,46 +112,44 @@ connect-src 'self' ipc: http://ipc.localhost
             https://huggingface.co https://*.huggingface.co;
 ```
 
-`unsafe-inline` ist nur fuer `style-src` aktiv (Tailwind/React inline
-styles). `script-src` ohne `unsafe-inline`, kein eval.
+`unsafe-inline` is enabled only for `style-src` (Tailwind/React inline
+styles). `script-src` has no `unsafe-inline`, and no eval.
 
 ## Capabilities (Tauri Allowlist)
 
-Die `default`-Capability nutzt die `*:default`-Permission-Sets der
-Plugins. Diese sind **enger, als der Begriff „liberal" vermuten
-laesst**: `fs:default` etwa gewaehrt in `tauri-plugin-fs` 2.5.x nur
-**lesenden** Zugriff auf die App-Verzeichnisse (AppConfig/AppData),
-keinen Schreibzugriff und keinen Zugriff ausserhalb. Verbleibendes
-Restrisiko: `secrets.json` liegt in genau diesem App-Config-Verzeichnis
-und ist damit fuer einen Webview-Kontext prinzipiell lesbar — bei
-aktiver Encryption-at-rest aber nur als Chiffrat (auf Linux ohne
-Keyring bzw. macOS als Klartext). Die zweite Haerte-Phase vor 1.0
-reduziert auf konkrete `allow-*`-Permissions und setzt `secrets.json`
-per `fs:scope` auf die Deny-Liste. Die Window-Allowlist
-`["main", "overlay", "menu"]` ist explizit und vollstaendig.
+The `default` capability uses the plugins' `*:default` permission sets.
+These are **narrower than the term "liberal" suggests**: `fs:default`,
+for example, grants only **read** access to the app directories
+(AppConfig/AppData) in `tauri-plugin-fs` 2.5.x — no write access and no
+access outside them. Remaining residual risk: `secrets.json` lives in
+exactly this app-config directory and is therefore in principle readable
+from a webview context — but with encryption-at-rest active only as
+ciphertext (as plaintext only on Linux without a keyring, or on macOS).
+The second hardening phase before 1.0 reduces this to specific `allow-*`
+permissions and puts `secrets.json` on the deny list via `fs:scope`. The
+window allowlist `["main", "overlay", "menu"]` is explicit and complete.
 
 ## Bug Reports
 
-- **Standard-Bugs**: [GitHub Issues](https://github.com/ks98/voicetypex/issues)
-- **Security-Bugs**: bitte direkt an `mail@kevin-stenzel.de`,
-  mit Subject-Prefix `[VoiceTypeX-Security]`. Keine
-  oeffentlichen Issues fuer unfixierte Vulns.
+- **Standard bugs**: [GitHub Issues](https://github.com/ks98/voicetypex/issues)
+- **Security bugs**: please email `mail@kevin-stenzel.de` directly, with
+  the subject prefix `[VoiceTypeX-Security]`. No public issues for
+  unfixed vulnerabilities.
 
 ## Update Path
 
-VoiceTypeX hat einen **signierten Auto-Updater** (*Einstellungen →
-Diagnose → Updates*) fuer den **Windows-NSIS-Installer** und das
-**Linux-AppImage**: Update-Artefakte werden mit einem minisign-/
-Ed25519-Schluessel signiert, und der Updater verifiziert die Signatur
-gegen den in der App eingebetteten Public Key, bevor er installiert.
-**`.deb`/`.rpm`** haben keinen In-App-Updater — sie werden ueber den
-Paketmanager bzw. per Neu-Download vom GitHub-Releases-Tab aktualisiert.
-Der **Windows-Installer ist noch nicht Authenticode-signiert**
-(SmartScreen-Hinweis beim ersten Start); das betrifft nur den
-Installer-Download, nicht die Updater-Integritaet.
+VoiceTypeX has a **signed auto-updater** (*Settings → Diagnostics →
+Updates*) for the **Windows NSIS installer** and the **Linux AppImage**:
+update artifacts are signed with a minisign/Ed25519 key, and the updater
+verifies the signature against the public key embedded in the app before
+installing. **`.deb`/`.rpm`** have no in-app updater — they are updated
+via the package manager or by re-downloading from the GitHub Releases tab.
+The **Windows installer is not yet Authenticode-signed** (SmartScreen
+warning on first launch); this affects only the installer download, not
+the updater's integrity.
 
-## Audit-Stand
+## Audit Status
 
-Diese Beta wurde vor Release durch zwei interne Audits geprueft
-(Architektur + Security). Findings >= HIGH sind adressiert.
-Verbleibende MEDIUM/LOW Items sind als Backlog dokumentiert.
+This beta was reviewed by two internal audits before release
+(architecture + security). Findings of severity >= HIGH are addressed.
+Remaining MEDIUM/LOW items are documented in the backlog.

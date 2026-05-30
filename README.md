@@ -1,259 +1,255 @@
 # VoiceTypeX
 
-Plattformübergreifendes Desktop-Werkzeug, das Diktate in Text verwandelt
-und ihn an der aktuellen Cursor-Position einfügt — überall, in jeder App.
-Ein globaler Hotkey öffnet ein Modus-Menü, Pfeile + Enter wählen, Diktat
-läuft — derselbe Hotkey stoppt.
+A cross-platform desktop tool that turns dictation into text and inserts
+it at the current cursor position — anywhere, in any app. A global hotkey
+opens a mode menu, arrows + Enter select, dictation runs — and the same
+hotkey stops it.
 
 ## Status
 
-**Beta** — funktional komplett auf **Linux/Wayland (KDE Plasma 6 +
-GNOME 46+)**, **Linux/X11** und **Windows**. Auto-Paste auf Wayland
-über `xdg-desktop-portal.RemoteDesktop` + libei. Settings und Wayland-
-Permission-Token persistent. Release-Bundles für Linux
-(`.deb` / `.rpm` / AppImage) mit signiertem Auto-Updater verfügbar.
-Das **Windows-Release** umfasst Spracherkennung (whisper.cpp + Vulkan) und
-Cloud-LLM-Nachbearbeitung; das **eingebettete lokale LLM (llama-cpp-2) ist
-Linux/macOS-only** — auf Windows kollidierten dessen ggml-Symbole mit denen
-von whisper.cpp beim MSVC-Linken (LNK2005,
-[Issue #1](https://github.com/ks98/voicetypex/issues/1)), daher läuft
-lokales LLM dort über einen selbst installierten **Ollama**-Daemon oder
-einen Cloud-Provider. macOS ist nicht im Scope.
+**Beta** — feature-complete on **Linux/Wayland (KDE Plasma 6 +
+GNOME 46+)**, **Linux/X11**, and **Windows**. Auto-paste on Wayland via
+`xdg-desktop-portal.RemoteDesktop` + libei. Settings and the Wayland
+permission token persist. Release bundles for Linux
+(`.deb` / `.rpm` / AppImage) with a signed auto-updater are available.
+The **Windows release** includes speech recognition (whisper.cpp + Vulkan)
+and cloud LLM post-processing; the **embedded local LLM (llama-cpp-2) is
+Linux/macOS-only** — on Windows its ggml symbols collided with those of
+whisper.cpp during MSVC linking (LNK2005,
+[Issue #1](https://github.com/ks98/voicetypex/issues/1)), so the local LLM
+runs there via a self-installed **Ollama** daemon or a cloud provider.
+macOS is out of scope.
 
-Beta-spezifische Hinweise: siehe Abschnitt
-[*„Beta-Status & Updates"*](#beta-status--updates) weiter unten.
+Beta-specific notes: see the section
+[*"Beta Status & Updates"*](#beta-status--updates) further down.
 
-## Kernablauf
+## Core Flow
 
-1. Globaler **Menü-Hotkey** drücken (Default `Ctrl+Alt+Space`) → das
-   Overlay zeigt die Modus-Liste, der Cursor steht auf der zuletzt
-   getroffenen Auswahl.
-2. Mit `↑`/`↓` einen anderen Modus wählen (oder direkt `Enter`, um die
-   zuletzt verwendete Auswahl zu bestätigen). `Esc` schließt das Menü
-   ohne Aktion.
-3. Nach `Enter` startet die Aufnahme, Tray-Icon pulsiert rot, Overlay
-   zeigt *„Höre zu …"*. Sprich.
-4. **Denselben Hotkey nochmal drücken** → Audio wird transkribiert
-   (lokal via whisper.cpp **oder** Cloud-STT), optional durch ein LLM
-   nach dem gewählten **Modus** nachbearbeitet (lokal via Ollama
-   **oder** Cloud-LLM), und an der Cursor-Position eingefügt.
+1. Press the global **menu hotkey** (default `Ctrl+Alt+Space`) → the
+   overlay shows the mode list, with the cursor on the most recently
+   used selection.
+2. Use `↑`/`↓` to pick a different mode (or hit `Enter` directly to
+   confirm the last-used selection). `Esc` closes the menu without
+   taking any action.
+3. After `Enter`, recording starts, the tray icon pulses red, and the
+   overlay shows *"Listening …"*. Speak.
+4. **Press the same hotkey again** → the audio is transcribed (locally
+   via whisper.cpp **or** cloud STT), optionally post-processed by an LLM
+   according to the selected **mode** (locally via Ollama **or** a cloud
+   LLM), and inserted at the cursor position.
 
-Neun Modi sind vorinstalliert. Sechs **Diktier**-Modi (neuer Text):
-*Exaktes Diktat*, *Korrigierendes Diktat*, *Förmliche E-Mail*,
-*Slack/Teams Nachricht*, *GitHub Issue*, *Anweisung an Coding-Agent*.
-Dazu drei **Bearbeiten**-Modi, die *markierten* Text transformieren:
-*Verbessern* (überarbeitet/ersetzt die Auswahl), *Antwort schreiben*
-(verfasst eine Antwort darunter, Original bleibt) und *Frei bearbeiten*
-(per Sprachbefehl, das LLM entscheidet über das Platzieren). Workflow:
-markieren → Hotkey → Bearbeiten-Modus wählen → Anweisung sprechen.
-Die Defaults werden **locale-passend**
-ausgeliefert: bei englischer UI-Locale bekommst du englische Modi
-mit englischen `system_prompt`s, bei französischer/spanischer/
-italienischer Locale die jeweiligen kulturellen Entsprechungen
-(Anredeformen, Diktier-Befehle). Eigene Modi via TOML — siehe
+Nine modes ship preinstalled. Six **dictation** modes (new text):
+*Exact Dictation*, *Corrective Dictation*, *Formal Email*,
+*Slack/Teams Message*, *GitHub Issue*, *Instruction to Coding Agent*.
+Plus three **edit** modes that transform *selected* text:
+*Improve* (rewrites/replaces the selection), *Write Reply*
+(composes a reply below it, leaving the original intact), and *Free Edit*
+(via voice command, with the LLM deciding where to place the result).
+Workflow: select → hotkey → choose an edit mode → speak the instruction.
+The defaults ship **locale-aware**: with an English UI locale you get
+English modes with English `system_prompt`s, and with a French/Spanish/
+Italian locale the respective cultural equivalents (forms of address,
+dictation commands). Custom modes via TOML — see
 [`docs/MODES.md`](docs/MODES.md).
 
-**Migration aus älteren Versionen:** Modi hatten bisher je einen eigenen
-Hotkey (`Ctrl+Alt+D`, `Ctrl+Alt+E`, …). Der Wechsel auf den einzigen
-Menü-Hotkey ist transparent — bestehende `hotkey`-Felder in
-`modes/*.toml` werden weiterhin akzeptiert, aber ignoriert. Den
-Menü-Hotkey selbst änderst du in *Einstellungen* → *Globaler
-Menü-Hotkey*.
+**Migrating from older versions:** modes used to each have their own
+hotkey (`Ctrl+Alt+D`, `Ctrl+Alt+E`, …). The switch to the single menu
+hotkey is transparent — existing `hotkey` fields in `modes/*.toml` are
+still accepted but ignored. You change the menu hotkey itself under
+*Settings* → *Global Menu Hotkey*.
 
-## Tech-Stack (kompakt)
+## Tech Stack (at a glance)
 
-- **App-Framework:** Tauri 2 (stable)
-- **Backend:** Rust 2021+ mit tokio
+- **App framework:** Tauri 2 (stable)
+- **Backend:** Rust 2021+ with tokio
 - **Frontend:** React 18 + TypeScript strict + Vite + TailwindCSS +
   shadcn/ui + Zustand
-- **Internationalisierung:** eigener `useT()`-Hook (~70 LOC, kein i18next)
-  mit `Intl.PluralRules`. Vollstaendig in `de`, `en`, `fr`, `es`, `it`
-  ausgeliefert: alle UI-Strings (~400), Tray-Menue, per-Locale Default-
-  Modi mit kulturell angepassten `system_prompt`s. OS-Locale-Detection
-  im Backend (`tauri_plugin_os::locale()`), Live-Switch via Settings
-  ohne App-Neustart. Build-Gate `pnpm i18n:check` validiert Locale-
-  Parity und Used-Key-Existenz.
-- **Audio:** cpal + hound (WAV) + rubato (Sinc-Resampling auf 16 kHz)
-- **Lokales STT:** whisper-rs 0.16 mit Silero-VAD v6 (verhindert
-  Stille-Halluzinationen). Default-Modell ab Mai 2026:
-  `ggml-large-v3-turbo-q8_0` (~874 MB) — Q8 ist auf modernen Backends
-  gleich schnell wie Q5 bei sichtbar besserer DE-Qualität. Wählbare Slots
-  inkl. `large-v3-turbo-german-q5_0` (primeline-Fine-tune, ~28 % rel.
-  WER-Reduktion auf Deutsch) und `small-q5_1` für 4-GB-Geräte.
-  BeamSearch (size=5) mit temperature-Fallback. **Phase-2-Streaming**:
-  parallel zur Aufnahme läuft ein Greedy-Decode, das Overlay zeigt
-  mitlaufenden Partial-Text. Final-Pass nach Stop-Hotkey überschreibt
-  mit voller Qualität. **Phase 3a (ab Mai 2026): Vulkan-Default** —
-  ein Binary deckt iGPU/AMD/Intel/NVIDIA per Vulkan ab; bei fehlendem
-  GPU-Device automatischer CPU-Fallback. `gpu-cuda`/`gpu-metal`/
-  `gpu-coreml` als opt-in Features, `fast-cpu` (OpenBLAS) als
-  Headless-Fallback.
-- **Lokales LLM:** **Embedded** ist seit Mai 2026 der Standardpfad
-  (**Linux/macOS-only**) — llama-cpp-2 0.1.146 mit Vulkan-Backend läuft
-  direkt im VoiceTypeX-Prozess, **kein externer Daemon nötig**. Modi mit
-  `processing = "local"` ohne explizites `local_engine` nutzen automatisch
-  Embedded. **Auf Windows** ist Embedded nicht kompiliert (Issue #1, ggml-
-  Symbolkollision beim MSVC-Linken); dort defaultet `local_engine` auf
-  `"ollama"` — lokales LLM via selbst installiertem Ollama oder Cloud. Sechs
-  GGUF-Slots: **Gemma 4 E4B** (Pro, 12+ GB RAM, ~5,1 GB Disk),
-  **Gemma 4 E2B** (Mittel, 8-12 GB, ~3,1 GB), Gemma 3 1B (Light,
-  <8 GB, ~851 MB), Gemma 3 4B (Vor-Gemma4-Pro), Llama 3.2 1B, Qwen 2.5
-  1.5B. Settings-UI hat Hardware-basierte Slot-Empfehlung und
-  Ein-Klick-Download. **Ollama** bleibt als Opt-in für User mit
-  eigener Daemon-Installation via `local_engine = "ollama"` im
-  Mode-TOML — die Konfiguration (Endpoint + Keep-Alive) sitzt in der
-  Settings-Page in einem zusammenklappbaren „Ollama-Konfiguration"-
-  Block.
-- **Cloud-Provider (BYOK):** xAI (STT + Grok, Default `grok-4-fast-non-reasoning`),
+- **Internationalization:** a custom `useT()` hook (~70 LOC, no i18next)
+  with `Intl.PluralRules`. Fully shipped in `de`, `en`, `fr`, `es`, `it`:
+  all UI strings (~400), the tray menu, and per-locale default modes with
+  culturally adapted `system_prompt`s. OS locale detection in the backend
+  (`tauri_plugin_os::locale()`), live switching via Settings without an
+  app restart. The build gate `pnpm i18n:check` validates locale parity
+  and used-key existence.
+- **Audio:** cpal + hound (WAV) + rubato (sinc resampling to 16 kHz)
+- **Local STT:** whisper-rs 0.16 with Silero VAD v6 (prevents
+  silence hallucinations). Default model since May 2026:
+  `ggml-large-v3-turbo-q8_0` (~874 MB) — on modern backends Q8 is just as
+  fast as Q5 while delivering visibly better DE quality. Selectable slots
+  include `large-v3-turbo-german-q5_0` (primeline fine-tune, ~28 % rel.
+  WER reduction on German) and `small-q5_1` for 4 GB devices.
+  BeamSearch (size=5) with a temperature fallback. **Phase-2 streaming**:
+  a greedy decode runs in parallel with recording, and the overlay shows
+  the partial text as it comes in. The final pass after the stop hotkey
+  overwrites it at full quality. **Phase 3a (since May 2026): Vulkan
+  default** — a single binary covers iGPU/AMD/Intel/NVIDIA via Vulkan,
+  with an automatic CPU fallback when no GPU device is present.
+  `gpu-cuda`/`gpu-metal`/`gpu-coreml` as opt-in features, and `fast-cpu`
+  (OpenBLAS) as the headless fallback.
+- **Local LLM:** **Embedded** has been the default path since May 2026
+  (**Linux/macOS-only**) — llama-cpp-2 0.1.146 with the Vulkan backend
+  runs directly in the VoiceTypeX process, **no external daemon needed**.
+  Modes with `processing = "local"` and no explicit `local_engine`
+  automatically use Embedded. **On Windows** Embedded is not compiled
+  (Issue #1, ggml symbol collision during MSVC linking); there
+  `local_engine` defaults to `"ollama"` — local LLM via a self-installed
+  Ollama or via the cloud. Six GGUF slots: **Gemma 4 E4B**
+  (Pro, 12+ GB RAM, ~5.1 GB disk),
+  **Gemma 4 E2B** (Medium, 8-12 GB, ~3.1 GB), Gemma 3 1B (Light,
+  <8 GB, ~851 MB), Gemma 3 4B (pre-Gemma4 Pro), Llama 3.2 1B, Qwen 2.5
+  1.5B. The Settings UI provides a hardware-based slot recommendation and
+  one-click download. **Ollama** remains an opt-in for users with their
+  own daemon installation via `local_engine = "ollama"` in the
+  mode TOML — its configuration (endpoint + keep-alive) lives in the
+  Settings page in a collapsible "Ollama Configuration" block.
+- **Cloud providers (BYOK):** xAI (STT + Grok, default `grok-4-fast-non-reasoning`),
   OpenAI Whisper + GPT, Groq Whisper, Deepgram, Anthropic Claude
-- **Wayland Auto-Paste:** ashpd (RemoteDesktop-Portal) + reis (libei)
-- **Secrets:** `~/.config/.../secrets.json` (chmod 0600), **at-rest
-  verschlüsselt**: Windows nutzt DPAPI (`CryptProtectData`), Linux
-  nutzt AES-256-GCM mit einem 32-Byte-Random-KEK aus dem
-  OS-Keyring (libsecret / kwallet). Wenn kein Keyring verfügbar ist,
-  fällt der Storage auf Plaintext zurück + zeigt eine rote Banner-
-  Warnung im API-Keys-Tab. macOS bleibt im Beta-Scope auf Plaintext
-  (Security.framework-Integration nach 1.0).
+- **Wayland auto-paste:** ashpd (RemoteDesktop portal) + reis (libei)
+- **Secrets:** `~/.config/.../secrets.json` (chmod 0600), **encrypted
+  at rest**: Windows uses DPAPI (`CryptProtectData`), and Linux uses
+  AES-256-GCM with a 32-byte random KEK from the OS keyring
+  (libsecret / kwallet). If no keyring is available, storage falls back
+  to plaintext and shows a red banner warning in the API Keys tab. On
+  macOS, the beta scope stays on plaintext (Security.framework
+  integration after 1.0).
 - **Repo & CI:** GitHub (GitHub Actions)
 
-Architektur-Tiefe: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
-Konventionen + Mindset: [`CLAUDE.md`](CLAUDE.md).
+Architecture in depth: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+Conventions + mindset: [`CLAUDE.md`](CLAUDE.md).
 
-## Bauen (lokal)
+## Building (locally)
 
-**Voraussetzungen:**
-- Rust stable über `rustup` (`rust-toolchain.toml` pinnt den Channel)
-- Node.js 20+ und `pnpm` (`corepack enable && corepack prepare pnpm@latest --activate`)
-- Linux: System-Pakete laut [`docs/PLATFORMS.md`](docs/PLATFORMS.md)
+**Prerequisites:**
+- Rust stable via `rustup` (`rust-toolchain.toml` pins the channel)
+- Node.js 20+ and `pnpm` (`corepack enable && corepack prepare pnpm@latest --activate`)
+- Linux: system packages per [`docs/PLATFORMS.md`](docs/PLATFORMS.md)
 - Windows: WebView2 Runtime + MSVC Build Tools
 
 ```bash
 pnpm install
-pnpm tauri dev          # Dev-Build mit HMR fürs Frontend
-pnpm tauri build        # Bundles (.deb, .rpm, AppImage, NSIS) — auf Tags v* in CI
-pnpm test               # Frontend-Tests (Vitest, reine Logik wie i18n-Translate)
-pnpm i18n:check         # Locale-Parity-Gate (läuft auch automatisch im prebuild)
+pnpm tauri dev          # Dev build with HMR for the frontend
+pnpm tauri build        # Bundles (.deb, .rpm, AppImage, NSIS) — on v* tags in CI
+pnpm test               # Frontend tests (Vitest, pure logic like i18n translation)
+pnpm i18n:check         # Locale parity gate (also runs automatically in prebuild)
 ```
 
-Für Linux-Bundle-Build inkl. RPM zusätzlich `rpmbuild` installieren
-(`sudo apt-get install rpm` auf Debian; auf Fedora bereits vorhanden).
-Details, Output-Pfade und Installations-Anleitung in
-[`docs/PLATFORMS.md`](docs/PLATFORMS.md) → *„Distribution-Bundles"*.
+For a Linux bundle build including RPM, additionally install `rpmbuild`
+(`sudo apt-get install rpm` on Debian; already present on Fedora).
+Details, output paths, and installation instructions in
+[`docs/PLATFORMS.md`](docs/PLATFORMS.md) → *"Distribution Bundles"*.
 
-**Release schneiden** (Version bumpen, taggen, CI-Pipeline, Auto-Update,
-Signing-Key): siehe [`docs/RELEASING.md`](docs/RELEASING.md).
+**Cutting a release** (bump the version, tag, CI pipeline, auto-update,
+signing key): see [`docs/RELEASING.md`](docs/RELEASING.md).
 
-## Erste Schritte
+## Getting Started
 
-1. **App starten:** `pnpm tauri dev`. Tray-Icon erscheint im System-Tray
-   (Hauptfenster startet versteckt — siehe Wayland-Fokus-Hinweis in
-   [`CLAUDE.md`](CLAUDE.md) §4.8).
-2. **Hauptfenster öffnen:** Linksklick aufs Tray-Icon, oder Rechtsklick →
-   *„Einstellungen öffnen"*.
-3. **Whisper-Modell laden:** Tab *Einstellungen* → *„Default-Modell
-   herunterladen"*. Lädt das im `whisper_default_slot` konfigurierte
-   Modell (Default ab Mai 2026: `ggml-large-v3-turbo-q8_0`, ~874 MB) plus
-   Silero-VAD v6.2.0 (~885 kB) mit SHA-256-Verifikation aus Hugging Face
-   nach `app_config_dir/models/`. Existierende User mit Q5-Setup behalten
-   Q5; nur frische Installs starten direkt mit Q8.
-4. **Optional — Cloud-STT/LLM einrichten:** Tab *Einstellungen* →
-   *„Cloud-API-Keys (BYOK)"* → Key bei xAI / OpenAI / etc. einfügen.
-   Button *„Verbindung testen"* prüft den Key direkt.
-5. **Diktat-Test (lokal):** Cursor in einem Textfeld (Browser, Editor,
-   Slack-Eingabe), `Ctrl+Alt+Space` drücken, im Overlay-Menü *Exaktes
-   Diktat* wählen, `Enter` zum Starten, sprich, denselben Hotkey
-   nochmal zum Stoppen. Der transkribierte Text erscheint an der
-   Cursor-Position.
-6. **Auto-Paste auf Wayland:** Beim allerersten Diktat zeigt KDE Plasma
-   einen Permission-Dialog *„VoiceTypeX möchte Tastendrücke senden"*.
-   Erlauben — danach läuft Auto-Paste ohne weitere Dialoge, auch nach
-   App-Restart (`restore_token` wird persistiert).
+1. **Start the app:** `pnpm tauri dev`. The tray icon appears in the
+   system tray (the main window starts hidden — see the Wayland focus
+   note in [`CLAUDE.md`](CLAUDE.md) §4.8).
+2. **Open the main window:** left-click the tray icon, or right-click →
+   *"Open Settings"*.
+3. **Load a Whisper model:** *Settings* tab → *"Download Default
+   Model"*. This downloads the model configured in `whisper_default_slot`
+   (default since May 2026: `ggml-large-v3-turbo-q8_0`, ~874 MB) plus
+   Silero VAD v6.2.0 (~885 kB) with SHA-256 verification from Hugging Face
+   to `app_config_dir/models/`. Existing users on a Q5 setup keep Q5;
+   only fresh installs start directly on Q8.
+4. **Optional — set up cloud STT/LLM:** *Settings* tab →
+   *"Cloud API Keys (BYOK)"* → paste a key for xAI / OpenAI / etc.
+   The *"Test Connection"* button verifies the key right away.
+5. **Dictation test (local):** put the cursor in a text field (browser,
+   editor, Slack input), press `Ctrl+Alt+Space`, choose *Exact
+   Dictation* in the overlay menu, hit `Enter` to start, speak, then
+   press the same hotkey again to stop. The transcribed text appears at
+   the cursor position.
+6. **Auto-paste on Wayland:** on the very first dictation, KDE Plasma
+   shows a permission dialog *"VoiceTypeX wants to send keystrokes"*.
+   Allow it — after that, auto-paste runs without further dialogs, even
+   after an app restart (the `restore_token` is persisted).
 
-## Deinstallation
+## Uninstalling
 
-Der OS-Paket-Manager (apt/dnf/NSIS) entfernt nur das, was er installiert
-hat — User-Daten unter `~/.config/de.kevin-stenzel.voicetypex/`
-(Settings, Modi, API-Keys, Wayland-Token), Modelle unter `models/`
-(bis zu 10 GB GGUF + Whisper-Files), OS-Keychain-Einträge und ein
-eventueller Autostart-Eintrag bleiben **bewusst** liegen, damit ein
-Re-Install den User-Zustand wiederfindet.
+The OS package manager (apt/dnf/NSIS) only removes what it installed —
+user data under `~/.config/de.kevin-stenzel.voicetypex/`
+(settings, modes, API keys, Wayland token), models under `models/`
+(up to 10 GB of GGUF + Whisper files), OS keychain entries, and any
+autostart entry are **deliberately** left in place, so that a reinstall
+finds the user's state again.
 
-**Vor dem Uninstall:** In *Einstellungen → Gefahrenzone* kannst du
-API-Keys, Wayland-Token und die App-Konfiguration einzeln oder
-gemeinsam zurücksetzen.
+**Before uninstalling:** under *Settings → Danger Zone* you can reset
+API keys, the Wayland token, and the app configuration individually or
+all together.
 
-**Vollständige Spurenbeseitigung nach dem Uninstall:**
+**Complete trace removal after uninstalling:**
 
 - Linux/macOS:
   ```bash
   bash scripts/uninstall-cleanup.sh
   ```
-- Windows (PowerShell, *nicht* als Admin):
+- Windows (PowerShell, *not* as admin):
   ```powershell
   powershell -ExecutionPolicy Bypass -File scripts\uninstall-cleanup.ps1
   ```
 
-Beide Skripte sind interaktiv — jeder Schritt fragt einzeln nach.
-Details und welche Spuren manuell entfernt werden müssen (KDE-Wayland-
-Portal-Permission, WebView2-Cache, …) stehen in
-[`docs/PLATFORMS.md`](docs/PLATFORMS.md) → *„Deinstallation"*.
+Both scripts are interactive — every step asks individually. Details and
+which traces have to be removed manually (KDE Wayland portal permission,
+WebView2 cache, …) are in
+[`docs/PLATFORMS.md`](docs/PLATFORMS.md) → *"Uninstalling"*.
 
-## Datenschutz & Sicherheit
+## Privacy & Security
 
-- Audio, Transkripte und LLM-Antworten werden **nicht** geloggt. Der
-  `LogRingBuffer` (sichtbar im *Logs*-Tab) filtert Provider-Response-
-  Bodies und Transkript-Snippets — nur Status-Codes, Provider-Namen
-  und Dauer-Metriken landen in den Logs.
-- **Keine** Telemetrie, **kein** Analytics.
-- **Cloud-API-Keys werden at-rest verschlüsselt** gespeichert: Windows
-  über DPAPI, Linux mit AES-256-GCM (KEK im OS-Keyring). Bei Linux-
-  Systemen ohne Keyring fällt der Storage auf Plaintext mit chmod 0600
-  zurück; der API-Keys-Tab zeigt in dem Fall eine rote Warning. Keys
-  werden nie geloggt und nie ins Frontend exponiert — alle Provider-
-  Requests gehen durch das Rust-Backend. Details siehe
-  [`SECURITY.md`](SECURITY.md).
-- **Content-Security-Policy** auf allen Webviews aktiv: nur `'self'`
-  + explizite Provider-Hosts (api.anthropic.com, api.openai.com,
-  api.x.ai, api.groq.com, api.deepgram.com, huggingface.co). Kein
-  Inline-Scripting, kein eval.
-- Whisper-Modelle werden **nicht** im Installer mitgebündelt —
-  Downloader mit SHA-256-Hash-Verifikation aus Hugging Face beim
-  ersten Start.
-- Beim System-Start wird **nicht** automatisch gestartet — Auto-Start
-  ist explizites Opt-in.
+- Audio, transcripts, and LLM responses are **not** logged. The
+  `LogRingBuffer` (visible in the *Logs* tab) filters out provider
+  response bodies and transcript snippets — only status codes, provider
+  names, and duration metrics make it into the logs.
+- **No** telemetry, **no** analytics.
+- **Cloud API keys are stored encrypted at rest**: on Windows via DPAPI,
+  on Linux with AES-256-GCM (KEK in the OS keyring). On Linux systems
+  without a keyring, storage falls back to plaintext with chmod 0600; in
+  that case the API Keys tab shows a red warning. Keys are never logged
+  and never exposed to the frontend — all provider requests go through
+  the Rust backend. See [`SECURITY.md`](SECURITY.md) for details.
+- A **Content Security Policy** is active on all webviews: only `'self'`
+  + explicit provider hosts (api.anthropic.com, api.openai.com,
+  api.x.ai, api.groq.com, api.deepgram.com, huggingface.co). No inline
+  scripting, no eval.
+- Whisper models are **not** bundled in the installer — a downloader
+  with SHA-256 hash verification fetches them from Hugging Face on first
+  launch.
+- The app does **not** start automatically at system startup —
+  auto-start is an explicit opt-in.
 
-## Beta-Status & Updates
+## Beta Status & Updates
 
-- **Auto-Updater (Windows + AppImage).** VoiceTypeX prüft auf Wunsch
-  auf neue Versionen (*Einstellungen → Diagnose → Updates*) und
-  installiert sie per Ein-Klick. Die Update-Artefakte sind mit einem
-  minisign-/Ed25519-Schlüssel signiert; der Updater verweigert
-  unsignierte oder manipulierte Pakete. Self-Update gilt für den
-  **Windows-NSIS-Installer** und das **Linux-AppImage**; **`.deb`/`.rpm`**
-  aktualisierst du über deinen **Paketmanager** bzw. per Neu-Download.
-  Der Download startet erst auf Klick (das Bundle ist groß).
-- **Windows-Installer (noch) nicht Authenticode-signiert.** Beim ersten
-  Start zeigt SmartScreen „Unbekannter Herausgeber" → *Weitere
-  Informationen → Trotzdem ausführen*. Das ist unabhängig von der
-  minisign-Updater-Signatur. Distribution ausschließlich über die
-  offiziellen GitHub-Releases — bitte nicht über Drittquellen oder
-  Mirror beziehen.
-- **Linux-Voraussetzung für Encryption-at-rest:** libsecret
-  (gnome-keyring) oder kwallet muss installiert sein. Headless-/
-  Server-Setups laufen im Plaintext-Fallback mit deutlicher UI-Warning.
-- **Bug-Reports:** [GitHub Issues](https://github.com/ks98/voicetypex/issues)
-  inklusive `~/.config/de.kevin-stenzel.voicetypex/voicetypex.log`
-  (falls aktiviert) und der App-Version aus *Einstellungen → Diagnose*.
+- **Auto-updater (Windows + AppImage).** On request, VoiceTypeX checks
+  for new versions (*Settings → Diagnostics → Updates*) and installs
+  them with one click. The update artifacts are signed with a
+  minisign/Ed25519 key; the updater refuses unsigned or tampered
+  packages. Self-update applies to the **Windows NSIS installer** and
+  the **Linux AppImage**; you update **`.deb`/`.rpm`** via your
+  **package manager** or by re-downloading. The download only starts on
+  click (the bundle is large).
+- **The Windows installer is not (yet) Authenticode-signed.** On first
+  launch, SmartScreen shows "Unknown publisher" → *More info → Run
+  anyway*. This is independent of the minisign updater signature.
+  Distribution is exclusively via the official GitHub releases — please
+  do not obtain it from third-party sources or mirrors.
+- **Linux prerequisite for encryption at rest:** libsecret
+  (gnome-keyring) or kwallet must be installed. Headless/server setups
+  run in the plaintext fallback with a clear UI warning.
+- **Bug reports:** [GitHub Issues](https://github.com/ks98/voicetypex/issues)
+  including `~/.config/de.kevin-stenzel.voicetypex/voicetypex.log`
+  (if enabled) and the app version from *Settings → Diagnostics*.
 
-## Lizenz
+## License
 
-VoiceTypeX ist freie Software unter der **GNU General Public License
-Version 3 oder später** (`GPL-3.0-or-later`). Volltext in
-[`LICENSE`](LICENSE) (identisch in [`COPYING`](COPYING) abgelegt, gemäß
-GNU-Konvention).
+VoiceTypeX is free software under the **GNU General Public License
+Version 3 or later** (`GPL-3.0-or-later`). Full text in
+[`LICENSE`](LICENSE) (also stored identically in [`COPYING`](COPYING),
+per GNU convention).
 
 ```
-Copyright (C) 2026 Kevin Stenzel und Mitwirkende
+Copyright (C) 2026 Kevin Stenzel and contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by

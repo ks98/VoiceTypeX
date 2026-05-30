@@ -1,283 +1,282 @@
-# Modi schreiben
+# Writing Modes
 
-Ein **Modus** ist eine TOML-Datei in `app_config_dir/modes/`. Beim ersten
-Start kopiert VoiceTypeX die 9 mitgelieferten Defaults dort hin —
-**locale-passend**: wenn deine UI-Sprache beim ersten Start `fr` ist,
-bekommst du französische Defaults inklusive übersetzter
-`system_prompt`s. Sprachen-Sets liegen unter
-`modes/defaults/{de,en,fr,es,it}/` im Source und werden via
-`include_str!` ins Binary eingebettet (Backend-Logik in
+A **mode** is a TOML file in `app_config_dir/modes/`. On first launch,
+VoiceTypeX copies the 9 bundled defaults there —
+**locale-matched**: if your UI language is `fr` on first launch, you
+get French defaults, including translated
+`system_prompt`s. The language sets live under
+`modes/defaults/{de,en,fr,es,it}/` in the source and are embedded into the binary via
+`include_str!` (backend logic in
 [`src-tauri/src/core/default_modes.rs`](../src-tauri/src/core/default_modes.rs)).
-Eigene Modi einfach als weiteres `*.toml` ablegen — der Hot-Reload nimmt
-es ohne App-Neustart auf.
+To add your own modes, just drop another `*.toml` in place — hot-reload picks
+it up without restarting the app.
 
-**Spätere Locale-Wechsel betreffen die bereits kopierten Modi NICHT.**
-Wer englische Defaults nach einem späteren Switch nach `en` will:
-modes/-Verzeichnis leeren und App neu starten → Bootstrap kopiert die
-aktive-locale-Defaults rein. (User-eigene Modi gehen dabei verloren —
-vorher sichern.)
+**Later locale switches do NOT affect already-copied modes.**
+If you want English defaults after switching to `en` later:
+empty the modes/ directory and restart the app → bootstrap copies in the
+active-locale defaults. (Your own custom modes are lost in the process —
+back them up first.)
 
-## Mitgelieferte Standard-Modi (Beispiel: deutsche Locale)
+## Bundled Standard Modes (example: English locale)
 
-| Modus | STT | LLM-Postprocessing | Datei |
+| Mode | STT | LLM Postprocessing | File |
 |---|---|---|---|
-| Exaktes Diktat | Lokal (whisper-rs) | — | `exaktes_diktat.toml` |
-| Korrigierendes Diktat | Lokal (whisper-rs) | Lokal (Embedded oder Ollama) | `korrigierendes_diktat.toml` |
-| Förmliche E-Mail | xAI | xAI Grok-fast | `foermliche_email.toml` |
-| Slack/Teams Nachricht | xAI | xAI Grok-fast | `slack_teams.toml` |
-| GitHub Issue | xAI | xAI Grok-fast | `github_issue.toml` |
-| Anweisung an Coding-Agent | xAI (Auto-Sprache) | xAI Grok-fast | `claude_code_anweisung.toml` |
-| Verbessern *(Bearbeiten)* | xAI | xAI Grok-fast | `improve.toml` |
-| Antwort schreiben *(Bearbeiten)* | xAI | xAI Grok-fast | `reply.toml` |
-| Frei bearbeiten *(Bearbeiten)* | xAI | xAI Grok-fast | `transform.toml` |
+| Exact dictation | Local (whisper-rs) | — | `exaktes_diktat.toml` |
+| Corrective dictation | Local (whisper-rs) | Local (embedded or Ollama) | `korrigierendes_diktat.toml` |
+| Formal email | xAI | xAI Grok-fast | `foermliche_email.toml` |
+| Slack/Teams message | xAI | xAI Grok-fast | `slack_teams.toml` |
+| GitHub issue | xAI | xAI Grok-fast | `github_issue.toml` |
+| Coding-agent instruction | xAI (auto language) | xAI Grok-fast | `claude_code_anweisung.toml` |
+| Improve *(Edit)* | xAI | xAI Grok-fast | `improve.toml` |
+| Write reply *(Edit)* | xAI | xAI Grok-fast | `reply.toml` |
+| Free edit *(Edit)* | xAI | xAI Grok-fast | `transform.toml` |
 
-Die Filenames sind über alle Locales identisch (historisch deutsch
-gewählt). `id`/`name`/`description`/`system_prompt`/`language` und
-`initial_prompt` werden pro Locale lokalisiert; STT-/LLM-/Sampling-
-Konfiguration ist identisch.
+The filenames are identical across all locales (historically chosen in
+German). `id`/`name`/`description`/`system_prompt`/`language` and
+`initial_prompt` are localized per locale; the STT/LLM/sampling
+configuration is identical.
 
-Modi haben keinen eigenen Hotkey — siehe Abschnitt *Hotkey-Modell*
-weiter unten.
+Modes have no hotkey of their own — see the *Hotkey Model* section
+below.
 
-**Welcher Modus wann?**
-- *Exaktes Diktat* — wenn die Worte 1:1 so wie gesprochen ankommen sollen
-  (z.B. Zitate, technische Begriffe, eigene Code-Identifier). Reiner
-  Lokal-Pfad, kein Netz.
-- *Korrigierendes Diktat* — auf Linux/macOS vollständig offline (das
-  embedded LLM entfernt Versprecher und Selbstkorrekturen, behält Inhalt
-  1:1 bei). **Auf Windows** ist das embedded LLM nicht kompiliert
-  (Issue #1) — die TOML ist plattform-identisch, aber zur Laufzeit
-  erfordert der Modus dort einen selbst installierten Ollama-Daemon
-  (`local_engine = "ollama"`) oder einen Cloud-Provider; sonst meldet er
-  beim Auslösen einen klaren Fehler statt abzustürzen.
-- *Förmliche E-Mail* / *Slack/Teams Nachricht* / *GitHub Issue* /
-  *Anweisung an Coding-Agent* — Cloud-Pipeline mit Zielton pro Kontext.
-  Diese vier teilen die STT-Stage (xAI), unterscheiden sich in
-  `system_prompt`, Sampling-Profil und (bei den beiden technischen
-  Modi) im Whisper-Glossar via `initial_prompt`. Der Coding-Agent-
-  Modus verzichtet bewusst auf `language`, damit Whisper bei sprach-
-  gemischten Diktaten („die Funktion `parseConfig` returnt…")
-  auto-detect macht.
+**Which mode when?**
+- *Exact dictation* — when the words should land exactly as spoken
+  (e.g. quotes, technical terms, your own code identifiers). A purely
+  local path, no network.
+- *Corrective dictation* — fully offline on Linux/macOS (the
+  embedded LLM removes slips of the tongue and self-corrections, while keeping the content
+  verbatim). **On Windows** the embedded LLM is not compiled
+  (Issue #1) — the TOML is identical across platforms, but at runtime
+  the mode there requires a self-installed Ollama daemon
+  (`local_engine = "ollama"`) or a cloud provider; otherwise it reports
+  a clear error when triggered instead of crashing.
+- *Formal email* / *Slack/Teams message* / *GitHub issue* /
+  *Coding-agent instruction* — cloud pipeline with a target tone per
+  context. These four share the STT stage (xAI) and differ in
+  `system_prompt`, sampling profile, and (for the two technical
+  modes) the Whisper glossary via `initial_prompt`. The Coding-Agent
+  mode deliberately omits `language` so that Whisper auto-detects on
+  language-mixed dictations ("die Funktion `parseConfig` returnt…").
 
-## Bearbeiten-Modi (Text markieren → transformieren)
+## Edit Modes (select text → transform)
 
-Ein Modus mit `input = "selection"` arbeitet nicht auf neuem Diktat,
-sondern auf dem **gerade markierten Text** in der fokussierten App.
-Ablauf: Text markieren → Hotkey → im Menü einen Bearbeiten-Modus wählen
-→ optionale Anweisung sprechen → Stop-Hotkey. Die Selektion wird beim
-Hotkey-Druck (vor dem Menü, solange die Ziel-App noch fokussiert ist)
-über die Zwischenablage gelesen; das gesprochene Diktat wird zur
-Anweisung. Das LLM bekommt beides als:
+A mode with `input = "selection"` does not work on fresh dictation,
+but on the **currently selected text** in the focused app.
+Flow: select text → hotkey → pick an edit mode from the menu
+→ optionally speak an instruction → stop hotkey. The selection is read
+on hotkey press (before the menu, while the target app is still focused)
+via the clipboard; the spoken dictation becomes the
+instruction. The LLM receives both as:
 
 ```
 <selected_text>
-… der markierte Text …
+… the selected text …
 </selected_text>
 
 <instruction>
-… das gesprochene Diktat (kann leer sein) …
+… the spoken dictation (can be empty) …
 </instruction>
 ```
 
-Der `system_prompt` erklärt dem Modell, wie es die beiden Blöcke
-behandelt. Das Ergebnis wird je nach `output` platziert.
+The `system_prompt` tells the model how to handle the two blocks.
+The result is placed according to `output`.
 
-**`output = "auto"`** überlässt die Platzierung dem LLM: Es beginnt seine
-Antwort mit **genau einer** Steuerzeile — `@@REPLACE`, `@@APPEND` oder
-`@@PREPEND` — gefolgt vom eigentlichen Text. VoiceTypeX zieht die
-Steuerzeile ab und platziert entsprechend. Fehlt sie, greift
-`output_fallback`.
+**`output = "auto"`** leaves placement to the LLM: it begins its
+response with **exactly one** control line — `@@REPLACE`, `@@APPEND`, or
+`@@PREPEND` — followed by the actual text. VoiceTypeX strips the
+control line and places accordingly. If it is missing,
+`output_fallback` kicks in.
 
-**Eager-Capture-Kosten:** Die Selektion wird nur gelesen, wenn überhaupt
-ein Bearbeiten-Modus existiert. Reine Diktier-Setups merken nichts davon.
+**Eager-capture cost:** the selection is only read if an edit mode
+exists at all. Pure dictation setups notice nothing of it.
 
-Plattform-Details und Grenzen (z. B. Wayland-Zwischenablage,
-`append`/`prepend`) stehen in [`PLATFORMS.md`](PLATFORMS.md).
+Platform details and limits (e.g. Wayland clipboard,
+`append`/`prepend`) are in [`PLATFORMS.md`](PLATFORMS.md).
 
-## Speicherort
+## Storage Location
 
-| OS | Pfad |
+| OS | Path |
 |---|---|
 | Linux | `~/.config/de.kevin-stenzel.voicetypex/modes/` |
 | Windows | `%APPDATA%\de.kevin-stenzel.voicetypex\modes\` |
 | macOS | `~/Library/Application Support/de.kevin-stenzel.voicetypex/modes/` |
 
-## Pflichtfelder
+## Required Fields
 
 ```toml
-id = "kurz_ohne_spaces"        # eindeutig, keine Whitespaces
-name = "Anzeigename"           # erscheint im UI
+id = "short_no_spaces"         # unique, no whitespace
+name = "Display name"          # shown in the UI
 transcription = "local"        # "local" | "cloud"
 processing = "none"            # "none" | "local" | "cloud"
 ```
 
-Es gibt **kein** Hotkey-Feld pro Modus mehr. Modi werden zur Laufzeit
-über das Overlay-Menü ausgewählt (siehe *Hotkey-Modell* weiter unten).
-Bestehende TOMLs aus älteren Versionen behalten das `hotkey`-Feld —
-es wird beim Laden akzeptiert und ignoriert.
+There is **no** per-mode hotkey field anymore. Modes are selected at
+runtime via the overlay menu (see *Hotkey Model* below).
+Existing TOMLs from older versions keep the `hotkey` field —
+it is accepted and ignored on load.
 
 ## Optional
 
 ```toml
-description = "Kurze Beschreibung was der Modus tut."
-language = "de"                # ISO-Code, Hint für STT
-injection_method = "clipboard" # "clipboard" (Default) | "keystrokes"
+description = "Short description of what the mode does."
+language = "de"                # ISO code, hint for STT
+injection_method = "clipboard" # "clipboard" (default) | "keystrokes"
 
-# --- Bearbeiten-Modi (markierten Text transformieren) ---
-input = "voice"        # "voice" (Default, Diktat) | "selection"
-                       # "selection": liest den markierten Text aus der
-                       # fokussierten App und nutzt das Diktat als
-                       # (optionale) Anweisung darauf. Erfordert
+# --- Edit modes (transform selected text) ---
+input = "voice"        # "voice" (default, dictation) | "selection"
+                       # "selection": reads the selected text from the
+                       # focused app and uses the dictation as an
+                       # (optional) instruction on it. Requires
                        # processing != "none".
-output = "insert"      # "insert" (Default, an Cursor-Position)
-                       # Nur bei input="selection" sinnvoll:
-                       #   "replace" – ersetzt die Auswahl
-                       #   "append"  – behält die Auswahl, hängt darunter an
-                       #   "prepend" – stellt das Ergebnis davor
-                       #   "auto"    – das LLM entscheidet (siehe unten)
-output_fallback = "replace"  # nur bei output="auto": Aktion, wenn das
-                             # LLM keine Steuerzeile liefert. Nicht "auto".
+output = "insert"      # "insert" (default, at cursor position)
+                       # Only meaningful with input="selection":
+                       #   "replace" – replaces the selection
+                       #   "append"  – keeps the selection, appends below it
+                       #   "prepend" – puts the result before it
+                       #   "auto"    – the LLM decides (see below)
+output_fallback = "replace"  # only with output="auto": action when the
+                             # LLM emits no control line. Not "auto".
 
-# Nur wenn transcription = "cloud":
+# Only if transcription = "cloud":
 cloud_stt_provider = "xai"     # "xai" | "openai" | "groq" | "deepgram"
 
-# Nur wenn processing = "cloud":
+# Only if processing = "cloud":
 cloud_llm_provider = "xai"     # "xai" | "openai" | "anthropic"
 cloud_llm_model = "grok-4-fast-non-reasoning"
-                               # provider-spezifischer Model-Identifier
-                               # xAI-Default ist grok-4-fast-non-reasoning
-                               # (kein Reasoning-Overhead, ~6× günstiger
-                               # als grok-4 bei Postprocessing-Aufgaben)
+                               # provider-specific model identifier
+                               # xAI default is grok-4-fast-non-reasoning
+                               # (no reasoning overhead, ~6x cheaper
+                               # than grok-4 for postprocessing tasks)
 
-# Nur wenn processing = "local":
-local_engine = "embedded"       # "embedded" (llama-cpp-2, Linux/macOS) | "ollama" (externer Daemon)
-                                # Default bei null/weglassen: "embedded" auf Linux/macOS, "ollama"
-                                # auf Windows (dort ist Embedded nicht kompiliert — Issue #1).
-                                # Alte TOMLs mit `local_llm_model` (Phase 1/2) werden beim
-                                # Laden automatisch auf "ollama" migriert, damit sie nicht
-                                # versehentlich auf den falschen Engine-Pfad umgeleitet werden.
+# Only if processing = "local":
+local_engine = "embedded"       # "embedded" (llama-cpp-2, Linux/macOS) | "ollama" (external daemon)
+                                # Default if null/omitted: "embedded" on Linux/macOS, "ollama"
+                                # on Windows (embedded is not compiled there — Issue #1).
+                                # Old TOMLs with `local_llm_model` (Phase 1/2) are automatically
+                                # migrated to "ollama" on load, so they are not
+                                # accidentally redirected onto the wrong engine path.
 
-# Nur wenn local_engine = "ollama":
-ollama_model_tag = "qwen2.5:7b" # Ollama-Model-Tag
-# (Deprecated-Alias `local_llm_model` wird beim Load automatisch
-#  nach `ollama_model_tag` migriert.)
+# Only if local_engine = "ollama":
+ollama_model_tag = "qwen2.5:7b" # Ollama model tag
+# (Deprecated alias `local_llm_model` is automatically migrated
+#  to `ollama_model_tag` on load.)
 
-# Nur wenn local_engine = "embedded" — Override des globalen GGUF-Slots:
-embedded_llm_slot = "gemma4-e4b-it-q5_k_m"  # null = globaler Default
+# Only if local_engine = "embedded" — override the global GGUF slot:
+embedded_llm_slot = "gemma4-e4b-it-q5_k_m"  # null = global default
 
-# Nur wenn transcription = "local" — Override des globalen Whisper-Slots:
-whisper_model_slot = "large-v3-turbo-q8_0"  # null = globaler Default
+# Only if transcription = "local" — override the global Whisper slot:
+whisper_model_slot = "large-v3-turbo-q8_0"  # null = global default
 
-# Nur wenn transcription = "local" — Override der Beam-Breite des
-# Final-Pass. null = globaler Default (Settings.whisper_beam_size, = 5).
-# Bereich 1..=10: niedriger = schneller (1 ≈ greedy), höher = minimal
-# genauer + langsamer. Cloud-STT ignoriert es.
+# Only if transcription = "local" — override the beam width of the
+# final pass. null = global default (Settings.whisper_beam_size, = 5).
+# Range 1..=10: lower = faster (1 ≈ greedy), higher = marginally
+# more accurate + slower. Cloud STT ignores it.
 whisper_beam_size = 5
 
 initial_prompt = """
-Optionaler Whisper-Glossar — Eigennamen, Fachbegriffe oder Schreibweisen,
-die der Decoder als Kontext bekommen soll.
+Optional Whisper glossary — proper nouns, technical terms, or spellings
+the decoder should receive as context.
 """
 
-# Wenn processing != "none" — System-Prompt für die LLM-Nachbearbeitung:
+# If processing != "none" — system prompt for the LLM postprocessing:
 system_prompt = """
-Mehrzeiliger Prompt-Text. Wird an das LLM als System-Message geschickt,
-das gesprochene Diktat als User-Message.
+Multi-line prompt text. Sent to the LLM as the system message,
+the spoken dictation as the user message.
 """
 
-# Optional — Sampling-Parameter (sonst engine-/provider-spezifischer Default):
+# Optional — sampling parameters (otherwise engine-/provider-specific default):
 temperature = 0.3       # 0.0 – 2.0
 top_p = 0.8             # 0.0 – 1.0
 repeat_penalty = 1.05   # 0.5 – 2.0
 max_tokens = 1024       # 1 – 8192
 ```
 
-## Validierung
+## Validation
 
-VoiceTypeX prüft beim Laden:
+On load, VoiceTypeX checks:
 
-- **`id`**: nicht leer, keine Whitespaces, eindeutig.
-- **`transcription = "cloud"`**: erfordert `cloud_stt_provider`.
-- **`processing = "cloud"`**: erfordert `cloud_llm_provider`.
-- **`processing != "none"`**: erfordert `system_prompt`.
-- **`input = "selection"`**: erfordert `processing != "none"` (ohne LLM
-  gibt es nichts, womit die Auswahl transformiert würde).
-- **`output ∈ {replace, append, prepend, auto}`**: nur bei
-  `input = "selection"` (Voice-Modi fügen immer an der Cursor-Position
-  ein → `output = "insert"`).
-- **`output_fallback`**: darf nicht `"auto"` sein.
-- **`local_engine`**: nur `"embedded"` oder `"ollama"`.
-- **`processing = "local"` + `local_engine = "ollama"`**: erfordert
-  `ollama_model_tag` (oder Deprecated-`local_llm_model`).
-- **Sampling-Ranges**: `temperature ∈ [0.0, 2.0]`, `top_p ∈ [0.0, 1.0]`,
+- **`id`**: not empty, no whitespace, unique.
+- **`transcription = "cloud"`**: requires `cloud_stt_provider`.
+- **`processing = "cloud"`**: requires `cloud_llm_provider`.
+- **`processing != "none"`**: requires `system_prompt`.
+- **`input = "selection"`**: requires `processing != "none"` (without an
+  LLM there is nothing to transform the selection with).
+- **`output ∈ {replace, append, prepend, auto}`**: only with
+  `input = "selection"` (voice modes always insert at the cursor
+  position → `output = "insert"`).
+- **`output_fallback`**: must not be `"auto"`.
+- **`local_engine`**: only `"embedded"` or `"ollama"`.
+- **`processing = "local"` + `local_engine = "ollama"`**: requires
+  `ollama_model_tag` (or the deprecated `local_llm_model`).
+- **Sampling ranges**: `temperature ∈ [0.0, 2.0]`, `top_p ∈ [0.0, 1.0]`,
   `repeat_penalty ∈ [0.5, 2.0]`, `max_tokens ∈ [1, 8192]`.
 
-Fehlerhafte Modi werden komplett verworfen (das ganze Verzeichnis-Reload
-schlägt fehl) — die zuvor geladenen Modi bleiben aktiv. Der Fehler
-erscheint im UI-Logs-View.
+Faulty modes are discarded entirely (the whole directory reload
+fails) — the previously loaded modes stay active. The error
+appears in the UI Logs view.
 
-## Hotkey-Modell
+## Hotkey Model
 
-Es gibt **genau einen** globalen Hotkey für die ganze App
-(Settings: `menu_hotkey`, Default `CommandOrControl+Alt+Space`):
+There is **exactly one** global hotkey for the whole app
+(Settings: `menu_hotkey`, default `CommandOrControl+Alt+Space`):
 
-1. **`Idle` + Hotkey** → Menu-Window zeigt die Modus-Liste; `↑`/`↓` wählen,
-   `Enter` startet die Aufnahme, `Esc` bricht ab. Der Cursor steht
-   initial auf dem zuletzt gewählten Modus
+1. **`Idle` + hotkey** → the menu window shows the mode list; `↑`/`↓` select,
+   `Enter` starts recording, `Esc` cancels. The cursor initially
+   rests on the last-selected mode
    (`Settings.last_selected_mode_id`).
-2. **`Recording` + Hotkey** → laufende Aufnahme wird mit dem beim Start
-   gewählten Modus finalisiert (Toggle-Stop, gleicher Hotkey).
-3. Andere Pipeline-Zustände (Transcribing/Postprocessing/Injecting)
-   ignorieren den Hotkey.
+2. **`Recording` + hotkey** → the running recording is finalized with the
+   mode chosen at start (toggle-stop, same hotkey).
+3. Other pipeline states (Transcribing/Postprocessing/Injecting)
+   ignore the hotkey.
 
-### Hotkey-Format
+### Hotkey Format
 
-`tauri-plugin-global-shortcut`-kompatibel:
-- Modifier: `CommandOrControl`, `Alt`, `Shift`, `Super`/`Meta`
+`tauri-plugin-global-shortcut`-compatible:
+- Modifiers: `CommandOrControl`, `Alt`, `Shift`, `Super`/`Meta`
 - Key: `A`-`Z`, `0`-`9`, `F1`-`F24`, `Space`, `Tab`, `Enter`, …
-- Beispiele: `"CommandOrControl+Alt+Space"`, `"Super+Space"`,
+- Examples: `"CommandOrControl+Alt+Space"`, `"Super+Space"`,
   `"Control+Shift+F12"`
 
-`CommandOrControl` wird auf macOS als `Cmd` interpretiert, sonst als
-`Ctrl`. Auf Wayland ist der Wert nur ein Vorschlag — der Compositor
-zeigt beim ersten Start einen Dialog zur finalen Zuweisung
+`CommandOrControl` is interpreted as `Cmd` on macOS, otherwise as
+`Ctrl`. On Wayland the value is only a suggestion — the compositor
+shows a dialog on first launch for the final binding
 (`xdg-desktop-portal.GlobalShortcuts`).
 
-### Wayland: Hotkey-Anzeige weicht von der Einstellung ab
+### Wayland: hotkey display differs from the setting
 
-Wenn du auf KDE in *System-Settings → Globale Verknüpfungen →
-VoiceTypeX* einen anderen Hotkey zuweist, ist das die effektive
-Bindung — VoiceTypeX nimmt die `Settings.menu_hotkey`-Eingabe beim
-zweiten Start nicht mehr an, weil KDE die User-Zuweisung priorisiert.
-Die Einstellungsseite zeigt deshalb auf Wayland ein read-only Feld
-mit dem tatsächlich gebundenen Trigger; ändern geht nur über die
-KDE-System-Settings. Auf X11 / Windows ist die App-Einstellung
-weiterhin die Wahrheit (editierbar).
+If you assign a different hotkey on KDE under *System Settings → Global
+Shortcuts → VoiceTypeX*, that is the effective binding —
+VoiceTypeX no longer accepts the `Settings.menu_hotkey` input on the
+second launch, because KDE prioritizes the user assignment.
+The settings page therefore shows a read-only field on Wayland
+with the actually bound trigger; changing it is only possible via the
+KDE System Settings. On X11 / Windows the app setting is
+still the source of truth (editable).
 
-## Beispiel: Nutzer-eigener Modus
+## Example: a user's own mode
 
 ```toml
 # ~/.config/de.kevin-stenzel.voicetypex/modes/sql_review.toml
 id = "sql"
-name = "SQL Review-Kommentar"
-description = "Diktat -> kompakter SQL-Review-Kommentar fuer Pull-Requests."
+name = "SQL review comment"
+description = "Dictation -> compact SQL review comment for pull requests."
 transcription = "cloud"
 processing = "cloud"
 cloud_stt_provider = "xai"
 cloud_llm_provider = "xai"
 cloud_llm_model = "grok-4-fast-non-reasoning"
-language = "de"
+language = "en"
 injection_method = "clipboard"
 system_prompt = """
-Du bekommst ein gesprochenes Diktat eines SQL-Reviewers.
-Forme es zu einem klaren, technisch-knappen Code-Review-Kommentar:
-- Eine Zeile als Kernpunkt.
-- Optional 2-3 Zeilen Begruendung mit Index-/Plan-Hinweisen.
-- Wenn der Sprecher konkretes SQL nennt, in `Backticks` einbetten.
-- Sprache: Deutsch, technisch, ohne Floskeln.
-- Gib NUR den Kommentar aus.
+You receive a spoken dictation from a SQL reviewer.
+Shape it into a clear, technically concise code-review comment:
+- One line as the key point.
+- Optionally 2-3 lines of rationale with index/plan hints.
+- When the speaker names concrete SQL, embed it in `backticks`.
+- Language: English, technical, no filler.
+- Output ONLY the comment.
 """
 ```
 
-Speichern, fertig. App-Neustart unnötig — der Hot-Reload sieht die neue
-Datei und nimmt den Modus sofort ins Overlay-Menü auf.
+Save it, done. No app restart needed — hot-reload sees the new
+file and immediately adds the mode to the overlay menu.

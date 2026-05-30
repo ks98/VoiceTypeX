@@ -1,48 +1,49 @@
-# Plattform-Notizen
+# Platform Notes
 
 ## Linux
 
 ### Wayland (KDE Plasma 6, GNOME 46+)
 
-Funktional komplett: Hotkeys via `xdg-desktop-portal.GlobalShortcuts`
-(über `ashpd`), Auto-Paste via `xdg-desktop-portal.RemoteDesktop` +
-`reis` (libei). Beim ersten Diktat zeigt der Compositor einen
-Permission-Dialog *„VoiceTypeX möchte Tastendrücke senden"*; nach
-Erlaubnis wird der `restore_token` in
-`~/.config/.../wayland_session.json` (chmod 0600) persistiert — kein
-Permission-Dialog bei nachfolgenden App-Starts.
+Functionally complete: hotkeys via `xdg-desktop-portal.GlobalShortcuts`
+(through `ashpd`), auto-paste via `xdg-desktop-portal.RemoteDesktop` +
+`reis` (libei). On the first dictation the compositor shows a
+permission dialog *"VoiceTypeX wants to send keystrokes"*; once granted,
+the `restore_token` is persisted to
+`~/.config/.../wayland_session.json` (chmod 0600) — no permission
+dialog on subsequent app starts.
 
-**Mindestversionen:**
+**Minimum versions:**
 - `xdg-desktop-portal` ≥ 1.18
-- `libei` (System-Library) ≥ 1.0
-- KDE Plasma ≥ 6.1 (`xdg-desktop-portal-kde` mit MR !223 + KWin MR !5496
-  gemerged) **oder** GNOME ≥ 46 (Mutter MR !2628 gemerged)
+- `libei` (system library) ≥ 1.0
+- KDE Plasma ≥ 6.1 (`xdg-desktop-portal-kde` with MR !223 + KWin MR !5496
+  merged) **or** GNOME ≥ 46 (Mutter MR !2628 merged)
 
-**Wayland-Fokus-Quirks** (KDE Plasma 6) sind in
-[`CLAUDE.md`](../CLAUDE.md) §4.8 + §8 dokumentiert. Kurz:
-- Hauptfenster startet versteckt — wird sonst beim Hotkey-Trigger
-  fokussiert und klaut den Fokus von der Ziel-App.
-- Overlay-Window wird vor dem libei-Inject explizit `hide()` gerufen
-  (mit 80 ms Pause), damit der Fokus zurück zur Ziel-App springt.
+**Wayland focus quirks** (KDE Plasma 6) are documented in
+[`CLAUDE.md`](../CLAUDE.md) §4.8 + §8. In short:
+- The main window starts hidden — otherwise it gets focused on the
+  hotkey trigger and steals focus from the target app.
+- The overlay window is explicitly `hide()`-ed before the libei inject
+  (with an 80 ms pause) so that focus jumps back to the target app.
 
 ### X11
 
-Funktional komplett: Hotkeys via `tauri-plugin-global-shortcut`
-(XGrabKey-basiert), Clipboard-Inject über
-`tauri-plugin-clipboard-manager` + simulierten `Ctrl+V` per `enigo`
+Functionally complete: hotkeys via `tauri-plugin-global-shortcut`
+(XGrabKey-based), clipboard inject via
+`tauri-plugin-clipboard-manager` + a simulated `Ctrl+V` through `enigo`
 (XTest).
 
 ### Hyprland / Sway / wlroots
 
-`xdg-desktop-portal-hyprland` implementiert das `RemoteDesktop`-Portal
-nicht (Issue #252 offen); wlroots-Maintainer haben sich gegen den
-Portal-Ansatz positioniert. Auf diesen Compositors fällt der Wayland-
-Pfad auf Clipboard + Notification *„Drücke Strg+V"* zurück. Eine native
-Auto-Paste-Lösung müsste über `wlr-virtual-keyboard-unstable-v1`
-(z.B. via `wtype`-Sub-Prozess) gebaut werden — aktuell **nicht
-implementiert** und ohne konkretes Bedürfnis auch nicht eingeplant.
+`xdg-desktop-portal-hyprland` does not implement the `RemoteDesktop`
+portal (issue #252 is open); the wlroots maintainers have taken a stance
+against the portal approach. On these compositors the Wayland path falls
+back to clipboard + a notification *"Press Ctrl+V"*. A native
+auto-paste solution would have to be built on top of
+`wlr-virtual-keyboard-unstable-v1` (e.g. via a `wtype` sub-process) —
+currently **not implemented**, and with no concrete need, not planned
+either.
 
-### Build-Anforderungen (Debian/Ubuntu)
+### Build requirements (Debian/Ubuntu)
 
 ```bash
 sudo apt-get install -y \
@@ -50,98 +51,99 @@ sudo apt-get install -y \
     libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev \
     libayatana-appindicator3-dev librsvg2-dev \
     libssl-dev \
-    libdbus-1-dev                # keyring -> dbus-secret-service (KEK fuer secrets.json at-rest) \
-    libasound2-dev               # cpal (Audio-Aufnahme) \
-    libxdo-dev                   # enigo (X11-Keystroke; auf Wayland nicht runtime-relevant) \
-    libclang-dev cmake           # whisper-rs (bindgen + whisper.cpp-Build) \
-    libvulkan-dev                # gpu-vulkan-Feature (Phase-3a-Default), Headers + Loader \
-    glslc                        # GLSL->SPIR-V Shader-Compiler, von whisper.cpp's Vulkan-Backend zur Build-Zeit gebraucht \
-    mesa-vulkan-drivers          # llvmpipe-Software-Vulkan-Fallback (Systeme ohne Hardware-Vulkan)
+    libdbus-1-dev                # keyring -> dbus-secret-service (KEK for secrets.json at-rest) \
+    libasound2-dev               # cpal (audio capture) \
+    libxdo-dev                   # enigo (X11 keystroke; not runtime-relevant on Wayland) \
+    libclang-dev cmake           # whisper-rs (bindgen + whisper.cpp build) \
+    libvulkan-dev                # gpu-vulkan feature (Phase-3a default), headers + loader \
+    glslc                        # GLSL->SPIR-V shader compiler, needed by whisper.cpp's Vulkan backend at build time \
+    mesa-vulkan-drivers          # llvmpipe software-Vulkan fallback (systems without hardware Vulkan)
 ```
 
-**Vulkan-Default (Phase 3a, Mai 2026):**
-Der Default-Build nutzt das `gpu-vulkan`-Feature von `whisper-rs`.
-Vulkan deckt iGPU + AMD + Intel Arc + NVIDIA mit *einem* Binary ab
-(~95 % der Consumer-Hardware). Wenn zur Laufzeit kein Vulkan-Device
-verfuegbar ist, faellt whisper.cpp transparent auf CPU zurueck —
-kein App-Code-Pfad noetig.
+**Vulkan default (Phase 3a, May 2026):**
+The default build uses the `gpu-vulkan` feature of `whisper-rs`.
+Vulkan covers iGPU + AMD + Intel Arc + NVIDIA with a *single* binary
+(~95% of consumer hardware). If no Vulkan device is available at
+runtime, whisper.cpp falls back to CPU transparently — no app code
+path needed.
 
-`glslc` ist Build-Time-only: whisper.cpp kompiliert seine GLSL-Shader
-zu SPIR-V beim Cargo-Build. Zur Laufzeit ist nur `libvulkan1` +
-GPU-Treiber gefragt.
+`glslc` is build-time-only: whisper.cpp compiles its GLSL shaders to
+SPIR-V during the cargo build. At runtime only `libvulkan1` + the
+GPU driver are required.
 
-Wenn du kein Vulkan willst (Server/Container/Headless), explizit:
+If you don't want Vulkan (server/container/headless), be explicit:
 ```bash
 cargo build --no-default-features --features custom-protocol,fast-cpu
 ```
-Das `fast-cpu`-Feature linkt OpenBLAS statt Vulkan. Build-Voraussetzung
-dafuer: `libopenblas-dev` und `BLAS_INCLUDE_DIRS` gesetzt (siehe unten).
+The `fast-cpu` feature links OpenBLAS instead of Vulkan. Build
+prerequisite for it: `libopenblas-dev` and `BLAS_INCLUDE_DIRS` set (see
+below).
 
-**Phase 3b — llama-cpp-sys-2 0.1.146 Build-Quirk (automatisiert):**
-llama-cpp-sys-2 0.1.146's build.rs hat einen TOC/TOU-Bug — `Path::
-exists()` folgt Symlinks und liefert false fuer dangling Links,
-`std::fs::hard_link()` schlaegt aber fehl, weil der Symlink-Eintrag
-noch da ist. Resultat ohne Workaround: `Os { code: 17, kind:
-AlreadyExists }`-Panic beim Rebuild.
+**Phase 3b — llama-cpp-sys-2 0.1.146 build quirk (automated):**
+llama-cpp-sys-2 0.1.146's build.rs has a TOC/TOU bug — `Path::
+exists()` follows symlinks and returns false for dangling links, but
+`std::fs::hard_link()` then fails because the symlink entry is still
+there. The result without a workaround: an `Os { code: 17, kind:
+AlreadyExists }` panic on rebuild.
 
-**Automatisiert via npm-Hook:** `scripts/clean-dangling-libs.mjs`
-laeuft als `predev` und `prebuild` (siehe `package.json`) vor jedem
-`pnpm tauri dev` und `pnpm tauri build`. Pure-Node, cross-platform,
-no-op auf Windows. Falls du Cargo direkt aufrufst (z.B. `cargo build`
-fuer Tests), entweder Tauri-Workflow nutzen oder manuell:
+**Automated via an npm hook:** `scripts/clean-dangling-libs.mjs`
+runs as `predev` and `prebuild` (see `package.json`) before every
+`pnpm tauri dev` and `pnpm tauri build`. Pure Node, cross-platform,
+no-op on Windows. If you invoke Cargo directly (e.g. `cargo build`
+for tests), either use the Tauri workflow or run it manually:
 ```bash
 node scripts/clean-dangling-libs.mjs
 ```
 
-**Phase 3b — `dynamic-link` Runtime-Erwartungen + Bundle-Pipeline:**
-llama-cpp-2 wird mit `dynamic-link`-Feature gelinkt; das produziert
+**Phase 3b — `dynamic-link` runtime expectations + bundle pipeline:**
+llama-cpp-2 is linked with the `dynamic-link` feature; this produces
 `libllama.so`, `libggml.so`, `libggml-cpu.so`, `libggml-vulkan.so`
-und `libggml-base.so` als separate Shared-Libs.
+and `libggml-base.so` as separate shared libs.
 
-- **Dev-Build (`pnpm tauri dev`):** Cargo legt die Libs in
-  `target/debug/` ab und setzt rpath automatisch dorthin. Binary
-  findet sie zur Laufzeit ohne Zusatzkonfiguration.
-- **Distribution-Build (`pnpm tauri build`):**
-  1. Cargo baut Binary + Libs in `target/release/`.
-  2. `beforeBundleCommand` triggert `scripts/bundle-libs.mjs`, der
-     die Libs nach `src-tauri/resources/lib/` kopiert.
-  3. `tauri.conf.json`-Eintrag `bundle.resources: ["resources/lib/*"]`
-     packt sie ins finale Bundle.
-  4. `src-tauri/build.rs` setzt mehrere rpath-Fallback-Entries
+- **Dev build (`pnpm tauri dev`):** Cargo places the libs in
+  `target/debug/` and sets the rpath there automatically. The binary
+  finds them at runtime without any extra configuration.
+- **Distribution build (`pnpm tauri build`):**
+  1. Cargo builds the binary + libs in `target/release/`.
+  2. `beforeBundleCommand` triggers `scripts/bundle-libs.mjs`, which
+     copies the libs to `src-tauri/resources/lib/`.
+  3. The `tauri.conf.json` entry `bundle.resources: ["resources/lib/*"]`
+     packs them into the final bundle.
+  4. `src-tauri/build.rs` sets several rpath fallback entries
      (`$ORIGIN`, `$ORIGIN/lib`, `$ORIGIN/../lib/voicetypex`,
-     `$ORIGIN/../lib`) — egal wo der Tauri-Bundler die Libs hinlegt,
-     der Linker findet sie.
+     `$ORIGIN/../lib`) — no matter where the Tauri bundler puts the
+     libs, the linker finds them.
 
-`src-tauri/resources/lib/` ist gitignored ausser `.gitkeep` — Inhalt
-wird bei jedem Bundle-Build neu erzeugt, gehoert nicht ins Repo.
+`src-tauri/resources/lib/` is gitignored except for `.gitkeep` — its
+contents are regenerated on every bundle build and don't belong in the
+repo.
 
-**Optionaler CUDA-Builder-Pfad (Task #27):**
-Wer auf einer Maschine mit CUDA-Toolkit baut, kann zusaetzlich
-das `embedded-cuda-dynamic`-Feature aktivieren:
+**Optional CUDA builder path (Task #27):**
+Anyone building on a machine with the CUDA toolkit can additionally
+enable the `embedded-cuda-dynamic` feature:
 ```bash
-sudo apt install -y nvidia-cuda-toolkit  # oder vendor-Download
+sudo apt install -y nvidia-cuda-toolkit  # or vendor download
 cargo build --release --features embedded-cuda-dynamic
 ```
-Damit baut llama-cpp-2 die GGML-Backends als separate Shared-Libs
-(`ggml-cpu.so`, `ggml-vulkan.so`, `ggml-cuda.so`); zur Laufzeit waehlt
-llama.cpp das schnellste verfuegbare. Auf User-Maschinen ohne CUDA-
-Treiber faellt die App transparent auf Vulkan zurueck — keine
-Code-Anpassung noetig.
+With this, llama-cpp-2 builds the GGML backends as separate shared libs
+(`ggml-cpu.so`, `ggml-vulkan.so`, `ggml-cuda.so`); at runtime llama.cpp
+picks the fastest available one. On user machines without a CUDA
+driver the app falls back to Vulkan transparently — no code change
+needed.
 
-**Verifikation auf erstem Bundle-Build noetig** — Tauri-Bundler-
-Layout-Details koennen je nach Format (.deb/.rpm/AppImage)
-abweichen. Wenn der Test-Install meldet `error while loading shared
-libraries: libllama.so: cannot open shared object file`, dann ist
-keiner der rpath-Pfade getroffen worden — Bundle-Inspect mit
-`dpkg-deb -c xyz.deb` zeigt das tatsaechliche Layout, danach
-build.rs-rpath-Entries entsprechend ergaenzen.
+**Verification required on the first bundle build** — Tauri bundler
+layout details can differ by format (.deb/.rpm/AppImage). If the test
+install reports `error while loading shared libraries: libllama.so:
+cannot open shared object file`, then none of the rpath paths were hit
+— inspect the bundle with `dpkg-deb -c xyz.deb` to see the actual
+layout, then add the corresponding build.rs rpath entries.
 
-**BLAS_INCLUDE_DIRS (nur fuer `fast-cpu`-Feature):**
-Wenn `fast-cpu` aktiv ist, braucht `whisper-rs-sys` 0.15+
-`BLAS_INCLUDE_DIRS` explizit. Auf Debian/Ubuntu liegt der Pfad bei
+**BLAS_INCLUDE_DIRS (only for the `fast-cpu` feature):**
+When `fast-cpu` is active, `whisper-rs-sys` 0.15+ needs
+`BLAS_INCLUDE_DIRS` set explicitly. On Debian/Ubuntu the path is
 `/usr/include/x86_64-linux-gnu/openblas-pthread` —
-`src-tauri/.cargo/config.toml` setzt diesen Default mit `force = false`.
-Auf anderen Distros manuell setzen:
+`src-tauri/.cargo/config.toml` sets this default with `force = false`.
+On other distros set it manually:
 
 ```bash
 # Fedora (libopenblas-devel):
@@ -150,185 +152,189 @@ export BLAS_INCLUDE_DIRS=/usr/include/openblas
 export BLAS_INCLUDE_DIRS=/usr/include
 ```
 
-**Hinweis Wayland:** `reis` ist eine pure-Rust-Implementierung des
-EI-Protokolls und braucht keine separate System-Library. Es kommuniziert
-direkt mit dem File-Descriptor, den ashpd vom Portal liefert.
-`xdg-desktop-portal-kde` bzw. `xdg-desktop-portal-gnome` muss als
-Backend installiert sein (auf KDE/GNOME meist Default).
+**Wayland note:** `reis` is a pure-Rust implementation of the EI
+protocol and needs no separate system library. It communicates
+directly with the file descriptor that ashpd receives from the portal.
+`xdg-desktop-portal-kde` or `xdg-desktop-portal-gnome` must be
+installed as the backend (on KDE/GNOME usually the default).
 
-Auf Fedora/Arch sind die Paketnamen etwas anders — die Prinzip-Liste
-(GTK, WebKit2GTK 4.1, Soup3, AppIndicator, RSVG, ALSA, libxdo, clang,
-cmake) bleibt gleich.
+On Fedora/Arch the package names are slightly different — the
+principle list (GTK, WebKit2GTK 4.1, Soup3, AppIndicator, RSVG, ALSA,
+libxdo, clang, cmake) stays the same.
 
-### Bekannte X11-Limits
+### Known X11 limitations
 
-- Paste-Shortcut ist im Clipboard-Pfad auf `Ctrl+V` festgelegt. Terminals
-  erwarten oft `Ctrl+Shift+V` — dort fügt der Clipboard-Pfad nichts ein.
-  Workaround: im Modus `injection_method = "keystrokes"` setzen (siehe
-  unten — funktioniert auf X11 und Windows; auf Wayland ignoriert).
-- Manche WMs blockieren `XGrabKey` für bestimmte Modifier-Kombinationen
-  (z.B. wenn ein WM-Shortcut die gleiche Combi schon hat). In dem Fall
-  meldet `tauri-plugin-global-shortcut` einen Fehler und VoiceTypeX
-  zeigt eine Notification.
+- The paste shortcut on the clipboard path is fixed to `Ctrl+V`.
+  Terminals often expect `Ctrl+Shift+V` — there the clipboard path
+  pastes nothing. Workaround: set `injection_method = "keystrokes"` in
+  the mode (see below — works on X11 and Windows; ignored on Wayland).
+- Some WMs block `XGrabKey` for certain modifier combinations (e.g.
+  when a WM shortcut already uses the same combo). In that case
+  `tauri-plugin-global-shortcut` reports an error and VoiceTypeX shows
+  a notification.
 
-### Keystrokes-Modus (X11 + Windows)
+### Keystrokes mode (X11 + Windows)
 
-Modi mit `injection_method = "keystrokes"` umgehen das Clipboard
-komplett. Der Text wird Zeichen für Zeichen via `enigo.text(...)` getippt
-(Windows: `SendInput`, X11: `XTest`). Vorteile: funktioniert in Terminals
-mit `Ctrl+Shift+V`-Paste, in IME-empfindlichen Apps und in Eingaben mit
-Clipboard-Blockern. Nachteile: langsamer als Paste, Layout-abhängig —
-Unicode-Zeichen außerhalb des aktiven Tastatur-Layouts können scheitern.
+Modes with `injection_method = "keystrokes"` bypass the clipboard
+entirely. The text is typed character by character via `enigo.text(...)`
+(Windows: `SendInput`, X11: `XTest`). Advantages: works in terminals
+with `Ctrl+Shift+V` paste, in IME-sensitive apps, and in inputs with
+clipboard blockers. Disadvantages: slower than paste, layout-dependent
+— Unicode characters outside the active keyboard layout can fail.
 
-**Auf Wayland** wird `keystrokes` aktuell auf den libei-Clipboard-Pfad
-zurückgeführt (mit Hinweis-Log). Echte Keystroke-Injection via libei
-würde Char→Keysym-Mapping per `xkbcommon` brauchen — bisher nicht
-implementiert.
+**On Wayland** `keystrokes` currently falls back to the libei
+clipboard path (with a hint log). Real keystroke injection via libei
+would need char→keysym mapping through `xkbcommon` — not yet
+implemented.
 
 ## Windows
 
-Windows 10/11 mit WebView2 (auf 11 vorinstalliert; auf 10 kommt es mit
-dem Tauri-Installer).
+Windows 10/11 with WebView2 (preinstalled on 11; on 10 it ships with
+the Tauri installer).
 
-### Build-Anforderungen
+### Build requirements
 
-- Rust stable (`rustup` mit MSVC-Toolchain — empfohlen statt GNU)
-- Node.js 20+ und pnpm (am einfachsten via `corepack enable`)
-- Visual Studio Build Tools 2019+ mit *„Desktop development with C++"*
-- WebView2 Runtime (auf Win 11 vorinstalliert; sonst aus
+- Rust stable (`rustup` with the MSVC toolchain — recommended over GNU)
+- Node.js 20+ and pnpm (easiest via `corepack enable`)
+- Visual Studio Build Tools 2019+ with *"Desktop development with C++"*
+- WebView2 Runtime (preinstalled on Win 11; otherwise from
   https://developer.microsoft.com/microsoft-edge/webview2/)
 
-### Bekannte Windows-Eigenheiten
+### Known Windows specifics
 
-- `cargo` zieht `whisper-rs-sys` ein, das whisper.cpp's C++-Code mit
-  cmake/MSVC kompiliert. Erstmaliger Build ~5–10 min.
-- **Vulkan-SDK fuer Build-Zeit** (Phase-3a-Default): Lunarg-Vulkan-SDK
-  installieren (https://www.lunarg.com/vulkan-sdk/), Environment-
-  Variable `VULKAN_SDK` muss gesetzt sein. Runtime: aktuelle GPU-
-  Treiber bringen `vulkan-1.dll` automatisch mit (NVIDIA/AMD/Intel).
-- **Wer ohne Vulkan bauen will** (z.B. Headless oder Lizenz-strikt):
+- `cargo` pulls in `whisper-rs-sys`, which compiles whisper.cpp's C++
+  code with cmake/MSVC. First-time build ~5–10 min.
+- **Vulkan SDK for build time** (Phase 3a default): install the
+  LunarG Vulkan SDK (https://www.lunarg.com/vulkan-sdk/), the
+  environment variable `VULKAN_SDK` must be set. Runtime: current GPU
+  drivers ship `vulkan-1.dll` automatically (NVIDIA/AMD/Intel).
+- **To build without Vulkan** (e.g. headless or license-strict):
   `cargo build --no-default-features --features custom-protocol,fast-cpu`.
-  Dann gilt `BLAS_INCLUDE_DIRS` (OpenBLAS-Windows-Distribution noetig,
-  z.B. `set BLAS_INCLUDE_DIRS=C:\OpenBLAS\include`).
-- `enigo` nutzt `SendInput` — funktioniert in den meisten Anwendungen,
-  aber einige UWP-/WinUI-Apps haben restriktive Input-Pfade. Workaround
-  mit Clipboard-Fallback (Standard).
+  Then `BLAS_INCLUDE_DIRS` applies (an OpenBLAS Windows distribution is
+  required, e.g. `set BLAS_INCLUDE_DIRS=C:\OpenBLAS\include`).
+- `enigo` uses `SendInput` — works in most applications, but some
+  UWP/WinUI apps have restrictive input paths. Workaround via the
+  clipboard fallback (default).
 
-### Windows — lokales LLM (embedded vs. Ollama)
+### Windows — local LLM (embedded vs. Ollama)
 
-Das **embedded LLM** (`llama-cpp-2`) wird auf Windows **nicht** kompiliert.
-Grund (ks98/voicetypex#1): `whisper-rs-sys` und `llama-cpp-sys-2` bundeln je
-ihr eigenes ggml; auf MSVC kollidieren die doppelten `ggml_*`-Symbole beim
-Linken (LNK2005). Linux/ELF toleriert ein in Executable **und** Shared-Lib
-definiertes Symbol, MSVC nicht. `llama-cpp-2` ist daher in `Cargo.toml`
-target-gegatet (`[target.'cfg(not(target_os = "windows"))'.dependencies]`),
-und der `processing::embedded`-Pfad ist `#[cfg(not(windows))]`.
+The **embedded LLM** (`llama-cpp-2`) is **not** compiled on Windows.
+Reason (ks98/voicetypex#1): `whisper-rs-sys` and `llama-cpp-sys-2` each
+bundle their own ggml; on MSVC the duplicate `ggml_*` symbols collide at
+link time (LNK2005). Linux/ELF tolerates a symbol defined in both the
+executable **and** a shared lib, MSVC does not. `llama-cpp-2` is
+therefore target-gated in `Cargo.toml`
+(`[target.'cfg(not(target_os = "windows"))'.dependencies]`),
+and the `processing::embedded` path is `#[cfg(not(windows))]`.
 
-**Folge fuer das Bundle:** Auf Windows linkt `whisper-rs-sys` sein ggml
-**statisch** in die Binary — es gibt also **keine** `ggml-*.dll`/`llama.dll`
-zu buendeln. `scripts/bundle-libs.mjs` ist auf Windows ein No-op (es findet
-kein `llama.dll`-Marker und beendet sich sauber mit Exit 0). Damit entfaellt
-auch die frueher hier notierte NSIS-DLL-Loader-Problematik komplett.
+**Consequence for the bundle:** On Windows `whisper-rs-sys` links its
+ggml **statically** into the binary — so there is **no** `ggml-*.dll`/`llama.dll`
+to bundle. `scripts/bundle-libs.mjs` is a no-op on Windows (it finds no
+`llama.dll` marker and exits cleanly with exit 0). That also eliminates
+the NSIS DLL loader issue noted here earlier entirely.
 
-**Lokales LLM auf Windows** laeuft ueber einen **selbst installierten
-Ollama-Daemon** (`local_engine = "ollama"`; der Default-Engine-Wert ist auf
-Windows `"ollama"` statt `"embedded"`) oder ueber einen **Cloud-Provider**.
-Triggert ein Modus explizit `local_engine = "embedded"`, liefert die
-Pipeline eine klare Fehlermeldung statt eines Absturzes. Die Spracherkennung
-(whisper.cpp + Vulkan) ist davon unberuehrt und laeuft voll lokal.
+**The local LLM on Windows** runs via a **self-installed
+Ollama daemon** (`local_engine = "ollama"`; the default engine value on
+Windows is `"ollama"` instead of `"embedded"`) or via a **cloud
+provider**. If a mode explicitly triggers `local_engine = "embedded"`,
+the pipeline returns a clear error message instead of crashing. Speech
+recognition (whisper.cpp + Vulkan) is unaffected by this and runs fully
+locally.
 
-| Plattform | STT | Embedded LLM | Ollama-LLM | Cloud-LLM |
+| Platform | STT | Embedded LLM | Ollama LLM | Cloud LLM |
 | --- | --- | --- | --- | --- |
 | Linux / macOS | whisper.cpp (Vulkan) | ✅ llama-cpp-2 | ✅ | ✅ |
-| Windows | whisper.cpp (Vulkan) | ❌ (#1) | ✅ (selbst installiert) | ✅ |
+| Windows | whisper.cpp (Vulkan) | ❌ (#1) | ✅ (self-installed) | ✅ |
 
-## Bearbeiten-Modi: Selektion lesen & zurückschreiben
+## Edit modes: reading the selection & writing it back
 
-Modi mit `input = "selection"` lesen den markierten Text der fokussierten
-Fremd-App und schreiben das Ergebnis zurück. Beides ist plattformabhängig
-und gehört zu den manuell zu verifizierenden Pfaden.
+Modes with `input = "selection"` read the selected text of the focused
+foreign app and write the result back. Both are platform-dependent and
+belong to the paths that must be verified manually.
 
-**Lesen** (`TextInjector::read_selection`):
+**Reading** (`TextInjector::read_selection`):
 
-| Plattform | Lese-Mechanismus | Status |
+| Platform | Read mechanism | Status |
 |---|---|---|
-| Linux X11 | **PRIMARY-Selection** direkt (arboard, nativ) | fokus-unabhängig, ohne Ctrl+C |
-| Linux Wayland | **PRIMARY-Selection** via wlr/ext-data-control (arboard, Feature `wayland-data-control`) | verifiziert lesbar auf KWin (auch unfokussiert) |
-| Windows | `enigo` Ctrl+C → Clipboard sichern/lesen/wiederherstellen | **manuell zu verifizieren** |
+| Linux X11 | **PRIMARY selection** directly (arboard, native) | focus-independent, without Ctrl+C |
+| Linux Wayland | **PRIMARY selection** via wlr/ext-data-control (arboard, feature `wayland-data-control`) | verified readable on KWin (even unfocused) |
+| Windows | `enigo` Ctrl+C → save/read/restore clipboard | **to be verified manually** |
 
-Auf Linux liegt der markierte Text automatisch in der PRIMARY-Selection
-(dem „Middle-Click-Paste"-Puffer) — er wird direkt gelesen, ohne
-Tastatur-Simulation, ohne Fokus, ohne die normale Zwischenablage
-(CLIPBOARD) anzufassen. Windows kennt keine PRIMARY-Selection, daher dort
-weiterhin der simulierte Ctrl+C-Weg.
+On Linux the selected text is automatically in the PRIMARY selection
+(the "middle-click paste" buffer) — it is read directly, without
+keyboard simulation, without focus, and without touching the normal
+clipboard (CLIPBOARD). Windows has no PRIMARY selection, so the
+simulated Ctrl+C route is still used there.
 
-**Zurückschreiben** richtet sich nach `output`: `replace`/`insert` fügen
-direkt ein (Paste über eine aktive Selektion überschreibt sie);
-`append`/`prepend` kollabieren die Selektion vorher per Pfeiltaste
-(rechts/links) und fügen dann ein.
+**Writing back** depends on `output`: `replace`/`insert` paste
+directly (pasting over an active selection overwrites it);
+`append`/`prepend` collapse the selection first via an arrow key
+(right/left) and then paste.
 
-### Manuelle Verifikation (pro Plattform durchführen)
+### Manual verification (perform per platform)
 
-1. Text in einer Fremd-App markieren (Editor **und** Browser-Textfeld —
-   die sind am unterschiedlichsten).
-2. Hotkey → Bearbeiten-Modus „Verbessern" wählen → Anweisung sprechen →
-   Stop. Erwartung: markierter Text wird durch das Ergebnis ersetzt.
-3. „Antwort schreiben" auf einen markierten Absatz: Original bleibt
-   stehen, Antwort erscheint darunter.
-4. „Frei bearbeiten": je nach Anweisung ersetzen vs. anhängen
-   (`@@`-Steuerzeile).
-5. Nichts markieren, Hotkey, Bearbeiten-Modus: PRIMARY ist leer → leere
-   Selektion (Log: `Eager selection capture captured=false`).
+1. Select text in a foreign app (an editor **and** a browser text
+   field — those are the most different).
+2. Hotkey → choose the edit mode "Improve" → speak the instruction →
+   stop. Expectation: the selected text is replaced by the result.
+3. "Write a reply" on a selected paragraph: the original stays, the
+   reply appears below it.
+4. "Free edit": replace vs. append depending on the instruction
+   (`@@` control line).
+5. Select nothing, hotkey, edit mode: PRIMARY is empty → empty
+   selection (log: `Eager selection capture captured=false`).
 
-### Bekannte Grenzen & Risiken
+### Known limitations & risks
 
-- **PRIMARY-Semantik (Linux):** PRIMARY enthält den *zuletzt markierten*
-  Text — egal in welchem Fenster. Hat der Nutzer nichts Frisches
-  markiert, wird eine veraltete/fremde Selektion gelesen. In der Praxis
-  unkritisch, weil der Workflow „markieren → sofort Hotkey" ist.
-- **Apps ohne PRIMARY (Linux):** Manche Chromium-/Electron-Builds und
-  einige Terminals füllen PRIMARY nicht zuverlässig → `read_selection`
-  liefert `None`, der Edit-Modus arbeitet dann auf leerer Selektion.
-- **`append`/`prepend` brauchen die überlebende Selektion (Output):** Das
-  Zurückschreiben kollabiert die Selektion per Pfeiltaste. Apps, die die
-  Selektion beim Fokuswechsel (Menü → Ziel-App) verwerfen, lassen das
-  Kollabieren ins Leere laufen. Das Lesen ist davon nicht betroffen
-  (PRIMARY persistiert fokus-unabhängig).
-- **Windows-`read_selection`-Heuristik:** „nichts markiert" wird über
-  „Clipboard nach Ctrl+C unverändert/leer" erkannt; falsch-negativ, wenn
-  die Selektion dem vorherigen Clipboard-Inhalt entspricht — seltener
-  Edge-Case. (Linux/PRIMARY ist davon nicht betroffen.)
-- **Wayland — `append`/`prepend`:** Die Kollaps-Pfeiltaste wird auf
-  Wayland noch nicht über libei gesendet; dort landen diese Aktionen am
-  Cursor (wie `replace`). `replace`/`insert` funktionieren. Offener
-  Folgeschritt: Einzeltasten-`KeyCommand` im libei-Worker.
+- **PRIMARY semantics (Linux):** PRIMARY holds the *most recently
+  selected* text — regardless of which window. If the user hasn't
+  selected anything fresh, a stale/foreign selection gets read. In
+  practice this is uncritical because the workflow is "select →
+  immediately hotkey".
+- **Apps without PRIMARY (Linux):** Some Chromium/Electron builds and
+  a few terminals don't fill PRIMARY reliably → `read_selection`
+  returns `None`, and the edit mode then operates on an empty
+  selection.
+- **`append`/`prepend` need the surviving selection (output):** Writing
+  back collapses the selection via an arrow key. Apps that discard the
+  selection on focus change (menu → target app) make the collapse run
+  into nothing. Reading is not affected by this (PRIMARY persists
+  independently of focus).
+- **Windows `read_selection` heuristic:** "nothing selected" is
+  detected via "clipboard unchanged/empty after Ctrl+C"; false-negative
+  if the selection matches the previous clipboard content — a rare
+  edge case. (Linux/PRIMARY is not affected by this.)
+- **Wayland — `append`/`prepend`:** The collapse arrow key is not yet
+  sent over libei on Wayland; there these actions land at the cursor
+  (like `replace`). `replace`/`insert` work. Open follow-up:
+  single-key `KeyCommand` in the libei worker.
 
-## macOS — nicht im Scope
+## macOS — out of scope
 
-Alle macOS-Implementierungen sind Stubs hinter
-`#[cfg(target_os = "macos")]`. Der Code kompiliert dort, aber ein
-funktionaler macOS-Port (CGEvent für Inject, NSStatusItem für Tray,
-TCC-/Accessibility-Permissions, signierter `.dmg`) ist nicht eingeplant.
+All macOS implementations are stubs behind
+`#[cfg(target_os = "macos")]`. The code compiles there, but a
+functional macOS port (CGEvent for inject, NSStatusItem for the tray,
+TCC/Accessibility permissions, a signed `.dmg`) is not planned.
 
-## Distribution-Bundles
+## Distribution bundles
 
-`pnpm tauri build` produziert auf Linux drei Bundle-Formate. Wichtig:
-der erste Release-Build dauert ~10–15 min (auf langsameren Systemen
-deutlich mehr — der Compile von `whisper-rs-sys` mit cmake/clang-LTO
-ist der Engpass), danach ist alles im Cargo-Release-Cache und folgende
-Builds laufen in ~3–5 min.
+`pnpm tauri build` produces three bundle formats on Linux. Important:
+the first release build takes ~10–15 min (significantly more on slower
+systems — compiling `whisper-rs-sys` with cmake/clang LTO is the
+bottleneck); after that everything is in the Cargo release cache and
+subsequent builds run in ~3–5 min.
 
-**Voraussetzungen auf dem Build-System (Debian/Ubuntu):**
-- alle Pakete aus dem Build-Anforderungen-Abschnitt oben
-- zusätzlich `rpm` (stellt `rpmbuild` bereit) — sonst wird das
-  RPM-Target ohne Fehler übersprungen
+**Prerequisites on the build system (Debian/Ubuntu):**
+- all packages from the build requirements section above
+- additionally `rpm` (provides `rpmbuild`) — otherwise the RPM target
+  is skipped without an error
 
 ```bash
 sudo apt-get install rpm
 pnpm tauri build
 ```
 
-**Output-Pfade nach erfolgreichem Build:**
+**Output paths after a successful build:**
 
 ```
 src-tauri/target/release/bundle/deb/VoiceTypeX_0.1.0_amd64.deb         (~5 MB)
@@ -336,145 +342,144 @@ src-tauri/target/release/bundle/appimage/VoiceTypeX_0.1.0_amd64.AppImage  (~110 
 src-tauri/target/release/bundle/rpm/VoiceTypeX-0.1.0-1.x86_64.rpm      (~5 MB)
 ```
 
-Der NSIS-Installer wird auf Linux übersprungen (NSIS-Toolchain ist
-Windows-spezifisch) — kein Fehler, das ist erwartet.
+The NSIS installer is skipped on Linux (the NSIS toolchain is
+Windows-specific) — no error, that's expected.
 
-### `.deb` installieren (Debian / Ubuntu / Linux Mint)
+### Installing the `.deb` (Debian / Ubuntu / Linux Mint)
 
 ```bash
 sudo dpkg -i src-tauri/target/release/bundle/deb/VoiceTypeX_0.1.0_amd64.deb
-# Bei fehlenden Deps:
+# If dependencies are missing:
 sudo apt-get -f install
 ```
 
-Nach der Installation erscheint *VoiceTypeX* im App-Menü. Start
-über Menü oder `voicetypex` im Terminal.
+After installation *VoiceTypeX* appears in the app menu. Start it
+via the menu or `voicetypex` in the terminal.
 
-Uninstall: `sudo apt remove voice-type-x` (Tauri normalisiert
-`identifier` auf einen kebab-case-Paketnamen). User-Daten und
-Keychain-Einträge bleiben dabei liegen — Cleanup siehe Abschnitt
-*„Deinstallation — vollständige Spurenbeseitigung"* weiter unten.
+Uninstall: `sudo apt remove voice-type-x` (Tauri normalizes
+`identifier` to a kebab-case package name). User data and
+keychain entries are left behind — for cleanup see the section
+*"Uninstall — complete trace removal"* further below.
 
-### `.rpm` installieren (Fedora / RHEL / openSUSE)
+### Installing the `.rpm` (Fedora / RHEL / openSUSE)
 
-RPM auf das Ziel-System kopieren (z.B. via `scp`, USB-Stick), dann:
+Copy the RPM to the target system (e.g. via `scp`, USB stick), then:
 
 ```bash
 sudo dnf install ./VoiceTypeX-0.1.0-1.x86_64.rpm
-# Oder klassisch:
+# Or classically:
 sudo rpm -i VoiceTypeX-0.1.0-1.x86_64.rpm
 ```
 
-Uninstall: `sudo dnf remove voice-type-x`. User-Daten bleiben liegen
-— siehe *„Deinstallation"*.
+Uninstall: `sudo dnf remove voice-type-x`. User data is left behind
+— see *"Uninstall"*.
 
-### AppImage starten (universell Linux)
+### Running the AppImage (universal Linux)
 
-Keine Installation nötig — `chmod +x`, dann doppelklicken oder im
-Terminal:
+No installation needed — `chmod +x`, then double-click or in the
+terminal:
 
 ```bash
 chmod +x VoiceTypeX_0.1.0_amd64.AppImage
 ./VoiceTypeX_0.1.0_amd64.AppImage
 ```
 
-Falls FUSE auf dem System fehlt oder deaktiviert ist:
+If FUSE is missing or disabled on the system:
 
 ```bash
 ./VoiceTypeX_0.1.0_amd64.AppImage --appimage-extract-and-run
 ```
 
-Das AppImage enthält den kompletten GTK/WebKit-Stack — funktioniert
-auf jeder modernen Linux-Distro, integriert sich aber **nicht** ins
-App-Menü. Für dauerhafte Nutzung empfiehlt sich DEB oder RPM.
+The AppImage contains the complete GTK/WebKit stack — it works on
+any modern Linux distro, but it does **not** integrate into the app
+menu. For permanent use, DEB or RPM is recommended.
 
-### Runtime-Dependencies (was die Pakete verlangen)
+### Runtime dependencies (what the packages require)
 
-- **`.deb`** (von Tauri's Bundler ermittelt): `libopenblas0`,
+- **`.deb`** (determined by Tauri's bundler): `libopenblas0`,
   `libasound2`, `libxdo3`, `libayatana-appindicator3-1`,
-  `libwebkit2gtk-4.1-0`, `libgtk-3-0` — alle aus dem Debian-Standard-
-  Repo.
-- **`.rpm`** (von Tauri's Bundler ermittelt): `openblas-serial`,
+  `libwebkit2gtk-4.1-0`, `libgtk-3-0` — all from the standard Debian
+  repo.
+- **`.rpm`** (determined by Tauri's bundler): `openblas-serial`,
   `alsa-lib`, `libxdo`, `libayatana-appindicator3.so.1`,
-  `libwebkit2gtk-4.1.so.0`, `libgtk-3.so.0` — alle aus dem
-  Fedora-Standard-Repo.
-- **AppImage**: nichts — alles eingebacken, ~110 MB.
+  `libwebkit2gtk-4.1.so.0`, `libgtk-3.so.0` — all from the
+  standard Fedora repo.
+- **AppImage**: nothing — everything baked in, ~110 MB.
 
-## Deinstallation — vollständige Spurenbeseitigung
+## Uninstall — complete trace removal
 
-Der OS-Paket-Manager (apt/dnf/NSIS) entfernt nur das, was er installiert
-hat. **Bewusst liegen** bleiben User-Daten, OS-Keychain-Einträge,
-Autostart-Konfiguration und Wayland-Portal-Permissions — damit ein
-Re-Install den User-Zustand wiederfindet.
+The OS package manager (apt/dnf/NSIS) only removes what it installed.
+**Deliberately left behind** are user data, OS keychain entries,
+autostart configuration and Wayland portal permissions — so that a
+re-install finds the user's state again.
 
-### Was wo liegt
+### What lives where
 
-| Plattform | Pfad | Inhalt |
+| Platform | Path | Content |
 |---|---|---|
-| Linux | `~/.config/de.kevin-stenzel.voicetypex/settings.json` | App-Einstellungen |
-| Linux | `~/.config/de.kevin-stenzel.voicetypex/secrets.json` (chmod 0600) | Cloud-API-Keys (Source of Truth) |
-| Linux | `~/.config/de.kevin-stenzel.voicetypex/wayland_session.json` (chmod 0600) | Wayland-Permission-Restore-Token |
-| Linux | `~/.config/de.kevin-stenzel.voicetypex/modes/*.toml` | Eigene + Default-Modi |
-| Linux | `~/.config/de.kevin-stenzel.voicetypex/models/` | Whisper-/VAD-/GGUF-Modelle (bis zu ~10 GB) |
-| Linux | `~/.config/autostart/*VoiceType*.desktop` | Autostart-Eintrag (falls aktiviert) |
-| Linux | gnome-keyring / kwallet, `service="voicetypex"` | API-Key-Mirror |
-| Windows | `%APPDATA%\de.kevin-stenzel.voicetypex\config\` | Settings, Modi, Secrets, Token |
-| Windows | `%APPDATA%\de.kevin-stenzel.voicetypex\data\` | Modelle |
-| Windows | `%LocalAppData%\de.kevin-stenzel.voicetypex\EBWebView\` | WebView2-Profil-Cache |
-| Windows | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\VoiceTypeX` | Autostart-Registry (falls aktiviert) |
-| Windows | Credential Manager, target `<provider>.voicetypex` (z.B. `xai.voicetypex`) | API-Key-Mirror |
+| Linux | `~/.config/de.kevin-stenzel.voicetypex/settings.json` | App settings |
+| Linux | `~/.config/de.kevin-stenzel.voicetypex/secrets.json` (chmod 0600) | Cloud API keys (source of truth) |
+| Linux | `~/.config/de.kevin-stenzel.voicetypex/wayland_session.json` (chmod 0600) | Wayland permission restore token |
+| Linux | `~/.config/de.kevin-stenzel.voicetypex/modes/*.toml` | Custom + default modes |
+| Linux | `~/.config/de.kevin-stenzel.voicetypex/models/` | Whisper/VAD/GGUF models (up to ~10 GB) |
+| Linux | `~/.config/autostart/*VoiceType*.desktop` | Autostart entry (if enabled) |
+| Linux | gnome-keyring / kwallet, `service="voicetypex"` | API key mirror |
+| Windows | `%APPDATA%\de.kevin-stenzel.voicetypex\config\` | Settings, modes, secrets, token |
+| Windows | `%APPDATA%\de.kevin-stenzel.voicetypex\data\` | Models |
+| Windows | `%LocalAppData%\de.kevin-stenzel.voicetypex\EBWebView\` | WebView2 profile cache |
+| Windows | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\VoiceTypeX` | Autostart registry (if enabled) |
+| Windows | Credential Manager, target `<provider>.voicetypex` (e.g. `xai.voicetypex`) | API key mirror |
 
-### Drei Wege, das aufzuräumen
+### Three ways to clean this up
 
-**1. In der App — vor dem Uninstall:**
-*Einstellungen → Gefahrenzone* bietet drei Reset-Stufen
-(API-Keys, Wayland-Token, Werksreset). Modelle bleiben dabei
-unangetastet — separates Cache-Management in derselben Settings-Seite.
+**1. In the app — before uninstalling:**
+*Settings → Danger Zone* offers three reset levels
+(API keys, Wayland token, factory reset). Models stay untouched
+in the process — separate cache management on the same settings page.
 
-**2. Cleanup-Skript — nach dem Uninstall:**
+**2. Cleanup script — after uninstalling:**
 
 Linux/macOS:
 ```bash
 bash scripts/uninstall-cleanup.sh
 ```
 
-Windows (PowerShell, *nicht* als Admin):
+Windows (PowerShell, *not* as Admin):
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\uninstall-cleanup.ps1
 ```
 
-Beide Skripte sind interaktiv. Sie räumen User-Daten, OS-Keychain-
-Einträge und Autostart-Eintrag weg, jeweils mit separater
-Bestätigung. Voraussetzung auf Linux ist optional `libsecret-tools`
-(Paket `libsecret-tools` auf Debian/Ubuntu) für die Keyring-
-Löschung; ohne das gibt das Skript eine Anleitung für seahorse /
-kwalletmanager aus.
+Both scripts are interactive. They clean away user data, OS keychain
+entries and the autostart entry, each with a separate confirmation.
+The prerequisite on Linux is the optional `libsecret-tools` (package
+`libsecret-tools` on Debian/Ubuntu) for the keyring deletion; without
+it the script prints instructions for seahorse / kwalletmanager.
 
-**3. Manuell — Spuren, die kein Skript anfasst:**
+**3. Manually — traces no script touches:**
 
-- **Wayland-Portal-Permissions** (RemoteDesktop / GlobalShortcuts):
-  - KDE Plasma 6: *System-Settings → Apps → Anwendungsberechtigungen
-    → „Tastendrücke senden"* → VoiceTypeX entfernen.
-    Analog für *„Globale Verknüpfungen"*.
+- **Wayland portal permissions** (RemoteDesktop / GlobalShortcuts):
+  - KDE Plasma 6: *System Settings → Apps → Application Permissions
+    → "Send keystrokes"* → remove VoiceTypeX.
+    Same for *"Global Shortcuts"*.
   - GNOME: `gsettings list-recursively | grep desktop-portal`
-    bzw. dconf-editor unter `/org/gnome/desktop-portal-permissions/`.
-- **WebView2-State** (Windows): `%LocalAppData%\de.kevin-stenzel.
-  voicetypex\EBWebView\` manuell löschen.
-- **NSIS-Uninstaller-Eintrag** (Windows): über *Win+R → appwiz.cpl*.
+    or dconf-editor under `/org/gnome/desktop-portal-permissions/`.
+- **WebView2 state** (Windows): delete `%LocalAppData%\de.kevin-stenzel.
+  voicetypex\EBWebView\` manually.
+- **NSIS uninstaller entry** (Windows): via *Win+R → appwiz.cpl*.
 
 ## CI
 
-GitHub Actions baut auf jedem Push/PR (`.github/workflows/ci.yml`):
+GitHub Actions builds on every push/PR (`.github/workflows/ci.yml`):
 - Linux (ubuntu-24.04) — `cargo fmt + clippy + test`, `pnpm lint + build`
 - Windows (windows-latest) — `cargo build + test`, `pnpm build` (embedded
-  llama-cpp-2 ausgebaut, daher voller Link statt nur `cargo check`)
-- Supply-Chain-Audit (`cargo audit`, `pnpm audit`)
+  llama-cpp-2 disabled, hence a full link instead of just `cargo check`)
+- Supply-chain audit (`cargo audit`, `pnpm audit`)
 
-Auf Tags `v*` baut `release.yml` via `tauri-action` für beide
-Plattformen die Bundle-Artefakte (deb/rpm/AppImage/nsis), signiert die
-Updater-Artefakte und legt ein GitHub-Release (Draft) mit Assets +
-`latest.json` an.
+On `v*` tags, `release.yml` builds the bundle artifacts
+(deb/rpm/AppImage/nsis) for both platforms via `tauri-action`, signs
+the updater artifacts and creates a GitHub release (draft) with assets +
+`latest.json`.
 
-> Der native Vulkan-GPU-Build auf den gehosteten Runnern (whisper.cpp /
-> llama.cpp) muss beim ersten realen CI-Lauf validiert werden — die
-> gepinnte Vulkan-SDK-Version ist die Schlüsselvariable.
+> The native Vulkan GPU build on the hosted runners (whisper.cpp /
+> llama.cpp) must be validated on the first real CI run — the pinned
+> Vulkan SDK version is the key variable.
