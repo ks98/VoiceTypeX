@@ -133,8 +133,11 @@ Nutzer bekommen sie nicht angeboten.
 
 ## Plattform-Status
 
-- **Linux** (deb / rpm / AppImage): vollständig im Release, mit
-  Auto-Updater (AppImage).
+- **Linux** (deb / rpm / AppImage): im Release. Der AppImage-Build wurde
+  gerade (per `NO_STRIP=true`) repariert — Hintergrund in
+  [#2](https://github.com/ks98/voicetypex/issues/2). Der In-App-Auto-Updater
+  (AppImage) ist noch **deaktiviert** (`uploadUpdaterJson: false`), bis der
+  `AppImage Validate`-Workflow ein startendes AppImage bestätigt.
 - **Windows** (NSIS): **zurückgestellt** — siehe
   [#1](https://github.com/ks98/voicetypex/issues/1). Der gesamte
   Vulkan-Build kompiliert bereits; nur das Linken der zwei ggml-Kopien

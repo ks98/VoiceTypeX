@@ -52,9 +52,13 @@ jobs:
           # Setzt eine glibc-2.39-Untergrenze (deckt sich mit dem
           # README-Support Plasma 6 / GNOME 46+). Ergibt deb/rpm/AppImage.
           - platform: ubuntu-24.04
-            # AppImage uebersprungen: linuxdeploy laeuft in CI nicht
-            # (ks98/voicetypex#2, tauri#14796). Nur deb + rpm.
-            args: "--bundles deb,rpm"
+            # AppImage wieder aktiv. Der fruehere CI-Fehler war NICHT FUSE,
+            # sondern linuxdeploys gebuendeltes strip (binutils 2.35), das an
+            # den .relr.dyn-Sektionen moderner System-Libs (glibc >=2.36)
+            # stirbt ("unknown type [0x13]"). NO_STRIP=true (Build-Step unten)
+            # ueberspringt den strip-Pass; --verbose zeigt linuxdeploys sonst
+            # verschluckten stderr. (ks98/voicetypex#2, tauri#14796)
+            args: "--bundles deb,rpm,appimage --verbose"
           # Windows ist vorerst NICHT im Release: whisper.cpp + llama.cpp
           # buendeln je ihr eigenes ggml -> LNK2005-Symbolkollision beim
           # Linken auf MSVC. Tracking: ks98/voicetypex#1. Der gesamte
@@ -108,12 +112,10 @@ jobs:
             libasound2-dev libxdo-dev libudev-dev \
             libxcb1-dev libxcb-xtest0-dev libxcb-xfixes0-dev \
             libdbus-1-dev libclang-dev patchelf
-      # libfuse2 fuer das AppImage-Bundling: linuxdeploy ist selbst ein
-      # AppImage und braucht FUSE2 zum Mounten. ubuntu-24.04 liefert nur
-      # libfuse3 -> libfuse2t64 nachinstallieren (Fallback: libfuse2).
-      - name: Install FUSE2 (AppImage bundling)
-        if: matrix.platform == 'ubuntu-24.04'
-        run: sudo apt-get install -y libfuse2t64 || sudo apt-get install -y libfuse2
+      # Kein FUSE2-Step noetig: der tauri-bundler ruft linuxdeploy ohnehin
+      # mit --appimage-extract-and-run + APPIMAGE_EXTRACT_AND_RUN=1 auf,
+      # mountet also nichts. Der frueher hier installierte libfuse2t64 war
+      # ein No-Op (der echte AppImage-Fix ist NO_STRIP, s. Build-Step).
 
       # glslc + Vulkan-Header fuer whisper.cpp/llama.cpp. Version PINNEN —
       # ein ungepinntes "latest" hat shaderc-2025.x-Regressionen, die den
@@ -156,6 +158,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # linuxdeploys gebuendeltes strip (binutils 2.35) bricht an den
+          # .relr.dyn-Sektionen moderner System-Libs -> strip-Pass
+          # ueberspringen. Wird von linuxdeploy gelesen (NICHT von Tauri) und
+          # kann NICHT in tauri.conf.json stehen. -> ks98/voicetypex#2
+          NO_STRIP: "true"
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "VoiceTypeX ${{ github.ref_name }}"
@@ -167,7 +174,11 @@ jobs:
           # ueberspringt sie, stabile Nutzer bekommen sie nicht angeboten.
           prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') }}
           # Wir bauen NSIS (nicht WiX) auf Windows -> NSIS in latest.json.
-          # Keine Updater-latest.json: ohne AppImage gibt es auf Linux kein
-          # Updater-Ziel (deb/rpm self-updaten nicht). -> ks98/voicetypex#2
+          # latest.json noch NICHT hochladen: der AppImage-Build ist gerade
+          # erst (per NO_STRIP) repariert und noch nicht auf Lauffaehigkeit
+          # validiert (White-Screen-Risiko). Scharfschalten, sobald der
+          # appimage-validate-Workflow ein startendes AppImage bestaetigt.
+          # (deb/rpm koennten mit tauri-plugin-updater 2.10.1 ebenfalls
+          # self-updaten — separater Pfad.) -> ks98/voicetypex#2
           uploadUpdaterJson: false
           args: ${{ matrix.args }}
