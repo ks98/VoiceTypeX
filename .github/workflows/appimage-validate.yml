@@ -1,0 +1,85 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# TEMPORAERER Validierungs-Workflow fuer ks98/voicetypex#2.
+#
+# Baut NUR das Linux-AppImage (mit NO_STRIP=true + --verbose) auf
+# ubuntu-24.04 und laedt es als Artefakt hoch — OHNE ein Release anzulegen.
+# Zweck:
+#   1. bestaetigen, dass NO_STRIP das linuxdeploy-strip-Problem (.relr.dyn,
+#      "unknown type [0x13]") loest und der AppImage-Build durchlaeuft;
+#   2. das gebaute AppImage zum lokalen Start-/White-Screen-Smoke-Test
+#      bereitstellen, bevor der In-App-Updater (uploadUpdaterJson) wieder
+#      scharfgeschaltet wird.
+#
+# Laeuft automatisch bei Push auf den fix-Branch (siehe push-Trigger) und ist
+# zusaetzlich manuell ausloesbar, sobald die Datei auf main liegt. Nach
+# erfolgreicher Validierung + Updater-Reaktivierung wieder entfernen.
+
+name: AppImage Validate (issue #2)
+
+on:
+  # workflow_dispatch greift erst, wenn die Datei auf dem Default-Branch
+  # liegt (GitHub-Limitation: HTTP 404 sonst). Damit die Validierung schon
+  # auf diesem Feature-Branch laeuft, zusaetzlich ein branch-scoped
+  # push-Trigger. Beide nach dem Merge/der Validierung entfernen.
+  workflow_dispatch:
+  push:
+    branches: [fix/appimage-ci-bundling]
+
+permissions:
+  contents: read
+
+jobs:
+  appimage:
+    name: Build AppImage (validation, no release)
+    runs-on: ubuntu-24.04
+    env:
+      # linuxdeploys gebuendeltes strip (binutils 2.35) bricht an den
+      # .relr.dyn-Sektionen moderner System-Libs -> strip-Pass ueberspringen.
+      NO_STRIP: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      # Identische System-Deps wie im Release-Build (Tauri + Vulkan-GPU-Build).
+      - name: Install Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libvulkan-dev glslc spirv-headers cmake clang \
+            libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev \
+            libayatana-appindicator3-dev librsvg2-dev \
+            libasound2-dev libxdo-dev libudev-dev \
+            libxcb1-dev libxcb-xtest0-dev libxcb-xfixes0-dev \
+            libdbus-1-dev libclang-dev patchelf
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      # tauri build fuehrt beforeBuildCommand (pnpm build, inkl. i18n-Gate)
+      # und beforeBundleCommand (bundle-libs.mjs) selbst aus. --verbose macht
+      # linuxdeploys sonst verschluckten stderr sichtbar. createUpdaterArtifacts
+      # (tauri.conf.json) signiert das AppImage -> Signing-Key noetig, damit der
+      # Build nicht abbricht; validiert zugleich die .sig-Updater-Artefakte.
+      - name: Build AppImage (NO_STRIP, verbose)
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: pnpm tauri build --bundles appimage --verbose
+
+      - name: Upload AppImage + updater artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: voicetypex-appimage
+          if-no-files-found: error
+          path: src-tauri/target/release/bundle/appimage/
