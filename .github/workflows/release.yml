@@ -163,6 +163,11 @@ jobs:
           # ueberspringen. Wird von linuxdeploy gelesen (NICHT von Tauri) und
           # kann NICHT in tauri.conf.json stehen. -> ks98/voicetypex#2
           NO_STRIP: "true"
+          # linuxdeploy findet die NEEDED-Libs libllama.so.0/libggml*.so nicht
+          # (Tauri-Resource resources/lib, kein Standard-Linker-Pfad) -> Pfad
+          # ergaenzen, damit es sie aufloest + nach usr/lib deployed.
+          # -> ks98/voicetypex#2
+          LD_LIBRARY_PATH: ${{ github.workspace }}/src-tauri/resources/lib
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "VoiceTypeX ${{ github.ref_name }}"
