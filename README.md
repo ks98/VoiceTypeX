@@ -212,15 +212,20 @@ Portal-Permission, WebView2-Cache, …) stehen in
 
 ## Beta-Status & Updates
 
-- **Kein Auto-Updater im Beta.** Updates erfordern manuelles Re-Download
-  vom GitHub-Release. Plan für 1.0: signierter Auto-Updater via
-  `tauri-plugin-updater`. **Konsequenz für die Beta**: wenn ein
-  Sicherheitspatch erscheint, gibt es keine automatische Aktualisierung
-  — bitte abonniere das GitHub-Repo, um Release-Tags zu beobachten.
-- **Beta-Bundles sind unsigniert.** AppImage, .deb, .rpm und das
-  Windows-NSIS-Installer haben keine Code-Signatur. Distribution
-  ausschließlich über die offiziellen GitHub-Releases — bitte nicht
-  über Drittquellen oder Mirror beziehen.
+- **Auto-Updater (Windows + AppImage).** VoiceTypeX prüft auf Wunsch
+  auf neue Versionen (*Einstellungen → Diagnose → Updates*) und
+  installiert sie per Ein-Klick. Die Update-Artefakte sind mit einem
+  minisign-/Ed25519-Schlüssel signiert; der Updater verweigert
+  unsignierte oder manipulierte Pakete. Self-Update gilt für den
+  **Windows-NSIS-Installer** und das **Linux-AppImage**; **`.deb`/`.rpm`**
+  aktualisierst du über deinen **Paketmanager** bzw. per Neu-Download.
+  Der Download startet erst auf Klick (das Bundle ist groß).
+- **Windows-Installer (noch) nicht Authenticode-signiert.** Beim ersten
+  Start zeigt SmartScreen „Unbekannter Herausgeber" → *Weitere
+  Informationen → Trotzdem ausführen*. Das ist unabhängig von der
+  minisign-Updater-Signatur. Distribution ausschließlich über die
+  offiziellen GitHub-Releases — bitte nicht über Drittquellen oder
+  Mirror beziehen.
 - **Linux-Voraussetzung für Encryption-at-rest:** libsecret
   (gnome-keyring) oder kwallet muss installiert sein. Headless-/
   Server-Setups laufen im Plaintext-Fallback mit deutlicher UI-Warning.

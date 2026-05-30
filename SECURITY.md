@@ -140,10 +140,16 @@ per `fs:scope` auf die Deny-Liste. Die Window-Allowlist
 
 ## Update Path
 
-Beta-Releases haben **keinen** Auto-Updater. Sicherheitsupdates
-erfordern manuelles Re-Download vom GitHub-Releases-Tab. Geplant fuer
-1.0: signierter Auto-Updater via `tauri-plugin-updater` mit
-GPG-signierten Release-Bundles.
+VoiceTypeX hat einen **signierten Auto-Updater** (*Einstellungen →
+Diagnose → Updates*) fuer den **Windows-NSIS-Installer** und das
+**Linux-AppImage**: Update-Artefakte werden mit einem minisign-/
+Ed25519-Schluessel signiert, und der Updater verifiziert die Signatur
+gegen den in der App eingebetteten Public Key, bevor er installiert.
+**`.deb`/`.rpm`** haben keinen In-App-Updater — sie werden ueber den
+Paketmanager bzw. per Neu-Download vom GitHub-Releases-Tab aktualisiert.
+Der **Windows-Installer ist noch nicht Authenticode-signiert**
+(SmartScreen-Hinweis beim ersten Start); das betrifft nur den
+Installer-Download, nicht die Updater-Integritaet.
 
 ## Audit-Stand
 
