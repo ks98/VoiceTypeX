@@ -6,6 +6,9 @@ use crate::core::error::Result;
 use async_trait::async_trait;
 
 pub mod cloud;
+// Embedded LLM (llama-cpp-2) is Linux/macOS-only — it collides with
+// whisper's ggml at link time on Windows/MSVC (issue #1).
+#[cfg(not(target_os = "windows"))]
 pub mod embedded;
 pub mod local;
 
