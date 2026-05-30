@@ -20,9 +20,14 @@ und die bekannten Grenzen der aktuellen Beta-Version.
   SHA-256-gepinnte Modell-Downloads, und Filterung von Provider-
   Response-Bodies vor dem User-sichtbaren Log/UI.
 - **Versehentliches Loggen sensibler Daten** durch zukuenftige Code-
-  Aenderungen. Adressiert via `LogRingBuffer`, der nur Status-Codes,
-  Provider-Namen und Dauer-Metriken aufzeichnet — keine Audio-Bytes,
-  Transkripte, LLM-Antworten oder Header.
+  Aenderungen. Der `LogRingBuffer` zeichnet die `tracing`-Events
+  **ungefiltert** auf — er erzwingt also keine Redaction. Dass keine
+  Audio-Bytes, Transkripte, LLM-Antworten oder API-Keys im
+  user-sichtbaren Logs-Tab landen, ist heute eine **Konvention** des
+  Backend-Codes (die Provider-Clients loggen nur Status-Codes,
+  Provider-Namen und Dauer-Metriken), nicht eine technisch erzwungene
+  Garantie. Eine feldbasierte Redaction im `StringVisitor` ist als
+  Haerte-Schritt vorgemerkt.
 - **XSS-Eskalation in einem Webview** (z.B. ueber einen zukuenftigen
   Markdown-Renderer im Logs-Tab). Adressiert via Content-Security-
   Policy mit `script-src 'self'` und expliziter `connect-src`-
@@ -113,10 +118,18 @@ styles). `script-src` ohne `unsafe-inline`, kein eval.
 
 ## Capabilities (Tauri Allowlist)
 
-Aktuell liberal gesetzt (`fs:default`, `dialog:default` etc.) — die
-zweite Haerte-Phase reduziert auf konkrete `allow-*`-Permissions vor
-1.0. Die Window-Allowlist `["main", "overlay", "menu"]` ist explizit
-und vollstaendig.
+Die `default`-Capability nutzt die `*:default`-Permission-Sets der
+Plugins. Diese sind **enger, als der Begriff „liberal" vermuten
+laesst**: `fs:default` etwa gewaehrt in `tauri-plugin-fs` 2.5.x nur
+**lesenden** Zugriff auf die App-Verzeichnisse (AppConfig/AppData),
+keinen Schreibzugriff und keinen Zugriff ausserhalb. Verbleibendes
+Restrisiko: `secrets.json` liegt in genau diesem App-Config-Verzeichnis
+und ist damit fuer einen Webview-Kontext prinzipiell lesbar — bei
+aktiver Encryption-at-rest aber nur als Chiffrat (auf Linux ohne
+Keyring bzw. macOS als Klartext). Die zweite Haerte-Phase vor 1.0
+reduziert auf konkrete `allow-*`-Permissions und setzt `secrets.json`
+per `fs:scope` auf die Deny-Liste. Die Window-Allowlist
+`["main", "overlay", "menu"]` ist explizit und vollstaendig.
 
 ## Bug Reports
 
