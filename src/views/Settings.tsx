@@ -10,6 +10,7 @@ import Loading from "../components/Loading";
 import ApiKeysSection from "../components/ApiKeysSection";
 import TestTranscriptionSection from "../components/TestTranscriptionSection";
 import AutoPasteTestSection from "../components/AutoPasteTestSection";
+import UpdateSection from "../components/UpdateSection";
 import { useSettingsStore } from "../store";
 import {
   ipcCleanPartialDownloads,
@@ -505,6 +506,7 @@ export default function Settings(): JSX.Element {
             id="diagnostics-heading"
             title={t("settings.section.diagnostics")}
           />
+          <UpdateSection />
           <SetupAssistantRetriggerField
             onTrigger={() => void update({ onboarding_done: false })}
           />

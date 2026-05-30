@@ -475,5 +475,18 @@
   "settings.section.language": "Lingua",
   "settings.subnav.language": "Lingua",
   "settings.language.label": "Lingua dell'interfaccia",
-  "settings.language.hint": "Cambia immediatamente la lingua dell'interfaccia. Il menu tray e i nomi delle modalità predefinite seguono al prossimo riavvio."
+  "settings.language.hint": "Cambia immediatamente la lingua dell'interfaccia. Il menu tray e i nomi delle modalità predefinite seguono al prossimo riavvio.",
+
+  "settings.update.label": "Aggiornamenti",
+  "settings.update.hint": "Cerca una nuova versione. L'aggiornamento automatico vale per l'installer Windows e l'AppImage Linux; per .deb/.rpm usa il gestore pacchetti o riscarica.",
+  "settings.update.current": "Versione installata: {version}",
+  "settings.update.btn.check": "Cerca aggiornamenti",
+  "settings.update.btn.checking": "Ricerca…",
+  "settings.update.uptodate": "✓ Hai l'ultima versione.",
+  "settings.update.available": "La versione {version} è disponibile.",
+  "settings.update.btn.install": "Scarica e installa",
+  "settings.update.downloading": "Download… {current} di {total}",
+  "settings.update.downloading_indeterminate": "Download… {current}",
+  "settings.update.installing": "Installazione — l'app si riavvierà…",
+  "settings.update.error": "Aggiornamento non riuscito: {message}"
 }

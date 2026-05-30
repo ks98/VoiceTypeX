@@ -475,5 +475,18 @@
   "settings.section.language": "Sprache",
   "settings.subnav.language": "Sprache",
   "settings.language.label": "UI-Sprache",
-  "settings.language.hint": "Schaltet die Oberflächensprache sofort um. Tray-Menü und Default-Modi-Namen folgen beim nächsten App-Neustart."
+  "settings.language.hint": "Schaltet die Oberflächensprache sofort um. Tray-Menü und Default-Modi-Namen folgen beim nächsten App-Neustart.",
+
+  "settings.update.label": "Updates",
+  "settings.update.hint": "Auf neue Version prüfen. Auto-Update gilt für den Windows-Installer und das Linux-AppImage; .deb/.rpm aktualisierst du über deinen Paketmanager oder per Neu-Download.",
+  "settings.update.current": "Installierte Version: {version}",
+  "settings.update.btn.check": "Nach Updates suchen",
+  "settings.update.btn.checking": "Suche…",
+  "settings.update.uptodate": "✓ Du hast die neueste Version.",
+  "settings.update.available": "Version {version} ist verfügbar.",
+  "settings.update.btn.install": "Herunterladen & installieren",
+  "settings.update.downloading": "Lädt… {current} von {total}",
+  "settings.update.downloading_indeterminate": "Lädt… {current}",
+  "settings.update.installing": "Installiere — die App startet neu…",
+  "settings.update.error": "Update fehlgeschlagen: {message}"
 }

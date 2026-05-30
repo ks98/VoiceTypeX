@@ -475,5 +475,18 @@
   "settings.section.language": "Idioma",
   "settings.subnav.language": "Idioma",
   "settings.language.label": "Idioma de la UI",
-  "settings.language.hint": "Cambia el idioma de la interfaz inmediatamente. El menú de bandeja y los nombres de los modos por defecto siguen al próximo reinicio."
+  "settings.language.hint": "Cambia el idioma de la interfaz inmediatamente. El menú de bandeja y los nombres de los modos por defecto siguen al próximo reinicio.",
+
+  "settings.update.label": "Actualizaciones",
+  "settings.update.hint": "Buscar una nueva versión. La actualización automática se aplica al instalador de Windows y al AppImage de Linux; para .deb/.rpm, usa tu gestor de paquetes o vuelve a descargar.",
+  "settings.update.current": "Versión instalada: {version}",
+  "settings.update.btn.check": "Buscar actualizaciones",
+  "settings.update.btn.checking": "Buscando…",
+  "settings.update.uptodate": "✓ Tienes la última versión.",
+  "settings.update.available": "La versión {version} está disponible.",
+  "settings.update.btn.install": "Descargar e instalar",
+  "settings.update.downloading": "Descargando… {current} de {total}",
+  "settings.update.downloading_indeterminate": "Descargando… {current}",
+  "settings.update.installing": "Instalando — la aplicación se reiniciará…",
+  "settings.update.error": "Error en la actualización: {message}"
 }
