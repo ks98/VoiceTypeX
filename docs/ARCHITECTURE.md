@@ -27,13 +27,13 @@ Festgelegt — Alternativen werden nicht ohne Rücksprache eingeführt.
 | Secrets | File (`~/.config/.../secrets.json`, chmod 0600) als Source of Truth, OS-Keychain best-effort Mirror |
 | Audio-Cues | rodio |
 | Datei-Watch | notify (Mode-Hot-Reload) |
-| Repo & CI | GitLab (`.gitlab-ci.yml`) |
+| Repo & CI | GitHub (GitHub Actions) |
 
 **Tauri-Plugins (verwendet):** global-shortcut (X11/Windows), store,
-dialog, notification, os, fs, clipboard-manager, autostart.
+dialog, notification, os, fs, clipboard-manager, autostart, updater
+(Auto-Update für AppImage + Windows-NSIS), process (Relaunch nach Update).
 
-**Tauri-Plugins (bewusst nicht verwendet):** tauri-plugin-updater
-(kein Auto-Update geplant), tauri-plugin-shell.
+**Tauri-Plugins (bewusst nicht verwendet):** tauri-plugin-shell.
 
 Wire-Protokoll-Details der Cloud-Provider (Endpoints, Auth-Header,
 Multipart-Reihenfolge, Response-Parsing) sind in

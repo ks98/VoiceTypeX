@@ -468,14 +468,16 @@ kwalletmanager aus.
 
 ## CI
 
-`.gitlab-ci.yml` baut auf jedem Push:
-- Linux (Debian-Slim Container) — `cargo check + clippy + test`,
-  `pnpm lint + build`
-- Windows (saas-windows-medium-amd64) — `cargo check`, `pnpm build`
+GitHub Actions baut auf jedem Push/PR (`.github/workflows/ci.yml`):
+- Linux (ubuntu-24.04) — `cargo fmt + clippy + test`, `pnpm lint + build`
+- Windows (windows-latest) — `cargo check + test`, `pnpm build`
+- Supply-Chain-Audit (`cargo audit`, `pnpm audit`)
 
-Auf Tags `v*` zusätzlich `pnpm tauri build` für beide Plattformen mit
-Bundle-Artefakten (deb/AppImage/nsis).
+Auf Tags `v*` baut `release.yml` via `tauri-action` für beide
+Plattformen die Bundle-Artefakte (deb/rpm/AppImage/nsis), signiert die
+Updater-Artefakte und legt ein GitHub-Release (Draft) mit Assets +
+`latest.json` an.
 
-> Die CI-Konfiguration wurde in Phase 1 angelegt. Bei API-Drift (Tauri
-> 2.x Updates, neue System-Pakete) ist sie eventuell auf den letzten
-> Stand zu bringen — beim ersten realen Push prüfen.
+> Der native Vulkan-GPU-Build auf den gehosteten Runnern (whisper.cpp /
+> llama.cpp) muss beim ersten realen CI-Lauf validiert werden — die
+> gepinnte Vulkan-SDK-Version ist die Schlüsselvariable.
