@@ -52,7 +52,9 @@ jobs:
           # Setzt eine glibc-2.39-Untergrenze (deckt sich mit dem
           # README-Support Plasma 6 / GNOME 46+). Ergibt deb/rpm/AppImage.
           - platform: ubuntu-24.04
-            args: ""
+            # AppImage uebersprungen: linuxdeploy laeuft in CI nicht
+            # (ks98/voicetypex#2, tauri#14796). Nur deb + rpm.
+            args: "--bundles deb,rpm"
           # Windows ist vorerst NICHT im Release: whisper.cpp + llama.cpp
           # buendeln je ihr eigenes ggml -> LNK2005-Symbolkollision beim
           # Linken auf MSVC. Tracking: ks98/voicetypex#1. Der gesamte
@@ -165,5 +167,7 @@ jobs:
           # ueberspringt sie, stabile Nutzer bekommen sie nicht angeboten.
           prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') }}
           # Wir bauen NSIS (nicht WiX) auf Windows -> NSIS in latest.json.
-          updaterJsonPreferNsis: true
+          # Keine Updater-latest.json: ohne AppImage gibt es auf Linux kein
+          # Updater-Ziel (deb/rpm self-updaten nicht). -> ks98/voicetypex#2
+          uploadUpdaterJson: false
           args: ${{ matrix.args }}
