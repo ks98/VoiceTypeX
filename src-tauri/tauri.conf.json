@@ -7,7 +7,7 @@
     "devUrl": "http://localhost:1420",
     "beforeDevCommand": "pnpm dev",
     "beforeBuildCommand": "pnpm build",
-    "beforeBundleCommand": "node ../scripts/bundle-libs.mjs"
+    "beforeBundleCommand": "node scripts/bundle-libs.mjs"
   },
   "app": {
     "windows": [
