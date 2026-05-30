@@ -106,6 +106,12 @@ jobs:
             libasound2-dev libxdo-dev libudev-dev \
             libxcb1-dev libxcb-xtest0-dev libxcb-xfixes0-dev \
             libdbus-1-dev libclang-dev patchelf
+      # libfuse2 fuer das AppImage-Bundling: linuxdeploy ist selbst ein
+      # AppImage und braucht FUSE2 zum Mounten. ubuntu-24.04 liefert nur
+      # libfuse3 -> libfuse2t64 nachinstallieren (Fallback: libfuse2).
+      - name: Install FUSE2 (AppImage bundling)
+        if: matrix.platform == 'ubuntu-24.04'
+        run: sudo apt-get install -y libfuse2t64 || sudo apt-get install -y libfuse2
 
       # glslc + Vulkan-Header fuer whisper.cpp/llama.cpp. Version PINNEN —
       # ein ungepinntes "latest" hat shaderc-2025.x-Regressionen, die den
@@ -148,9 +154,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # linuxdeploy ist selbst ein AppImage und braucht FUSE — das fehlt
-          # auf ubuntu-24.04. Extract-and-run statt FUSE-Mount.
-          APPIMAGE_EXTRACT_AND_RUN: "1"
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "VoiceTypeX ${{ github.ref_name }}"
