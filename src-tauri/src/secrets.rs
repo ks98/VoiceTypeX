@@ -227,15 +227,15 @@ fn dpapi_encrypt(plaintext: &[u8]) -> Result<String> {
     use windows::Win32::Foundation::LocalFree;
     use windows::Win32::Foundation::HLOCAL;
     use windows::Win32::Security::Cryptography::{
-        CryptProtectData, CRYPTOAPI_BLOB, CRYPTPROTECT_UI_FORBIDDEN,
+        CryptProtectData, CRYPT_INTEGER_BLOB, CRYPTPROTECT_UI_FORBIDDEN,
     };
 
     let mut in_bytes = plaintext.to_vec();
-    let in_blob = CRYPTOAPI_BLOB {
+    let in_blob = CRYPT_INTEGER_BLOB {
         cbData: in_bytes.len() as u32,
         pbData: in_bytes.as_mut_ptr(),
     };
-    let mut out_blob = CRYPTOAPI_BLOB::default();
+    let mut out_blob = CRYPT_INTEGER_BLOB::default();
 
     unsafe {
         CryptProtectData(
@@ -263,17 +263,17 @@ fn dpapi_decrypt(ct_b64: &str) -> Result<Vec<u8>> {
     use windows::Win32::Foundation::LocalFree;
     use windows::Win32::Foundation::HLOCAL;
     use windows::Win32::Security::Cryptography::{
-        CryptUnprotectData, CRYPTOAPI_BLOB, CRYPTPROTECT_UI_FORBIDDEN,
+        CryptUnprotectData, CRYPT_INTEGER_BLOB, CRYPTPROTECT_UI_FORBIDDEN,
     };
 
     let mut ct = B64
         .decode(ct_b64.as_bytes())
         .map_err(|e| VoiceTypeError::Secrets(format!("DPAPI decode: {e}")))?;
-    let in_blob = CRYPTOAPI_BLOB {
+    let in_blob = CRYPT_INTEGER_BLOB {
         cbData: ct.len() as u32,
         pbData: ct.as_mut_ptr(),
     };
-    let mut out_blob = CRYPTOAPI_BLOB::default();
+    let mut out_blob = CRYPT_INTEGER_BLOB::default();
 
     unsafe {
         CryptUnprotectData(
