@@ -133,7 +133,7 @@ per `fs:scope` auf die Deny-Liste. Die Window-Allowlist
 
 ## Bug Reports
 
-- **Standard-Bugs**: [GitLab Issues](https://gitlab.com/kevin-stenzel/voicetypex/issues)
+- **Standard-Bugs**: [GitHub Issues](https://github.com/ks98/voicetypex/issues)
 - **Security-Bugs**: bitte direkt an `mail@kevin-stenzel.de`,
   mit Subject-Prefix `[VoiceTypeX-Security]`. Keine
   oeffentlichen Issues fuer unfixierte Vulns.
@@ -141,7 +141,7 @@ per `fs:scope` auf die Deny-Liste. Die Window-Allowlist
 ## Update Path
 
 Beta-Releases haben **keinen** Auto-Updater. Sicherheitsupdates
-erfordern manuelles Re-Download vom GitLab-Release-Tab. Geplant fuer
+erfordern manuelles Re-Download vom GitHub-Releases-Tab. Geplant fuer
 1.0: signierter Auto-Updater via `tauri-plugin-updater` mit
 GPG-signierten Release-Bundles.
 

@@ -105,7 +105,7 @@ Menü-Hotkey*.
   fällt der Storage auf Plaintext zurück + zeigt eine rote Banner-
   Warnung im API-Keys-Tab. macOS bleibt im Beta-Scope auf Plaintext
   (Security.framework-Integration nach 1.0).
-- **Repo & CI:** GitLab (`.gitlab-ci.yml`)
+- **Repo & CI:** GitHub (GitHub Actions)
 
 Architektur-Tiefe: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 Konventionen + Mindset: [`CLAUDE.md`](CLAUDE.md).
@@ -213,18 +213,18 @@ Portal-Permission, WebView2-Cache, …) stehen in
 ## Beta-Status & Updates
 
 - **Kein Auto-Updater im Beta.** Updates erfordern manuelles Re-Download
-  vom GitLab-Release. Plan für 1.0: signierter Auto-Updater via
+  vom GitHub-Release. Plan für 1.0: signierter Auto-Updater via
   `tauri-plugin-updater`. **Konsequenz für die Beta**: wenn ein
   Sicherheitspatch erscheint, gibt es keine automatische Aktualisierung
-  — bitte abonniere das GitLab-Repo, um Release-Tags zu beobachten.
+  — bitte abonniere das GitHub-Repo, um Release-Tags zu beobachten.
 - **Beta-Bundles sind unsigniert.** AppImage, .deb, .rpm und das
   Windows-NSIS-Installer haben keine Code-Signatur. Distribution
-  ausschließlich über die offiziellen GitLab-Releases — bitte nicht
+  ausschließlich über die offiziellen GitHub-Releases — bitte nicht
   über Drittquellen oder Mirror beziehen.
 - **Linux-Voraussetzung für Encryption-at-rest:** libsecret
   (gnome-keyring) oder kwallet muss installiert sein. Headless-/
   Server-Setups laufen im Plaintext-Fallback mit deutlicher UI-Warning.
-- **Bug-Reports:** [GitLab Issues](https://gitlab.com/kevin-stenzel/voicetypex/issues)
+- **Bug-Reports:** [GitHub Issues](https://github.com/ks98/voicetypex/issues)
   inklusive `~/.config/de.kevin-stenzel.voicetypex/voicetypex.log`
   (falls aktiviert) und der App-Version aus *Einstellungen → Diagnose*.
 

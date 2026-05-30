@@ -116,7 +116,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDhCMTVDRjEwRENBNUVCClJXVHJwZHdRenhXTEFMSmF1THAzSndqNm1xSVJPanlocG9tR2svWUVXSDZKaW1HbDQ2YWRoSy9sCg==",
       "endpoints": [
-        "https://git.nevondo.com/ks98/voicetypex/-/releases/permalink/latest/downloads/latest.json"
+        "https://github.com/ks98/voicetypex/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"
