@@ -1,0 +1,128 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Leichtgewichtige Checks bei jedem Push auf main und jedem Pull Request:
+# Lint, Test, Build-Check und Supply-Chain-Audit. Der schwere
+# Bundle-Build laeuft NUR auf Tags (siehe release.yml).
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Laufende PR-Checks abbrechen, wenn ein neuer Commit gepusht wird.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-test-linux:
+    name: Lint + Test (Linux)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libvulkan-dev glslc spirv-headers cmake clang \
+            libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev \
+            libayatana-appindicator3-dev librsvg2-dev \
+            libasound2-dev libxdo-dev libudev-dev \
+            libxcb1-dev libxcb-xtest0-dev libxcb-xfixes0-dev \
+            libdbus-1-dev libclang-dev patchelf
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+      - name: cargo fmt
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+      - name: cargo clippy
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+      - name: eslint
+        run: pnpm lint
+      - name: prettier
+        run: pnpm format:check
+      - name: cargo test
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib
+      - name: vitest
+        run: pnpm test
+
+  build-windows:
+    name: Build-Check (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Vulkan SDK
+        uses: jakoch/install-vulkan-sdk-action@v1
+        with:
+          vulkan_version: 1.3.296.0
+          install_runtime: false
+          cache: true
+          stripdown: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+      - name: pnpm build (frontend + i18n gate)
+        run: pnpm build
+      - name: cargo check
+        run: cargo check --manifest-path src-tauri/Cargo.toml
+      # Plattform-spezifische Bugs (Pfad-Handling, keyring-Windows-Backend,
+      # DPAPI) fallen sonst erst beim Nutzer auf.
+      - name: cargo test
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib
+
+  audit:
+    name: Supply-Chain-Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: cargo-audit
+        run: |
+          cargo install --locked cargo-audit
+          # --deny warnings macht auch yanked-Crates und Informational-
+          # Advisories zu Fehlern. Die --ignore-Liste suppressed bekannte
+          # transitive Unmaintained-Advisories aus dem Tauri-/GTK-Stack,
+          # die wir nicht selbst fixen koennen. Bei jedem Tauri-/GTK-Update
+          # pruefen, ob Eintraege entfallen.
+          cargo audit --file src-tauri/Cargo.lock --deny warnings \
+            --ignore RUSTSEC-2024-0370 --ignore RUSTSEC-2024-0411 \
+            --ignore RUSTSEC-2024-0412 --ignore RUSTSEC-2024-0413 \
+            --ignore RUSTSEC-2024-0414 --ignore RUSTSEC-2024-0415 \
+            --ignore RUSTSEC-2024-0416 --ignore RUSTSEC-2024-0417 \
+            --ignore RUSTSEC-2024-0418 --ignore RUSTSEC-2024-0419 \
+            --ignore RUSTSEC-2024-0420 --ignore RUSTSEC-2024-0429 \
+            --ignore RUSTSEC-2025-0075 --ignore RUSTSEC-2025-0080 \
+            --ignore RUSTSEC-2025-0081 --ignore RUSTSEC-2025-0098 \
+            --ignore RUSTSEC-2025-0100
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: pnpm audit
+        run: pnpm audit --audit-level=high

@@ -1,0 +1,129 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Release-Pipeline. Wird durch einen Tag `v*` ausgeloest (per
+# `pnpm release <bump>` erzeugt -> `git push --follow-tags`).
+#
+# Ablauf: git-cliff erzeugt die Release-Notes -> tauri-action baut die
+# Bundles (Linux: deb/rpm/AppImage, Windows: NSIS), signiert die
+# Updater-Artefakte mit dem minisign-Key, legt ein GitHub-Release als
+# DRAFT an (Review-Gate) und laedt Assets + latest.json hoch.
+# Veroeffentlichen ist ein bewusster manueller Klick ("Publish release"
+# oder `gh release edit <tag> --draft=false`) — erst dann zeigt
+# /releases/latest/download/latest.json auf die neue Version und der
+# In-App-Updater bietet sie an.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # tauri-action: Release anlegen + Assets hochladen (GITHUB_TOKEN)
+
+jobs:
+  changelog:
+    name: Release-Notes (git-cliff)
+    runs-on: ubuntu-latest
+    outputs:
+      body: ${{ steps.git-cliff.outputs.content }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # git-cliff braucht volle Historie + Tags
+      - name: Generate release notes
+        id: git-cliff
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --latest --strip header
+
+  release:
+    name: Build + Release (${{ matrix.platform }})
+    needs: changelog
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux: ubuntu-24.04, weil glslc dort ein sauberes apt-Paket ist.
+          # Setzt eine glibc-2.39-Untergrenze (deckt sich mit dem
+          # README-Support Plasma 6 / GNOME 46+). Ergibt deb/rpm/AppImage.
+          - platform: ubuntu-24.04
+            args: ""
+          # Windows: NSIS-Installer.
+          - platform: windows-latest
+            args: ""
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # --- System-Abhaengigkeiten (Tauri + Vulkan-GPU-Build) -------------
+      - name: Install Linux system dependencies
+        if: matrix.platform == 'ubuntu-24.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libvulkan-dev glslc spirv-headers cmake clang \
+            libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev \
+            libayatana-appindicator3-dev librsvg2-dev \
+            libasound2-dev libxdo-dev libudev-dev \
+            libxcb1-dev libxcb-xtest0-dev libxcb-xfixes0-dev \
+            libdbus-1-dev libclang-dev patchelf
+
+      # glslc + Vulkan-Header fuer whisper.cpp/llama.cpp. Version PINNEN —
+      # ein ungepinntes "latest" hat shaderc-2025.x-Regressionen, die den
+      # ggml-Vulkan-Shader-Build brechen. Beim ersten CI-Lauf gegen
+      # whisper-rs 0.16 / llama-cpp-2 0.1.146 validieren, dann ggf. bumpen.
+      - name: Install Vulkan SDK (Windows)
+        if: matrix.platform == 'windows-latest'
+        uses: jakoch/install-vulkan-sdk-action@v1
+        with:
+          vulkan_version: 1.3.296.0
+          install_runtime: false
+          cache: true
+          stripdown: false
+
+      # --- Toolchains ----------------------------------------------------
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      # --- Build + Release ----------------------------------------------
+      # tauri-action ruft `tauri build`, das beforeBuildCommand (pnpm build,
+      # inkl. i18n:check) und beforeBundleCommand (bundle-libs.mjs, kopiert
+      # die GPU-Libs nach resources/lib) selbst ausfuehrt — KEINE separaten
+      # Build-Schritte noetig. Default-Features (gpu-vulkan); kein
+      # --all-features (das zoege embedded-cuda-dynamic rein, braucht CUDA).
+      - name: Build bundles + create release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "VoiceTypeX ${{ github.ref_name }}"
+          releaseBody: ${{ needs.changelog.outputs.body }}
+          # Draft = Review-Gate: Assets + latest.json laden hoch, werden aber
+          # erst beim manuellen Publish fuer den Updater sichtbar.
+          releaseDraft: true
+          # -rc/-beta-Tags als Prerelease markieren -> /releases/latest/
+          # ueberspringt sie, stabile Nutzer bekommen sie nicht angeboten.
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') }}
+          # Wir bauen NSIS (nicht WiX) auf Windows -> NSIS in latest.json.
+          updaterJsonPreferNsis: true
+          args: ${{ matrix.args }}
