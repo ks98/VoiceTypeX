@@ -153,6 +153,26 @@ the DT_RPATH + productName-path rpath above. If a future Tauri bump
 changes the install layout, re-check with `rpm -ql <pkg>` /
 `dpkg-deb -c <deb>` and update build.rs accordingly.
 
+**CPU ISA baseline (whisper.cpp / ggml) — avoid AVX-512 SIGILL.**
+`whisper-rs-sys` defaults to `GGML_NATIVE=ON` (`-march=native`), so a build on
+an AVX-512-capable CI runner bakes AVX-512 into whisper's *static* ggml and the
+app dies with `Ungültiger Maschinenbefehl` / "illegal instruction" (SIGILL) on
+consumer CPUs without AVX-512 — e.g. Intel Meteor Lake or any Alder-Lake+
+consumer part (AVX-512 fused off). The CI builds therefore pin a portable
+x86-64-v3 baseline via env vars that `whisper-rs-sys` forwards to ggml's CMake:
+`GGML_NATIVE=OFF GGML_AVX=ON GGML_AVX2=ON GGML_FMA=ON GGML_F16C=ON` (set in
+`release.yml` and `ci.yml`). These are **whisper-only**: `llama-cpp-sys-2`
+forwards only `CMAKE_*` and derives `GGML_NATIVE` from the Rust `target-cpu`,
+so it already builds portable and ignores these vars.
+
+Trade-off: the binary now *requires* AVX2 (Haswell 2013+ / Zen+); pre-AVX2 CPUs
+are unsupported. True runtime CPU dispatch (`GGML_CPU_ALL_VARIANTS`) needs a
+shared-lib ggml + `GGML_BACKEND_DL`, which conflicts with whisper-rs-sys's
+static `BUILD_SHARED_LIBS=OFF` — out of scope for now. NOTE: whisper-rs-sys has
+no `rerun-if-env-changed` for `GGML_*`, so the `Swatinem/rust-cache`
+`prefix-key` was bumped to force a clean rebuild; bump it again if you change
+the baseline.
+
 **BLAS_INCLUDE_DIRS (only for the `fast-cpu` feature):**
 When `fast-cpu` is active, `whisper-rs-sys` 0.15+ needs
 `BLAS_INCLUDE_DIRS` set explicitly. On Debian/Ubuntu the path is

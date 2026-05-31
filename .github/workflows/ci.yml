@@ -31,6 +31,16 @@ jobs:
   lint-test-linux:
     name: Lint + Test (Linux)
     runs-on: ubuntu-24.04
+    # Portable CPU baseline for whisper's static ggml (see release.yml /
+    # docs/PLATFORMS.md): without this, GGML_NATIVE=ON bakes AVX-512 into
+    # whisper -> SIGILL on consumer CPUs without AVX-512. whisper-only
+    # (llama-cpp-sys-2 ignores GGML_*). Quote so YAML keeps ON/OFF as strings.
+    env:
+      GGML_NATIVE: "OFF"
+      GGML_AVX: "ON"
+      GGML_AVX2: "ON"
+      GGML_FMA: "ON"
+      GGML_F16C: "ON"
     steps:
       - uses: actions/checkout@v4
       - name: Install Linux system dependencies
@@ -62,6 +72,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "./src-tauri -> target"
+          # Bumped so the GGML_* ISA baseline change actually rebuilds whisper
+          # (whisper-rs-sys has no rerun-if-env-changed for GGML_*).
+          prefix-key: "v1-ggml-x86-64-v3"
       - name: cargo fmt
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
       - name: cargo clippy
@@ -93,6 +106,14 @@ jobs:
       # Short target dir to avoid MSVC MAX_PATH (260): otherwise the nested
       # vulkan-shaders-gen build produces paths > 260 characters (C1083).
       CARGO_TARGET_DIR: C:\t
+      # Portable CPU baseline for whisper's static ggml (see release.yml /
+      # docs/PLATFORMS.md): avoid AVX-512 SIGILL on non-AVX-512 CPUs.
+      # whisper-only; ggml's CMake maps these to MSVC /arch:AVX2 etc.
+      GGML_NATIVE: "OFF"
+      GGML_AVX: "ON"
+      GGML_AVX2: "ON"
+      GGML_FMA: "ON"
+      GGML_F16C: "ON"
     steps:
       - uses: actions/checkout@v4
       - uses: ilammy/msvc-dev-cmd@v1
@@ -130,6 +151,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "./src-tauri -> target"
+          # Bumped so the GGML_* ISA baseline change actually rebuilds whisper
+          # (whisper-rs-sys has no rerun-if-env-changed for GGML_*).
+          prefix-key: "v1-ggml-x86-64-v3"
       - name: pnpm build (frontend + i18n gate)
         run: pnpm build
       # Windows links now: the embedded llama-cpp-2 is removed on Windows

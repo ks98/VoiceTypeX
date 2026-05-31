@@ -145,6 +145,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "./src-tauri -> target"
+          # whisper-rs-sys has no rerun-if-env-changed for GGML_*, so an
+          # env-only ISA change would NOT rebuild a cached native whisper.
+          # Bump this key whenever the GGML_* baseline above changes.
+          prefix-key: "v1-ggml-x86-64-v3"
 
       # --- Build + Release ----------------------------------------------
       # tauri-action calls `tauri build`, which runs the beforeBuildCommand
@@ -168,6 +172,19 @@ jobs:
           # the path so it resolves them + deploys them to usr/lib.
           # -> ks98/voicetypex#2
           LD_LIBRARY_PATH: ${{ github.workspace }}/src-tauri/resources/lib
+          # whisper-rs-sys defaults to GGML_NATIVE=ON (-march=native): on the
+          # AVX-512-capable CI runner that bakes AVX-512 into whisper's static
+          # ggml -> SIGILL ("illegal instruction") on consumer CPUs without
+          # AVX-512 (Intel Meteor Lake / any Alder Lake+ consumer part). Pin a
+          # portable x86-64-v3 baseline instead. These GGML_* vars are
+          # forwarded ONLY by whisper-rs-sys; llama-cpp-sys-2 ignores them (it
+          # forwards CMAKE_* only and sets GGML_NATIVE itself). Quote the
+          # values so YAML does not coerce ON/OFF to booleans.
+          GGML_NATIVE: "OFF"
+          GGML_AVX: "ON"
+          GGML_AVX2: "ON"
+          GGML_FMA: "ON"
+          GGML_F16C: "ON"
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "VoiceTypeX ${{ github.ref_name }}"
