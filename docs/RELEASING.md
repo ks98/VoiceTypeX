@@ -137,7 +137,7 @@ offered them.
 - **Linux** (deb / rpm / AppImage): in the release. The AppImage build was
   fixed via `NO_STRIP=true` — background in
   [#2](https://github.com/ks98/voicetypex/issues/2). The in-app
-  auto-updater (AppImage) is still **disabled** (`uploadUpdaterJson: false`)
+  auto-updater (AppImage) is still **disabled** (`includeUpdaterJson: false`)
   until the `AppImage Validate` workflow confirms a launching AppImage.
 - **Windows** (NSIS): **in the release** — STT (whisper.cpp + Vulkan) +
   Cloud/Ollama LLM. The embedded llama-cpp-2 has been removed on Windows

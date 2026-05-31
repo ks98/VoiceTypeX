@@ -185,5 +185,10 @@ jobs:
           # appimage-validate workflow confirms a launching AppImage.
           # (deb/rpm could also self-update with tauri-plugin-updater 2.10.1
           # — separate path.) -> ks98/voicetypex#2
-          uploadUpdaterJson: false
+          # Input name is `includeUpdaterJson` on tauri-action@v0; a prior
+          # `uploadUpdaterJson` was silently ignored (an unknown input ->
+          # latest.json got uploaded regardless of the intended guard). The
+          # dev branch renamed it back to `uploadUpdaterJson`, so pin the
+          # action version if you ever bump @v0.
+          includeUpdaterJson: false
           args: ${{ matrix.args }}

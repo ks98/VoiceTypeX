@@ -8,7 +8,7 @@
 #   1. confirm that NO_STRIP fixes the linuxdeploy strip problem (.relr.dyn,
 #      "unknown type [0x13]") and that the AppImage build completes;
 #   2. provide the built AppImage for the local startup/white-screen smoke test
-#      before the in-app updater (uploadUpdaterJson) is re-enabled.
+#      before the in-app updater (includeUpdaterJson) is re-enabled.
 #
 # Runs automatically on push to the fix branch (see push trigger) and is
 # additionally manually triggerable once the file is on main. Remove again
