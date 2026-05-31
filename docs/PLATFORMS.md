@@ -18,12 +18,18 @@ dialog on subsequent app starts.
 - KDE Plasma ≥ 6.1 (`xdg-desktop-portal-kde` with MR !223 + KWin MR !5496
   merged) **or** GNOME ≥ 46 (Mutter MR !2628 merged)
 
-**Wayland focus quirks** (KDE Plasma 6) are documented in
-[`CLAUDE.md`](../CLAUDE.md) §4.8 + §8. In short:
-- The main window starts hidden — otherwise it gets focused on the
-  hotkey trigger and steals focus from the target app.
+**Wayland focus quirks** (KDE Plasma 6). In short:
+- The main window starts hidden (`visible:false`) — otherwise it gets
+  focused on the hotkey trigger and steals focus from the target app.
 - The overlay window is explicitly `hide()`-ed before the libei inject
   (with an 80 ms pause) so that focus jumps back to the target app.
+- Consequence + workaround: because the main window is first mapped only
+  later (via the tray), its WM close (X) button is dead on Wayland until
+  the first `configure` event (tao 0.35.3, tauri#13440 — still open
+  upstream). Worked around in `src-tauri/src/lib.rs`: on Linux the window
+  is `show()`-n once at startup and `hide()`-n ~300 ms later, so GTK binds
+  the close affordance while the window stays hidden at hotkey time (brief
+  startup flash is the accepted cost). Drop once upstream ships a fix.
 
 ### X11
 
