@@ -109,10 +109,19 @@ and `libggml-base.so` as separate shared libs.
      copies the libs to `src-tauri/resources/lib/`.
   3. The `tauri.conf.json` entry `bundle.resources: ["resources/lib/*"]`
      packs them into the final bundle.
-  4. `src-tauri/build.rs` sets several rpath fallback entries
-     (`$ORIGIN`, `$ORIGIN/lib`, `$ORIGIN/../lib/voicetypex`,
-     `$ORIGIN/../lib`) — no matter where the Tauri bundler puts the
-     libs, the linker finds them.
+  4. `src-tauri/build.rs` sets the rpath so the dynamic linker finds the
+     libs at runtime. Two specifics (verified against a real .rpm
+     install, see below):
+       * deb/rpm install `bundle.resources` under `/usr/lib/<productName>/`,
+         i.e. `/usr/lib/VoiceTypeX/resources/lib/` — the verbatim
+         productName, NOT the binary name `voicetypex`. The primary rpath
+         entry is therefore `$ORIGIN/../lib/VoiceTypeX/resources/lib`;
+         `$ORIGIN/../lib` (AppImage) and `$ORIGIN` (portable/dev) follow as
+         fallbacks.
+       * The libs have no rpath of their own and depend on each other
+         transitively (llama -> ggml -> ggml-{cpu,vulkan,base}). Since
+         DT_RUNPATH is not inherited by transitive deps, build.rs passes
+         `-Wl,--disable-new-dtags` to emit DT_RPATH, which is.
 
 `src-tauri/resources/lib/` is gitignored except for `.gitkeep` — its
 contents are regenerated on every bundle build and don't belong in the
@@ -131,12 +140,18 @@ picks the fastest available one. On user machines without a CUDA
 driver the app falls back to Vulkan transparently — no code change
 needed.
 
-**Verification required on the first bundle build** — Tauri bundler
-layout details can differ by format (.deb/.rpm/AppImage). If the test
-install reports `error while loading shared libraries: libllama.so:
-cannot open shared object file`, then none of the rpath paths were hit
-— inspect the bundle with `dpkg-deb -c xyz.deb` to see the actual
-layout, then add the corresponding build.rs rpath entries.
+**Verified layout (v0.1.0 .rpm on Fedora 44).** `rpm -ql` + `readelf -d`
+confirmed: binary at `/usr/bin/voicetypex`, libs at
+`/usr/lib/VoiceTypeX/resources/lib/` (deb is identical — both use the
+`productName` root). The very first v0.1.0 bundle failed to launch with
+`error while loading shared libraries: libllama.so.0: cannot open shared
+object file`: the original cascade (`$ORIGIN`, `$ORIGIN/lib`,
+`$ORIGIN/../lib/voicetypex`, `$ORIGIN/../lib`) missed that path on two
+counts (wrong case `voicetypex`, missing `/resources/lib`) and used
+DT_RUNPATH, which never reaches the transitive `libggml*` deps. Fixed by
+the DT_RPATH + productName-path rpath above. If a future Tauri bump
+changes the install layout, re-check with `rpm -ql <pkg>` /
+`dpkg-deb -c <deb>` and update build.rs accordingly.
 
 **BLAS_INCLUDE_DIRS (only for the `fast-cpu` feature):**
 When `fast-cpu` is active, `whisper-rs-sys` 0.15+ needs

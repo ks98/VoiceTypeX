@@ -83,8 +83,6 @@
     "shortDescription": "Dictate — VoiceTypeX writes it.",
     "longDescription": "VoiceTypeX is a dictation tool that records audio via a hotkey, transcribes it locally or via the cloud, and inserts the text at the current cursor position. Configurable modes control transcription, LLM postprocessing, and the insertion method. BYOK cloud (xAI, OpenAI, Anthropic, Groq, Deepgram); local via whisper.cpp and Ollama.",
     "resources": [
-      "../assets/cue_start.wav",
-      "../assets/cue_stop.wav",
       "resources/lib/*"
     ],
     "linux": {

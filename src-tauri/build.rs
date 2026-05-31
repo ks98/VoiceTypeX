@@ -2,33 +2,42 @@
 //! Build script.
 //!
 //! - Calls `tauri_build::build()` for the standard Tauri setup steps.
-//! - On Linux, adds rpath entries to the binary so the shared libs
-//!   needed at runtime (`libllama.so`, `libggml*.so` from the
-//!   llama-cpp-sys-2 build with the `dynamic-link` feature) are still
-//!   found after Tauri bundling.
+//! - On Linux, sets the rpath so the shared libs needed at runtime
+//!   (`libllama.so`, `libggml*.so` from the llama-cpp-sys-2 build with
+//!   the `dynamic-link` feature) are found after Tauri bundling.
 //!
-//! We set several rpath entries as a fallback cascade, because the
-//! Tauri bundler places the resources at different paths depending on
-//! the bundle format (.deb/.rpm/AppImage). Linker behavior:
-//! non-existent paths are simply ignored at runtime, no error.
+//! Two specifics, both verified against a real .rpm install + an `ld.so`
+//! repro (see docs/PLATFORMS.md):
+//!   * The bundled libs carry NO rpath of their own and need each other
+//!     transitively (llama -> ggml -> ggml-{cpu,vulkan,base}). DT_RUNPATH
+//!     (the linker default = new dtags) is NOT inherited by transitive
+//!     deps, so a RUNPATH resolves libllama but then fails on
+//!     libggml.so.0. We therefore force DT_RPATH (`--disable-new-dtags`),
+//!     which IS inherited down the whole chain — valid here because none
+//!     of the bundled libs declare their own RUNPATH.
+//!   * The deb/rpm bundler installs `bundle.resources` under
+//!     `/usr/lib/<productName>/`, i.e. `/usr/lib/VoiceTypeX/...` — the
+//!     verbatim productName, NOT the binary name `voicetypex`. The rpath
+//!     must hit that exact path. Non-existent cascade entries are simply
+//!     ignored at runtime, no error.
 
 fn main() {
     tauri_build::build();
 
     #[cfg(target_os = "linux")]
     {
-        // 1. `$ORIGIN` — libs right next to the binary (classic
-        //    portable-install variant, how the AppImage is laid out).
-        // 2. `$ORIGIN/lib` — one level below the binary (Tauri puts
-        //    bundle.resources here in some cases).
-        // 3. `$ORIGIN/../lib/voicetypex` — FHS Linux, .deb standard:
-        //    binary in /usr/bin/, libs in /usr/lib/voicetypex/.
-        // 4. `$ORIGIN/../lib` — generic LSB layout for .rpm.
-        // Multiple entries do no harm; the dynamic linker tries them
-        // in order and takes the first hit.
-        println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN");
-        println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN/lib");
-        println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN/../lib/voicetypex");
+        // Emit DT_RPATH instead of DT_RUNPATH so the entries below are
+        // inherited by libllama's transitive ggml deps (see module doc).
+        println!("cargo:rustc-link-arg=-Wl,--disable-new-dtags");
+
+        // rpath cascade (tried in order, missing dirs ignored):
+        // 1. deb/rpm — Tauri resource root is the productName "VoiceTypeX";
+        //    binary in /usr/bin, so $ORIGIN/../lib = /usr/lib. Update this
+        //    if productName ever changes.
+        // 2. AppImage — linuxdeploy deploys the NEEDED libs to AppDir/usr/lib.
+        // 3. portable/dev — libs right next to the binary.
+        println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN/../lib/VoiceTypeX/resources/lib");
         println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN/../lib");
+        println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN");
     }
 }
