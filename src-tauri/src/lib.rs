@@ -256,28 +256,6 @@ pub fn run() {
                         let _ = main_clone.hide();
                     }
                 });
-
-                // Linux/Wayland (tao 0.35.3, tauri#13440): the WM close (X)
-                // button stays dead until the window's first `configure`
-                // event. Because the window starts `visible:false` (§4.8 —
-                // no focusable window at hotkey time) and is first mapped only
-                // later via the tray, that event never arrives, so X does
-                // nothing until the user resizes/maximizes once. Map it here
-                // so GTK binds the close affordance, then hide it again a beat
-                // later — the `configure` round-trip needs an event-loop turn,
-                // so a synchronous hide() would beat it. It is hidden long
-                // before any hotkey can fire, so §4.8 still holds; the brief
-                // startup flash is the accepted trade-off. Drop this once
-                // tauri#13440 / tao ship a fix.
-                #[cfg(target_os = "linux")]
-                {
-                    let _ = main_window.show();
-                    let deferred = main_window.clone();
-                    std::thread::spawn(move || {
-                        std::thread::sleep(std::time::Duration::from_millis(300));
-                        let _ = deferred.hide();
-                    });
-                }
             }
 
             // Overlay window: no `set_ignore_cursor_events` — that

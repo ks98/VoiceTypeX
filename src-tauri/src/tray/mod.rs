@@ -109,8 +109,7 @@ pub fn setup_tray(app: &AppHandle, locale: Option<&str>) -> Result<()> {
         .on_menu_event(|app, event| match event.id().as_ref() {
             "open_settings" => {
                 if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.set_focus();
+                    reveal_main_window(&window);
                 }
             }
             "quit" => {
@@ -132,8 +131,7 @@ pub fn setup_tray(app: &AppHandle, locale: Option<&str>) -> Result<()> {
             {
                 let app = tray.app_handle();
                 if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.set_focus();
+                    reveal_main_window(&window);
                 }
             }
         })
@@ -141,4 +139,32 @@ pub fn setup_tray(app: &AppHandle, locale: Option<&str>) -> Result<()> {
         .map_err(|e| VoiceTypeError::Hotkey(format!("TrayIconBuilder::build: {e}")))?;
 
     Ok(())
+}
+
+/// Reveal the settings (main) window from the tray.
+///
+/// On Linux/Wayland the WM close (X) button is dead until the window's
+/// first `configure` event (tao 0.35.3, tauri#13440 — open upstream).
+/// Because the window starts `visible:false` (focus-steal guard) and is
+/// re-mapped fresh on every tray reveal, the X is dead again each time.
+/// We replicate the manual maximize→restore the user would otherwise do:
+/// once the fresh map has settled, briefly `maximize()` + `unmaximize()`,
+/// which fires the `configure` that binds the close affordance. Deferred on
+/// a short-lived thread so the initial map completes first. Window ops are
+/// dispatched to the main loop, so calling them off-thread is fine. Drop
+/// this once tauri#13440 / tao ship a fix.
+fn reveal_main_window(window: &tauri::WebviewWindow) {
+    let _ = window.show();
+    let _ = window.set_focus();
+
+    #[cfg(target_os = "linux")]
+    {
+        let w = window.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(120));
+            let _ = w.maximize();
+            std::thread::sleep(std::time::Duration::from_millis(80));
+            let _ = w.unmaximize();
+        });
+    }
 }

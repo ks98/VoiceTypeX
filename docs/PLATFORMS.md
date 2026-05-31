@@ -26,10 +26,13 @@ dialog on subsequent app starts.
 - Consequence + workaround: because the main window is first mapped only
   later (via the tray), its WM close (X) button is dead on Wayland until
   the first `configure` event (tao 0.35.3, tauri#13440 — still open
-  upstream). Worked around in `src-tauri/src/lib.rs`: on Linux the window
-  is `show()`-n once at startup and `hide()`-n ~300 ms later, so GTK binds
-  the close affordance while the window stays hidden at hotkey time (brief
-  startup flash is the accepted cost). Drop once upstream ships a fix.
+  upstream). Worked around in `src-tauri/src/tray/mod.rs`
+  (`reveal_main_window`): on Linux, after each tray `show()`, the window is
+  briefly `maximize()`-d then `unmaximize()`-d (deferred so the fresh map
+  settles first), which fires the `configure` that binds the close
+  affordance — the same maximize→restore a user would otherwise do by hand.
+  Runs on every reveal because each hide→show is a fresh GTK map. Drop once
+  upstream ships a fix.
 
 ### X11
 
