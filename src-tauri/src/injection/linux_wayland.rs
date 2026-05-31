@@ -216,7 +216,12 @@ impl TextInjector for WaylandLibeiInjector {
                 // without a perceptible UX delay.
                 tokio::time::sleep(Duration::from_millis(60)).await;
 
-                if let Err(e) = cmd_tx.send(KeyCommand::CtrlV) {
+                let paste_cmd = if opts.paste_with_shift {
+                    KeyCommand::CtrlShiftV
+                } else {
+                    KeyCommand::CtrlV
+                };
+                if let Err(e) = cmd_tx.send(paste_cmd) {
                     tracing::warn!(error = %e, "libei cmd channel closed — falling back to notification");
                     self.notify_manual_paste();
                 } else {
@@ -224,7 +229,7 @@ impl TextInjector for WaylandLibeiInjector {
                     // keypress before any subsequent code (e.g. the
                     // state bus switching to Idle) runs.
                     tokio::time::sleep(Duration::from_millis(80)).await;
-                    tracing::debug!("libei: Ctrl+V sent");
+                    tracing::debug!(shift = opts.paste_with_shift, "libei: paste shortcut sent");
                 }
             }
             None => {

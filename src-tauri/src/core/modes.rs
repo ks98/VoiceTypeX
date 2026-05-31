@@ -36,6 +36,22 @@ pub enum InjectionMethod {
     Keystrokes,
 }
 
+/// Which paste shortcut the clipboard injection method synthesizes.
+///
+/// - `auto` (default): `Ctrl+V`. On KDE/Wayland a later phase auto-switches
+///   to `Ctrl+Shift+V` for terminals; until then `auto` == `Ctrl+V`.
+/// - `ctrl_v`: always `Ctrl+V` (normal GUI apps).
+/// - `ctrl_shift_v`: always `Ctrl+Shift+V` — required for terminals (KDE
+///   Konsole, GNOME Terminal, …), which do NOT paste on plain `Ctrl+V`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PasteShortcut {
+    #[default]
+    Auto,
+    CtrlV,
+    CtrlShiftV,
+}
+
 /// Where the text a mode operates on comes from.
 ///
 /// - `Voice` (default): classic dictation — the spoken audio is the
@@ -172,6 +188,12 @@ pub struct Mode {
 
     #[serde(default)]
     pub injection_method: InjectionMethod,
+
+    /// Paste shortcut for the `clipboard` injection method. Terminals need
+    /// `ctrl_shift_v`; default `auto` behaves as `ctrl_v`. See
+    /// [`PasteShortcut`].
+    #[serde(default)]
+    pub paste_shortcut: PasteShortcut,
 
     /// Where the operated-on text comes from — `voice` (default,
     /// dictation) or `selection` ("Bearbeiten"). See `InputSource`.

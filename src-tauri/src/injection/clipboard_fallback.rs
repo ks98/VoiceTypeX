@@ -109,7 +109,7 @@ impl TextInjector for ClipboardFallbackInjector {
         // For append/prepend the selection is collapsed first so the
         // paste lands after/before it instead of overwriting it.
         collapse_selection_for_action(opts.action).await?;
-        send_paste_shortcut().await?;
+        send_paste_shortcut(opts.paste_with_shift).await?;
 
         if let Some(prev) = saved {
             let app = self.app_handle.clone();
@@ -257,7 +257,7 @@ async fn send_copy_shortcut() -> Result<()> {
 
 /// Send Cmd+V (macOS) or Ctrl+V (otherwise) via enigo. enigo's
 /// initialization can block, hence `spawn_blocking`.
-async fn send_paste_shortcut() -> Result<()> {
+async fn send_paste_shortcut(shift: bool) -> Result<()> {
     tokio::task::spawn_blocking(move || -> Result<()> {
         use enigo::{Direction, Enigo, Key, Keyboard, Settings};
 
@@ -272,9 +272,20 @@ async fn send_paste_shortcut() -> Result<()> {
         enigo
             .key(modifier, Direction::Press)
             .map_err(|e| VoiceTypeError::Injection(format!("modifier press: {e}")))?;
+        // Terminals (Konsole, …) paste on Ctrl+Shift+V, not Ctrl+V.
+        if shift {
+            enigo
+                .key(Key::Shift, Direction::Press)
+                .map_err(|e| VoiceTypeError::Injection(format!("shift press: {e}")))?;
+        }
         enigo
             .key(Key::Unicode('v'), Direction::Click)
             .map_err(|e| VoiceTypeError::Injection(format!("V click: {e}")))?;
+        if shift {
+            enigo
+                .key(Key::Shift, Direction::Release)
+                .map_err(|e| VoiceTypeError::Injection(format!("shift release: {e}")))?;
+        }
         enigo
             .key(modifier, Direction::Release)
             .map_err(|e| VoiceTypeError::Injection(format!("modifier release: {e}")))?;

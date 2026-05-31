@@ -51,6 +51,10 @@ pub struct InjectOptions {
     /// `Auto` is resolved before reaching the injector and is treated
     /// as `Replace` defensively.
     pub action: OutputAction,
+    /// Paste with `Ctrl+Shift+V` instead of `Ctrl+V` (terminals like KDE
+    /// Konsole ignore plain `Ctrl+V`). Resolved from the mode's
+    /// `paste_shortcut` before injection. Only affects the clipboard path.
+    pub paste_with_shift: bool,
 }
 
 #[async_trait]

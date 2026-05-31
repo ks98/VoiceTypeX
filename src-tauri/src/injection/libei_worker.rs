@@ -48,6 +48,9 @@ use xkbcommon::xkb;
 pub enum KeyCommand {
     /// Send Ctrl+V (press Ctrl, press V, release V, release Ctrl).
     CtrlV,
+    /// Send Ctrl+Shift+V — terminals (KDE Konsole, …) paste on this, not
+    /// on plain Ctrl+V.
+    CtrlShiftV,
     /// Shut down the worker cleanly.
     Shutdown,
 }
@@ -105,6 +108,8 @@ struct WorkerState {
     /// A Ctrl+<key> combo requested from the tokio side, pending until
     /// the keyboard is ready. `Some(v)` = paste, `Some(c)` = copy.
     pending_key: Option<xkb::Keysym>,
+    /// Whether the pending combo includes Shift (Ctrl+Shift+V vs Ctrl+V).
+    pending_shift: bool,
     running: bool,
 }
 
@@ -296,7 +301,7 @@ impl WorkerState {
     /// Four frames, one per key transition. Each `device.frame` is one
     /// "logical hardware event" (libei spec); the pattern matches what
     /// lan-mouse uses in production.
-    fn send_ctrl_combo(&mut self, context: &ei::Context, key_sym: xkb::Keysym) {
+    fn send_ctrl_combo(&mut self, context: &ei::Context, key_sym: xkb::Keysym, shift: bool) {
         let Some((device, keyboard)) = &self.active_keyboard else {
             tracing::warn!("libei: send_ctrl_combo without active keyboard");
             return;
@@ -317,6 +322,20 @@ impl WorkerState {
         let Some(key_keycode) = find_keycode(keymap, key_sym) else {
             tracing::warn!(keysym = ?key_sym, "libei: requested keysym not in keymap");
             return;
+        };
+        // Optional Shift for terminal paste (Ctrl+Shift+V). Abort rather
+        // than send a shift-less combo if Shift_L is missing — a stray
+        // Ctrl+V would mis-paste into a terminal.
+        let shift_evdev = if shift {
+            match find_keycode(keymap, xkb::Keysym::Shift_L) {
+                Some(kc) => Some(kc - 8),
+                None => {
+                    tracing::warn!("libei: Shift_L not in keymap — cannot send Ctrl+Shift+V");
+                    return;
+                }
+            }
+        } else {
+            None
         };
 
         let serial = self.last_serial;
@@ -340,17 +359,25 @@ impl WorkerState {
             t
         };
 
+        // Press order: Ctrl [, Shift], key ; release in reverse.
         last_t = send_frame(ctrl_evdev, ei::keyboard::KeyState::Press, last_t);
+        if let Some(shift_evdev) = shift_evdev {
+            last_t = send_frame(shift_evdev, ei::keyboard::KeyState::Press, last_t);
+        }
         last_t = send_frame(key_evdev, ei::keyboard::KeyState::Press, last_t);
         last_t = send_frame(key_evdev, ei::keyboard::KeyState::Released, last_t);
+        if let Some(shift_evdev) = shift_evdev {
+            last_t = send_frame(shift_evdev, ei::keyboard::KeyState::Released, last_t);
+        }
         last_t = send_frame(ctrl_evdev, ei::keyboard::KeyState::Released, last_t);
 
         tracing::info!(
             serial,
             ctrl_evdev,
             key_evdev,
+            shift,
             last_time_us = last_t,
-            "libei: Ctrl+combo sent (4 frames with per-frame flush + 1 ms pause)"
+            "libei: Ctrl(+Shift)+combo sent (per-frame flush + 1 ms pause)"
         );
     }
 }
@@ -433,6 +460,7 @@ pub fn run_libei_worker(
         emulation_active: false,
         ready_tx: Some(ready_tx),
         pending_key: None,
+        pending_shift: false,
         running: true,
     };
 
@@ -464,7 +492,14 @@ pub fn run_libei_worker(
         // 2. Poll commands from the tokio side
         loop {
             match cmd_rx.try_recv() {
-                Ok(KeyCommand::CtrlV) => state.pending_key = Some(xkb::Keysym::v),
+                Ok(KeyCommand::CtrlV) => {
+                    state.pending_key = Some(xkb::Keysym::v);
+                    state.pending_shift = false;
+                }
+                Ok(KeyCommand::CtrlShiftV) => {
+                    state.pending_key = Some(xkb::Keysym::v);
+                    state.pending_shift = true;
+                }
                 Ok(KeyCommand::Shutdown) => state.running = false,
                 Err(mpsc::TryRecvError::Empty) => break,
                 Err(mpsc::TryRecvError::Disconnected) => {
@@ -477,7 +512,8 @@ pub fn run_libei_worker(
         // 3. Execute a pending Ctrl+<key> combo once everything is ready
         if let Some(key_sym) = state.pending_key {
             if state.is_ready() {
-                state.send_ctrl_combo(&context, key_sym);
+                let shift = state.pending_shift;
+                state.send_ctrl_combo(&context, key_sym, shift);
                 state.pending_key = None;
             } else {
                 tracing::trace!(

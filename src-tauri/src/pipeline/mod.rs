@@ -582,12 +582,21 @@ async fn finish_recording_and_inject(
         crate::core::modes::InjectionMethod::Keystrokes => InjectionStrategy::Keystrokes,
     };
 
+    // Terminals (Konsole, …) paste on Ctrl+Shift+V, not Ctrl+V. Phase 0:
+    // honor an explicit per-mode `ctrl_shift_v`; `auto`/`ctrl_v` stay Ctrl+V
+    // (KDE terminal auto-detection is a later phase).
+    let paste_with_shift = matches!(
+        mode.paste_shortcut,
+        crate::core::modes::PasteShortcut::CtrlShiftV
+    );
+
     ctx.injector
         .inject(
             &final_text,
             InjectOptions {
                 strategy: injection_strategy,
                 action: output_action,
+                paste_with_shift,
             },
         )
         .await
@@ -1142,6 +1151,7 @@ mod tests {
                 InjectOptions {
                     strategy: crate::injection::InjectionStrategy::Clipboard,
                     action: OutputAction::Insert,
+                    paste_with_shift: false,
                 },
             )
             .await

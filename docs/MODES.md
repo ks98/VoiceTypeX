@@ -121,6 +121,13 @@ it is accepted and ignored on load.
 description = "Short description of what the mode does."
 language = "de"                # ISO code, hint for STT
 injection_method = "clipboard" # "clipboard" (default) | "keystrokes"
+paste_shortcut   = "auto"      # "auto" (default, currently = ctrl_v) |
+                               # "ctrl_v" | "ctrl_shift_v". Terminals
+                               # (KDE Konsole, GNOME Terminal, …) do NOT
+                               # paste on plain Ctrl+V — set "ctrl_shift_v"
+                               # for a terminal-dictation mode. KDE
+                               # auto-detection of terminals is planned, at
+                               # which point "auto" switches per focused app.
 
 # --- Edit modes (transform selected text) ---
 input = "voice"        # "voice" (default, dictation) | "selection"
