@@ -88,4 +88,11 @@ pub struct AppContext {
     pub log_buffer: LogRingBuffer,
     pub model_dir: PathBuf,
     pub modes_dir: PathBuf,
+
+    /// KDE/Wayland terminal auto-detection (drives `paste_shortcut = auto`
+    /// -> Ctrl+Shift+V for terminals). Filled asynchronously after startup;
+    /// empty/`None` when not on KDE/Wayland or the KWin/D-Bus setup failed, in
+    /// which case the paste path uses Ctrl+V.
+    #[cfg(target_os = "linux")]
+    pub kde_focus: Arc<RwLock<Option<Arc<crate::injection::focus_tracker::KdeFocusTracker>>>>,
 }

@@ -214,6 +214,24 @@ pub fn run() {
             let injector_box = make_default_injector(app_handle.clone(), wayland_token_path);
             let injector: Arc<dyn TextInjector> = Arc::from(injector_box);
 
+            // KDE/Wayland terminal auto-detection (drives `paste_shortcut =
+            // auto`). Filled asynchronously so a slow or absent KWin/D-Bus
+            // setup never blocks or panics startup; until it lands the paste
+            // path uses Ctrl+V.
+            #[cfg(target_os = "linux")]
+            let kde_focus: Arc<
+                RwLock<Option<Arc<crate::injection::focus_tracker::KdeFocusTracker>>>,
+            > = Arc::new(RwLock::new(None));
+            #[cfg(target_os = "linux")]
+            {
+                let slot = kde_focus.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Some(tracker) = crate::injection::focus_tracker::start().await {
+                        *slot.write() = Some(tracker);
+                    }
+                });
+            }
+
             let ctx = Arc::new(AppContext {
                 state_bus,
                 modes: Arc::clone(&modes_registry),
@@ -235,6 +253,8 @@ pub fn run() {
                 log_buffer: log_buffer.clone(),
                 model_dir,
                 modes_dir,
+                #[cfg(target_os = "linux")]
+                kde_focus,
             });
 
             app.manage(Arc::clone(&ctx));

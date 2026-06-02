@@ -128,6 +128,10 @@ xkbcommon = "0.7"
 # and without Ctrl+C simulation. Already in the tree transitively via
 # tauri-plugin-clipboard-manager; made directly usable here.
 arboard = { version = "3", features = ["wayland-data-control"] }
+# KWin-script active-window detection (terminal -> Ctrl+Shift+V paste). zbus
+# serves a tiny D-Bus object the focus-tracker KWin script calls back into.
+# ashpd already pulls zbus 5; the `tokio` feature integrates with our runtime.
+zbus = { version = "5", default-features = false, features = ["tokio"] }
 
 # Local LLM via llama.cpp (Rust bindings) — Phase 3b. ONLY Linux/macOS.
 # NOT compiled on Windows: whisper-rs-sys and llama-cpp-sys-2 each bundle

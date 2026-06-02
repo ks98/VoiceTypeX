@@ -582,13 +582,26 @@ async fn finish_recording_and_inject(
         crate::core::modes::InjectionMethod::Keystrokes => InjectionStrategy::Keystrokes,
     };
 
-    // Terminals (Konsole, …) paste on Ctrl+Shift+V, not Ctrl+V. Phase 0:
-    // honor an explicit per-mode `ctrl_shift_v`; `auto`/`ctrl_v` stay Ctrl+V
-    // (KDE terminal auto-detection is a later phase).
-    let paste_with_shift = matches!(
-        mode.paste_shortcut,
-        crate::core::modes::PasteShortcut::CtrlShiftV
-    );
+    // Terminals (Konsole, …) paste on Ctrl+Shift+V, not Ctrl+V. Explicit
+    // per-mode `ctrl_shift_v`/`ctrl_v` win; `auto` consults the KDE focus
+    // tracker (terminal -> shift) and stays Ctrl+V wherever it's unavailable.
+    let paste_with_shift = match mode.paste_shortcut {
+        crate::core::modes::PasteShortcut::CtrlShiftV => true,
+        crate::core::modes::PasteShortcut::CtrlV => false,
+        crate::core::modes::PasteShortcut::Auto => {
+            #[cfg(target_os = "linux")]
+            {
+                ctx.kde_focus
+                    .read()
+                    .as_ref()
+                    .is_some_and(|f| f.focused_is_terminal())
+            }
+            #[cfg(not(target_os = "linux"))]
+            {
+                false
+            }
+        }
+    };
 
     ctx.injector
         .inject(

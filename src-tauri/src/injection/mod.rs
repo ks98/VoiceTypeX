@@ -30,6 +30,9 @@ pub mod linux_wayland;
 #[cfg(target_os = "linux")]
 pub mod libei_worker;
 
+#[cfg(target_os = "linux")]
+pub mod focus_tracker;
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct InjectorCapabilities {
     pub supports_clipboard: bool,

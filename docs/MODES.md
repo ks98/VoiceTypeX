@@ -121,13 +121,13 @@ it is accepted and ignored on load.
 description = "Short description of what the mode does."
 language = "de"                # ISO code, hint for STT
 injection_method = "clipboard" # "clipboard" (default) | "keystrokes"
-paste_shortcut   = "auto"      # "auto" (default, currently = ctrl_v) |
-                               # "ctrl_v" | "ctrl_shift_v". Terminals
-                               # (KDE Konsole, GNOME Terminal, …) do NOT
-                               # paste on plain Ctrl+V — set "ctrl_shift_v"
-                               # for a terminal-dictation mode. KDE
-                               # auto-detection of terminals is planned, at
-                               # which point "auto" switches per focused app.
+paste_shortcut   = "auto"      # "auto" (default) | "ctrl_v" | "ctrl_shift_v".
+                               # Terminals (Konsole, …) need Ctrl+Shift+V, not
+                               # Ctrl+V. On KDE Plasma 6 (Wayland) "auto"
+                               # detects the focused window (KWin script) and
+                               # picks Ctrl+Shift+V for terminals, Ctrl+V
+                               # elsewhere. Off KDE, "auto" == Ctrl+V — set
+                               # "ctrl_shift_v" explicitly for a terminal mode.
 
 # --- Edit modes (transform selected text) ---
 input = "voice"        # "voice" (default, dictation) | "selection"

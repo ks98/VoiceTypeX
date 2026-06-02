@@ -34,6 +34,19 @@ dialog on subsequent app starts.
   Runs on every reveal because each hide→show is a fresh GTK map. Drop once
   upstream ships a fix.
 
+**Terminal paste (Ctrl+Shift+V).** Terminals (Konsole, …) paste on
+`Ctrl+Shift+V`, not `Ctrl+V`, so the default auto-paste fails in them. With
+`paste_shortcut = "auto"` (mode default) the app detects the focused window's
+class on KDE Plasma 6 via a bundled KWin script
+(`src-tauri/src/injection/focus_tracker.rs`): the script reports
+`activeWindow.resourceClass` over a zbus D-Bus service
+(`de.kevin_stenzel.voicetypex`), the app caches the last *foreign* class
+(ignoring its own windows by PID) and sends `Ctrl+Shift+V` for terminal
+classes, `Ctrl+V` otherwise. KDE-only; off KDE (or on KWin/D-Bus setup
+failure) `auto` stays `Ctrl+V`, and the per-mode `paste_shortcut =
+"ctrl_shift_v"` is the manual fallback. The detected class is logged
+(Logs tab) for debugging.
+
 ### X11
 
 Functionally complete: hotkeys via `tauri-plugin-global-shortcut`

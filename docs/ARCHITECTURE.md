@@ -174,7 +174,7 @@ differentiate in `core::session::is_wayland()`).
 |---|---|---|
 | `Transcriber` | `transcription/mod.rs` | `LocalTranscriber` (whisper-rs), `XaiTranscriber`, `OpenAITranscriber`, `GroqTranscriber`, `DeepgramTranscriber` |
 | `Processor` | `processing/mod.rs` | `LlamaEmbeddedProcessor` (embedded llama-cpp-2, **default engine**), `OllamaProcessor` (local Ollama daemon, opt-in), `XaiProcessor`/`OpenAIProcessor` (via the shared `OpenAICompatibleClient`), `AnthropicProcessor` |
-| `TextInjector` | `injection/mod.rs` | `ClipboardFallbackInjector` (X11/Windows: enigo Ctrl+V), `WaylandLibeiInjector` (Wayland: libei via xdg-desktop-portal.RemoteDesktop) — the trait additionally carries `read_selection()` (the input side of the edit modes, see below) |
+| `TextInjector` | `injection/mod.rs` | `ClipboardFallbackInjector` (X11/Windows: enigo Ctrl+V), `WaylandLibeiInjector` (Wayland: libei via xdg-desktop-portal.RemoteDesktop) — the trait additionally carries `read_selection()` (the input side of the edit modes, see below). On KDE Plasma 6 the paste shortcut (Ctrl+Shift+V for terminals vs Ctrl+V) is chosen via `injection/focus_tracker.rs` — a bundled KWin script reports the active window's `resourceClass` over a zbus service, cached in `AppContext.kde_focus` |
 
 **Hotkey registration** is platform-direct (no trait, see
 [CLAUDE.md §4.2](../CLAUDE.md)) and registers **exactly one** global
