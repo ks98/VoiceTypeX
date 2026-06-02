@@ -251,6 +251,7 @@
   "wizard.header.title": "Willkommen bei VoiceTypeX",
   "wizard.header.subtitle": "Setup in {total} kurzen Schritten",
   "wizard.header.skip": "überspringen",
+  "wizard.header.language_aria": "Sprache der Oberfläche",
   "wizard.nav.back": "← Zurück",
   "wizard.nav.next": "Weiter →",
   "wizard.nav.finish": "Setup abschließen",

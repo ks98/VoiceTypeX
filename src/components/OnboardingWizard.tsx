@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { useEffect, useRef, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import {
   ipcDownloadDefaultModel,
@@ -20,7 +20,15 @@ import Banner from "./Banner";
 import Button from "./Button";
 import Input from "./Input";
 import Logo from "./Logo";
-import { useT, type TranslateFn } from "../i18n";
+import {
+  LOCALE_NATIVE_NAMES,
+  SUPPORTED_LOCALES,
+  useI18nStore,
+  useLocale,
+  useT,
+  type SupportedLocale,
+  type TranslateFn,
+} from "../i18n";
 
 type Step = 1 | 2 | 3 | 4 | 5;
 const TOTAL_STEPS = 5;
@@ -47,6 +55,19 @@ export default function OnboardingWizard({
   const t = useT();
   const settings = useSettingsStore((s) => s.settings);
   const update = useSettingsStore((s) => s.update);
+  const locale = useLocale();
+
+  // First-run language picker (issue #6): the OS-detected locale can be
+  // wrong — on Windows `sys-locale` reports the display/UI language, not the
+  // regional format — so the user confirms/changes it right here. Persist
+  // first, then switch this window's UI and broadcast to the overlay/menu
+  // windows (identical flow to the Settings language switcher).
+  const onPickLocale = (next: SupportedLocale) => {
+    void update({ locale: next }).then(() => {
+      useI18nStore.setState({ locale: next });
+      void emit("i18n://locale-changed", { locale: next });
+    });
+  };
 
   const [step, setStep] = useState<Step>(1);
 
@@ -197,9 +218,25 @@ export default function OnboardingWizard({
                 {t("wizard.header.subtitle", { total: TOTAL_STEPS })}
               </div>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => void skipAll()}>
-              {t("wizard.header.skip")}
-            </Button>
+            <div className="flex items-center gap-2">
+              <select
+                aria-label={t("wizard.header.language_aria")}
+                value={locale}
+                onChange={(e) =>
+                  onPickLocale(e.target.value as SupportedLocale)
+                }
+                className="bg-elevated border border-outline rounded-md text-xs text-fg-muted px-2 py-1 focus:outline-none focus:ring-1 focus:ring-brand"
+              >
+                {SUPPORTED_LOCALES.map((l) => (
+                  <option key={l} value={l}>
+                    {LOCALE_NATIVE_NAMES[l]}
+                  </option>
+                ))}
+              </select>
+              <Button variant="ghost" size="sm" onClick={() => void skipAll()}>
+                {t("wizard.header.skip")}
+              </Button>
+            </div>
           </div>
           <StepIndicator current={step} total={TOTAL_STEPS} />
           <MiniProgressStack
