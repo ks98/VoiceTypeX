@@ -162,6 +162,17 @@ async fn start_recording(app: &AppHandle, ctx: &Arc<AppContext>, mode: &Mode) ->
     // `finish_recording_and_inject`.
     *ctx.active_mode.lock() = Some(mode.clone());
 
+    // Overlay engine status (issue #8): tell the overlay which engines +
+    // models this mode uses, emitted after active_mode is set and before the
+    // overlay is shown so the status line is populated when recording renders.
+    let engine_status = {
+        let settings = ctx.settings.read();
+        crate::core::modes::resolve_engine_status(mode, &settings)
+    };
+    if let Err(e) = app.emit("app://active-engine", &engine_status) {
+        tracing::warn!(error = %e, "emit app://active-engine failed");
+    }
+
     // Hide the menu window if the start came from the menu — otherwise it
     // stays visible behind the overlay. Idempotent: if it was already
     // hidden (UI-trigger path), nothing happens.

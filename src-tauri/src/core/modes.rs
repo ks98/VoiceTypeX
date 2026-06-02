@@ -6,6 +6,7 @@
 //! data model and a simple loader; the `notify`-based hot-reload comes
 //! in phase 1.4.
 
+use crate::core::config::Settings;
 use crate::core::error::{Result, VoiceTypeError};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -566,6 +567,80 @@ fn event_touches_toml(event: &notify::Event) -> bool {
         .any(|p| p.extension().and_then(|s| s.to_str()) == Some("toml"))
 }
 
+/// Slim engine descriptor for the recording overlay (issue #8).
+#[derive(Debug, Clone, Serialize)]
+pub struct EngineSegment {
+    /// `"local"` or `"cloud"`.
+    pub location: &'static str,
+    /// Cloud provider name (`xai`, `groq`, …); `None` for local engines.
+    pub provider: Option<String>,
+    /// Resolved model / GGUF slot / Ollama tag. May be empty for a cloud STT
+    /// provider whose model is fixed.
+    pub model: String,
+}
+
+/// Which engines + models the active mode uses, for the overlay status line.
+#[derive(Debug, Clone, Serialize)]
+pub struct EngineStatus {
+    pub stt: EngineSegment,
+    /// `None` when the mode does no LLM post-processing (`processing = none`).
+    pub llm: Option<EngineSegment>,
+}
+
+/// Resolve the engines + models the overlay should show for `mode`, applying
+/// the same slot fallbacks as the pipeline (the per-mode slot, else the global
+/// `Settings` default). Pure — see tests.
+pub fn resolve_engine_status(mode: &Mode, settings: &Settings) -> EngineStatus {
+    let stt = match mode.transcription {
+        TranscriptionTarget::Local => EngineSegment {
+            location: "local",
+            provider: None,
+            model: mode
+                .whisper_model_slot
+                .clone()
+                .unwrap_or_else(|| settings.whisper_default_slot.clone()),
+        },
+        TranscriptionTarget::Cloud => EngineSegment {
+            location: "cloud",
+            provider: mode.cloud_stt_provider.clone(),
+            model: String::new(),
+        },
+    };
+
+    let llm = match mode.processing {
+        ProcessingTarget::None => None,
+        ProcessingTarget::Local => {
+            // `embedded` is the default engine when unset (mirrors validate()).
+            let engine = mode.local_engine.as_deref().unwrap_or("embedded");
+            let (provider, model) = if engine == "ollama" {
+                (
+                    Some("ollama".to_string()),
+                    mode.ollama_model_tag.clone().unwrap_or_default(),
+                )
+            } else {
+                (
+                    None,
+                    mode.embedded_llm_slot
+                        .clone()
+                        .unwrap_or_else(|| settings.llm_default_slot.clone()),
+                )
+            };
+            Some(EngineSegment {
+                location: "local",
+                provider,
+                model,
+            })
+        }
+        ProcessingTarget::Cloud => Some(EngineSegment {
+            location: "cloud",
+            provider: mode.cloud_llm_provider.clone(),
+            model: mode.cloud_llm_model.clone().unwrap_or_default(),
+        }),
+    };
+
+    EngineStatus { stt, llm }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -579,6 +654,102 @@ mod tests {
         mode.migrate_deprecated_fields();
         mode.validate()?;
         Ok(mode)
+    }
+
+    #[test]
+    fn engine_status_local_stt_only() {
+        let m = parse(
+            r#"
+            id = "t"
+            name = "T"
+            transcription = "local"
+            processing = "none"
+            "#,
+        )
+        .unwrap();
+        let s = resolve_engine_status(&m, &Settings::default());
+        assert_eq!(s.stt.location, "local");
+        assert_eq!(s.stt.provider, None);
+        assert_eq!(s.stt.model, Settings::default().whisper_default_slot);
+        assert!(s.llm.is_none());
+    }
+
+    #[test]
+    fn engine_status_mode_whisper_slot_overrides_default() {
+        let m = parse(
+            r#"
+            id = "t"
+            name = "T"
+            transcription = "local"
+            processing = "none"
+            whisper_model_slot = "large-v3-turbo-german"
+            "#,
+        )
+        .unwrap();
+        let s = resolve_engine_status(&m, &Settings::default());
+        assert_eq!(s.stt.model, "large-v3-turbo-german");
+    }
+
+    #[test]
+    fn engine_status_embedded_llm_falls_back_to_default_slot() {
+        let m = parse(
+            r#"
+            id = "t"
+            name = "T"
+            transcription = "local"
+            processing = "local"
+            system_prompt = "Rewrite the text faithfully."
+            "#,
+        )
+        .unwrap();
+        let s = resolve_engine_status(&m, &Settings::default());
+        let llm = s.llm.expect("local processing -> llm segment");
+        assert_eq!(llm.location, "local");
+        assert_eq!(llm.provider, None);
+        assert_eq!(llm.model, Settings::default().llm_default_slot);
+    }
+
+    #[test]
+    fn engine_status_ollama_uses_tag() {
+        let m = parse(
+            r#"
+            id = "t"
+            name = "T"
+            transcription = "local"
+            processing = "local"
+            local_engine = "ollama"
+            ollama_model_tag = "gemma3:4b"
+            system_prompt = "Rewrite the text faithfully."
+            "#,
+        )
+        .unwrap();
+        let llm = resolve_engine_status(&m, &Settings::default()).llm.unwrap();
+        assert_eq!(llm.provider.as_deref(), Some("ollama"));
+        assert_eq!(llm.model, "gemma3:4b");
+    }
+
+    #[test]
+    fn engine_status_cloud_stt_and_llm() {
+        let m = parse(
+            r#"
+            id = "t"
+            name = "T"
+            transcription = "cloud"
+            processing = "cloud"
+            cloud_stt_provider = "groq"
+            cloud_llm_provider = "xai"
+            cloud_llm_model = "grok-4-fast"
+            system_prompt = "Rewrite the text faithfully."
+            "#,
+        )
+        .unwrap();
+        let s = resolve_engine_status(&m, &Settings::default());
+        assert_eq!(s.stt.location, "cloud");
+        assert_eq!(s.stt.provider.as_deref(), Some("groq"));
+        let llm = s.llm.unwrap();
+        assert_eq!(llm.location, "cloud");
+        assert_eq!(llm.provider.as_deref(), Some("xai"));
+        assert_eq!(llm.model, "grok-4-fast");
     }
 
     #[test]

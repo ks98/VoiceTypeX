@@ -72,6 +72,11 @@ multiple subscribers, no backpressure issues). Subscribers: tray-icon
 update, tray recording pulse, frontend event emitter (`app://state`),
 overlay state listener.
 
+`start_recording` additionally emits `app://active-engine` — the
+`EngineStatus` from `core::modes::resolve_engine_status` — so the overlay's
+status line shows the active mode's STT/LLM engine + model (local vs cloud).
+(#8)
+
 ## Pipeline (menu hotkey + toggle)
 
 [`src-tauri/src/pipeline/mod.rs`](../src-tauri/src/pipeline/mod.rs)

@@ -15,6 +15,12 @@ type Phase =
 
 type StatePayload = { state: Phase; error?: string };
 type PartialTranscriptPayload = { text: string };
+type EngineSegment = {
+  location: "local" | "cloud";
+  provider: string | null;
+  model: string;
+};
+type EngineStatusPayload = { stt: EngineSegment; llm: EngineSegment | null };
 
 /**
  * Live overlay window — displays the pipeline-phase indicator during
@@ -38,6 +44,7 @@ export default function Overlay(): JSX.Element {
   const [phase, setPhase] = useState<Phase>("recording");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [partial, setPartial] = useState<string>("");
+  const [engine, setEngine] = useState<EngineStatusPayload | null>(null);
 
   useEffect(() => {
     const unlistens: UnlistenFn[] = [];
@@ -53,6 +60,12 @@ export default function Overlay(): JSX.Element {
 
     listen<PartialTranscriptPayload>("app://partial-transcript", (event) => {
       setPartial(event.payload.text ?? "");
+    }).then((u) => unlistens.push(u));
+
+    // Engine status (issue #8): emitted by the backend when a mode becomes
+    // active (recording start). Stays until the next recording overwrites it.
+    listen<EngineStatusPayload>("app://active-engine", (event) => {
+      setEngine(event.payload);
     }).then((u) => unlistens.push(u));
 
     return () => {
@@ -109,8 +122,64 @@ export default function Overlay(): JSX.Element {
             {visiblePartial}
           </p>
         ) : null}
+        {engine && !isError ? (
+          <div className="flex items-center gap-1.5 text-[10px] text-fg-faint pl-10 pr-1 overflow-hidden whitespace-nowrap">
+            <EngineSeg label={t("overlay.engine.stt")} seg={engine.stt} t={t} />
+            {engine.llm ? (
+              <>
+                <span className="text-outline" aria-hidden>
+                  ·
+                </span>
+                <EngineSeg
+                  label={t("overlay.engine.llm")}
+                  seg={engine.llm}
+                  t={t}
+                />
+              </>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </div>
+  );
+}
+
+/** One engine segment (STT or LLM) of the overlay status line: a label, a
+ *  local/cloud dot, the location word, and `provider·model`. */
+function EngineSeg({
+  label,
+  seg,
+  t,
+}: {
+  label: string;
+  seg: EngineSegment;
+  t: TranslateFn;
+}): JSX.Element {
+  const isLocal = seg.location === "local";
+  const detail = seg.provider
+    ? seg.model
+      ? `${seg.provider}·${seg.model}`
+      : seg.provider
+    : seg.model;
+  return (
+    <span className="inline-flex items-center gap-1 overflow-hidden">
+      <span className="font-medium text-fg-muted">{label}</span>
+      <span
+        className={
+          "inline-block h-1.5 w-1.5 rounded-full shrink-0 " +
+          (isLocal ? "bg-status-done" : "bg-brand")
+        }
+        aria-hidden
+      />
+      <span>
+        {t(isLocal ? "overlay.engine.local" : "overlay.engine.cloud")}
+      </span>
+      {detail ? (
+        <span className="font-mono overflow-hidden text-ellipsis">
+          {detail}
+        </span>
+      ) : null}
+    </span>
   );
 }
 

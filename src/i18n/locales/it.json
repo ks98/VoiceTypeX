@@ -457,6 +457,10 @@
   "overlay.phase.error_with_msg": "Errore: {message}",
   "overlay.phase.error_generic": "Errore",
   "overlay.error_tooltip_fallback": "Errore — clicca per dettagli",
+  "overlay.engine.stt": "STT",
+  "overlay.engine.llm": "LLM",
+  "overlay.engine.local": "locale",
+  "overlay.engine.cloud": "cloud",
 
   "menu.title": "Scegli modalità",
   "menu.kbd_hint": "↑ ↓ Invio · Esc",
