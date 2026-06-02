@@ -9,6 +9,7 @@ import {
   ipcGetSettings,
   ipcListAudioDevices,
   ipcSetSettings,
+  retryWhileUnmanaged,
 } from "../lib/tauri";
 import {
   applyTheme,
@@ -57,7 +58,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   load: async () => {
     set({ loading: true, error: null });
     try {
-      const settings = await ipcGetSettings();
+      const settings = await retryWhileUnmanaged(ipcGetSettings);
       set({ settings, loading: false });
     } catch (e) {
       set({ loading: false, error: String(e) });
@@ -98,7 +99,7 @@ export const useModesStore = create<ModesState>((set) => ({
   load: async () => {
     set({ loading: true, error: null });
     try {
-      const modes = await ipcGetModes();
+      const modes = await retryWhileUnmanaged(ipcGetModes);
       set({ modes, loading: false });
     } catch (e) {
       set({ loading: false, error: String(e) });

@@ -6,7 +6,7 @@ import App from "./App";
 import Menu from "./views/Menu";
 import Overlay from "./views/Overlay";
 import { initTheme, subscribeSystemTheme } from "./lib/theme";
-import { ipcGetSettings } from "./lib/tauri";
+import { ipcGetSettings, retryWhileUnmanaged } from "./lib/tauri";
 import { pickSupported, useI18nStore } from "./i18n";
 import "./styles/globals.css";
 
@@ -55,7 +55,7 @@ void listen<{ locale: string }>("i18n://locale-changed", (event) => {
   useI18nStore.setState({ locale: next });
 });
 
-ipcGetSettings()
+retryWhileUnmanaged(ipcGetSettings)
   .then((settings) => {
     const picked = pickSupported(settings.locale);
     // Visible in the diagnostics log: bug reports "app is on the

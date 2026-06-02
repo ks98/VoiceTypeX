@@ -5,6 +5,37 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Mode, Settings } from "./types";
 
+/**
+ * Tauri returns this exact error when an IPC command tries to resolve its
+ * `tauri::State` before `app.manage()` has registered it. On first launch the
+ * webview can `invoke` `get_settings`/`get_modes` before the setup hook
+ * finishes its one-time disk work — a transient race (issue #7).
+ */
+export function isUnmanagedStateError(e: unknown): boolean {
+  return String(e).includes("State not managed");
+}
+
+/**
+ * Run `fn`, retrying with a short fixed backoff *only* while it fails with the
+ * unmanaged-state error (the first-launch setup race, #7). Any other error
+ * propagates immediately, and a still-unmanaged state after the attempt budget
+ * surfaces the original error — so a genuine failure is never masked.
+ */
+export async function retryWhileUnmanaged<T>(
+  fn: () => Promise<T>,
+  attempts = 10,
+  delayMs = 100,
+): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (attempt >= attempts || !isUnmanagedStateError(e)) throw e;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+}
+
 export async function ipcGetSettings(): Promise<Settings> {
   return invoke<Settings>("get_settings");
 }
