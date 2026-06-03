@@ -209,21 +209,23 @@ async fn setup_async(
     let script_path = write_script_tempfile()?;
     let script_path_str = script_path.to_string_lossy().into_owned();
 
-    let mut script_id = load_script(&connection, &script_path_str).await?;
-    tracing::info!(script_id, path = %script_path_str, "FocusTracker: KWin loadScript returned");
+    // Clear any stale instance left loaded by a previous run (our Drop unload
+    // is best-effort and usually cannot run at process exit). Ignoring the
+    // result: "not loaded" is the normal first-run case. This also avoids the
+    // loadScript == -1 ("already loaded") path entirely.
+    let _ = unload_script(&connection).await;
 
+    let script_id = load_script(&connection, &script_path_str).await?;
+    tracing::info!(script_id, path = %script_path_str, "FocusTracker: KWin loadScript returned");
     if script_id < 0 {
-        // -1 == a script with this plugin name is already loaded (stale from a
-        // previous run/crash). Unload it, then retry once.
-        tracing::warn!("FocusTracker: script already loaded — unloading + retrying");
-        let _ = unload_script(&connection).await;
-        script_id = load_script(&connection, &script_path_str).await?;
-        if script_id < 0 {
-            return Err("KWin loadScript returned -1 after unload+retry".into());
-        }
+        return Err(format!("KWin loadScript returned {script_id} after unload").into());
     }
 
-    run_script(&connection, script_id).await?;
+    // Run the loaded script. KWin 6 changed the per-script object path — the
+    // KWin-5-era `/{id}` no longer exists ("No such object path '/0'"), so we
+    // use `org.kde.kwin.Scripting.start()` on /Scripting, which runs all loaded
+    // scripts and is path-independent across KWin versions.
+    start_scripts(&connection).await?;
     Ok((connection, script_id))
 }
 
@@ -243,22 +245,22 @@ async fn load_script(
     Ok(reply.body().deserialize()?)
 }
 
-/// Invoke `run()` on the per-script object KWin serves at `/{id}`.
-async fn run_script(
+/// Run all loaded KWin scripts (including ours) via
+/// `org.kde.kwin.Scripting.start()` on `/Scripting`. Version-stable, unlike the
+/// per-script `/{id}` object whose path changed in KWin 6.
+async fn start_scripts(
     connection: &Connection,
-    script_id: i32,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let path = format!("/{script_id}");
     connection
         .call_method(
             Some(KWIN_BUS_NAME),
-            path.as_str(),
+            KWIN_SCRIPTING_PATH,
             Some(KWIN_SCRIPTING_IFACE),
-            "run",
+            "start",
             &(),
         )
         .await?;
-    tracing::debug!(script_id, "FocusTracker: KWin script run() invoked");
+    tracing::debug!("FocusTracker: KWin Scripting.start() invoked");
     Ok(())
 }
 
