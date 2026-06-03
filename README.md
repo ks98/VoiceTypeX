@@ -32,7 +32,8 @@ Beta-specific notes: see the section
    confirm the last-used selection). `Esc` closes the menu without
    taking any action.
 3. After `Enter`, recording starts, the tray icon pulses red, and the
-   overlay shows *"Listening …"*. Speak.
+   overlay shows *"Listening …"* plus a status line with the active
+   engine (local vs cloud, STT/LLM model). Speak.
 4. **Press the same hotkey again** → the audio is transcribed (locally
    via whisper.cpp **or** cloud STT), optionally post-processed by an LLM
    according to the selected **mode** (locally via Ollama **or** a cloud
@@ -144,8 +145,12 @@ signing key): see [`docs/RELEASING.md`](docs/RELEASING.md).
 ## Getting Started
 
 1. **Start the app:** `pnpm tauri dev`. The tray icon appears in the
-   system tray (the main window starts hidden — see the Wayland focus
-   note in [`CLAUDE.md`](CLAUDE.md) §4.8).
+   system tray (the main window starts hidden — see the *"Wayland focus
+   quirks"* note in [`docs/PLATFORMS.md`](docs/PLATFORMS.md)). On first
+   launch an onboarding wizard opens; its header has a language picker —
+   the UI language is auto-detected from your OS locale, but on Windows
+   that can be the display language rather than your region, so switch it
+   there if it guessed wrong (also under *Settings → Language* later).
 2. **Open the main window:** left-click the tray icon, or right-click →
    *"Open Settings"*.
 3. **Load a Whisper model:** *Settings* tab → *"Download Default
@@ -166,6 +171,11 @@ signing key): see [`docs/RELEASING.md`](docs/RELEASING.md).
    shows a permission dialog *"VoiceTypeX wants to send keystrokes"*.
    Allow it — after that, auto-paste runs without further dialogs, even
    after an app restart (the `restore_token` is persisted).
+7. **Dictating into terminals:** terminals (Konsole, GNOME Terminal, …)
+   paste with `Ctrl+Shift+V`, not `Ctrl+V`. The per-mode `paste_shortcut`
+   field (`auto` | `ctrl_v` | `ctrl_shift_v`) handles this — on KDE Plasma 6
+   `auto` auto-detects the focused terminal; elsewhere set `ctrl_shift_v`
+   for a terminal mode. See [`docs/MODES.md`](docs/MODES.md).
 
 ## Uninstalling
 

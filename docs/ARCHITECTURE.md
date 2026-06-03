@@ -182,7 +182,7 @@ differentiate in `core::session::is_wayland()`).
 | `TextInjector` | `injection/mod.rs` | `ClipboardFallbackInjector` (X11/Windows: enigo Ctrl+V), `WaylandLibeiInjector` (Wayland: libei via xdg-desktop-portal.RemoteDesktop) — the trait additionally carries `read_selection()` (the input side of the edit modes, see below). On KDE Plasma 6 the paste shortcut (Ctrl+Shift+V for terminals vs Ctrl+V) is chosen via `injection/focus_tracker.rs` — a bundled KWin script reports the active window's `resourceClass` over a zbus service, cached in `AppContext.kde_focus` |
 
 **Hotkey registration** is platform-direct (no trait, see
-[CLAUDE.md §4.2](../CLAUDE.md)) and registers **exactly one** global
+[CLAUDE.md](../CLAUDE.md)) and registers **exactly one** global
 shortcut (`Settings.menu_hotkey`):
 
 - X11/Windows: `pipeline::register_menu_hotkey()` registers it directly
@@ -490,8 +490,8 @@ code comments in `libei_worker.rs`):
 
 | Window | Purpose | Size | Focus | Pointer events | Position |
 |---|---|---|---|---|---|
-| `main` | Main window (Settings, Modes, Logs) | 960 × 720, resizable | yes | yes | OS default |
-| `overlay` | Status indicator during Recording / Transcribing / … | 520 × 96, **non-resizable** | **no** (`focus: false`) | **none** (CSS) | top left 24,24 |
+| `main` | Main window (Settings, Modes, Logs) | 960 × 720, resizable | yes | yes | centered |
+| `overlay` | Status indicator during Recording / Transcribing / … | 520 × 96, **non-resizable** | **no** (`focus: false`) | **none** (CSS) | centered |
 | `menu` | Mode selection via arrow navigation + Enter | 480 × 360, non-resizable, scrollable with many modes | yes | yes | top left 24,24 |
 
 All three windows load the same `index.html`; routing happens in
@@ -533,8 +533,9 @@ action). Keyboard handler on the root div:
 
 `menu.set_focus()` is not guaranteed to be honored on Wayland
 compositors — the compositor decides. On KDE Plasma 6 it works reliably
-because the menu window is born with `focus: true` in the Tauri config
-(the strongest compositor hint). On wlroots compositors like Hyprland /
+because the menu window is focusable by default (Tauri windows accept
+focus unless `focus: false` is set, as the overlay does), so
+`menu.set_focus()` is honored. On wlroots compositors like Hyprland /
 Sway focus can still fail to arrive; there the app is in
 clipboard-fallback mode anyway
 ([`docs/PLATFORMS.md`](PLATFORMS.md) → *Hyprland / Sway / wlroots*).
@@ -579,7 +580,7 @@ Tracing stack with three layers:
 - `fmt::layer()` for stdout (dev)
 - `LogRingBuffer::layer()` (in-memory, 500 lines, polled by the Logs view)
 
-CLAUDE.md §8 is strict: audio/transcript/LLM-response data **never** go
+CLAUDE.md's privacy/logging rules are strict: audio/transcript/LLM-response data **never** go
 into the default logging. A diagnostic-logging toggle in the settings
 would additively enable further calls, not filter existing ones.
 

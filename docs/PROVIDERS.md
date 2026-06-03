@@ -19,7 +19,7 @@
 | LLM (local) | Ollama | `src-tauri/src/processing/local.rs` |
 
 The decision of when a wrapper is shared and when it isn't follows the
-actual protocol kinship (CLAUDE.md §4.6): OpenAI and Groq are both
+actual protocol kinship: OpenAI and Groq are both
 Whisper-API-compatible and share `whisper_compatible.rs`; xAI, OpenAI,
 and Groq share the Chat-Completions-compatible path via
 `openai_compatible.rs`. Deepgram (STT) and Anthropic (LLM) stand on
@@ -252,7 +252,7 @@ API keys live per provider in the file `~/.config/.../secrets.json`
 case:** a single entry covers both STT *and* LLM, because both endpoints
 use the same key.
 
-Keys are **never** logged (see CLAUDE.md §8) — logging shows only the
+Keys are **never** logged — logging shows only the
 key length for diagnostics. Provider requests go exclusively through
 the Rust backend; the key never leaves the process for the frontend
 (the `get_provider_status` IPC returns only
