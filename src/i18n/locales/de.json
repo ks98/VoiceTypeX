@@ -422,7 +422,7 @@
   "mode_editor.output.inject.opt_clipboard": "clipboard (empfohlen)",
   "mode_editor.output.inject.opt_keystrokes": "keystrokes",
   "settings.beam_size.label": "Whisper-Beam-Size",
-  "settings.beam_size.hint": "Beam-Breite fürs lokale Transkribieren. 5 = Default (genaueste); niedriger = schneller (1 ≈ greedy). Pro Modus überschreibbar.",
+  "settings.beam_size.hint": "Beam-Breite fürs lokale Transkribieren. Default 2 (ausgewogen Tempo/Genauigkeit); höher = genauer, aber langsamer (1 ≈ greedy/am schnellsten, bis 10). Pro Modus überschreibbar.",
   "mode_editor.stt.beam_size.label": "Beam-Size (Override)",
   "mode_editor.stt.beam_size.hint": "Beam-Breite des Final-Pass für diesen Modus. Leer = globale Einstellung. 1 ≈ greedy/schnellste, bis 10.",
   "mode_editor.input.label": "Eingabequelle",

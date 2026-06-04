@@ -422,7 +422,7 @@
   "mode_editor.output.inject.opt_clipboard": "clipboard (consigliato)",
   "mode_editor.output.inject.opt_keystrokes": "keystrokes",
   "settings.beam_size.label": "Ampiezza fascio Whisper",
-  "settings.beam_size.hint": "Ampiezza del fascio per la trascrizione locale. 5 = predefinito (più preciso); più basso = più veloce (1 ≈ greedy). Sovrascrivibile per modalità.",
+  "settings.beam_size.hint": "Ampiezza del fascio per la trascrizione locale. Predefinito 2 (equilibrio velocità/precisione); più alto = più preciso ma più lento (1 ≈ greedy/più veloce, fino a 10). Sovrascrivibile per modalità.",
   "mode_editor.stt.beam_size.label": "Ampiezza fascio (override)",
   "mode_editor.stt.beam_size.hint": "Ampiezza del fascio della passata finale per questa modalità. Vuoto = impostazione globale. 1 ≈ greedy/più veloce, fino a 10.",
   "mode_editor.input.label": "Sorgente di ingresso",

@@ -435,7 +435,7 @@
   "mode_editor.output.inject.opt_clipboard": "clipboard (recommended)",
   "mode_editor.output.inject.opt_keystrokes": "keystrokes",
   "settings.beam_size.label": "Whisper beam size",
-  "settings.beam_size.hint": "Beam width for local transcription. 5 = default (most accurate); lower = faster (1 ≈ greedy). A per-mode override is possible.",
+  "settings.beam_size.hint": "Beam width for local transcription. Default 2 (balanced speed/accuracy); higher = more accurate but slower (1 ≈ greedy/fastest, up to 10). A per-mode override is possible.",
   "mode_editor.stt.beam_size.label": "Beam size (override)",
   "mode_editor.stt.beam_size.hint": "Final-pass beam width for this mode. Empty = use the global setting. 1 ≈ greedy/fastest, up to 10.",
   "mode_editor.input.label": "Input source",

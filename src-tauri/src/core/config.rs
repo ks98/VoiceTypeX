@@ -78,11 +78,11 @@ pub struct Settings {
     #[serde(default)]
     pub onboarding_done: bool,
 
-    /// Number of threads for Whisper inference. `None` = auto-detect
-    /// via `available_parallelism()` (capped at 8 — diminishing
-    /// returns due to memory bandwidth). The user can override in the
-    /// settings UI, e.g. "only 4 threads so the browser stays
-    /// responsive".
+    /// Number of threads for Whisper inference. `None` = auto-detect via
+    /// the physical core count (capped at 8 — diminishing returns due to
+    /// memory bandwidth; hyperthreads regress throughput, whisper.cpp
+    /// #200). The user can override in the settings UI, e.g. "only 4
+    /// threads so the browser stays responsive".
     #[serde(default)]
     pub whisper_n_threads: Option<u32>,
 

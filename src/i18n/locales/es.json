@@ -422,7 +422,7 @@
   "mode_editor.output.inject.opt_clipboard": "clipboard (recomendado)",
   "mode_editor.output.inject.opt_keystrokes": "keystrokes",
   "settings.beam_size.label": "Ancho de haz de Whisper",
-  "settings.beam_size.hint": "Ancho de haz para la transcripción local. 5 = predeterminado (más preciso); menor = más rápido (1 ≈ greedy). Anulable por modo.",
+  "settings.beam_size.hint": "Ancho de haz para la transcripción local. Predeterminado 2 (equilibrio velocidad/precisión); mayor = más preciso pero más lento (1 ≈ greedy/más rápido, hasta 10). Anulable por modo.",
   "mode_editor.stt.beam_size.label": "Ancho de haz (anulación)",
   "mode_editor.stt.beam_size.hint": "Ancho de haz de la pasada final para este modo. Vacío = ajuste global. 1 ≈ greedy/más rápido, hasta 10.",
   "mode_editor.input.label": "Fuente de entrada",

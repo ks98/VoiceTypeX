@@ -422,7 +422,7 @@
   "mode_editor.output.inject.opt_clipboard": "clipboard (recommandé)",
   "mode_editor.output.inject.opt_keystrokes": "keystrokes",
   "settings.beam_size.label": "Largeur de faisceau Whisper",
-  "settings.beam_size.hint": "Largeur de faisceau pour la transcription locale. 5 = défaut (plus précis) ; plus bas = plus rapide (1 ≈ greedy). Surcharge possible par mode.",
+  "settings.beam_size.hint": "Largeur de faisceau pour la transcription locale. Défaut 2 (équilibre vitesse/précision) ; plus haut = plus précis mais plus lent (1 ≈ greedy/le plus rapide, jusqu'à 10). Surcharge possible par mode.",
   "mode_editor.stt.beam_size.label": "Largeur de faisceau (surcharge)",
   "mode_editor.stt.beam_size.hint": "Largeur de faisceau de la passe finale pour ce mode. Vide = réglage global. 1 ≈ greedy/le plus rapide, jusqu'à 10.",
   "mode_editor.input.label": "Source d'entrée",

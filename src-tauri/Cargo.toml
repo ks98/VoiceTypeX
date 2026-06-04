@@ -97,6 +97,12 @@ futures-util = "0.3"
 # Atomic primitives
 parking_lot = "0.12"
 
+# Physical-core count for the Whisper thread default. whisper.cpp's encoder
+# is bandwidth-bound, so logical cores (hyperthreads/E-cores) regress
+# throughput (whisper.cpp #200); get_physical() gives the right number
+# cross-platform.
+num_cpus = "1"
+
 # Filesystem watch for modes/ hot-reload
 notify = "6"
 

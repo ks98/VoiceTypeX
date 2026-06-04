@@ -285,14 +285,14 @@ fn run_whisper_blocking(
     }
 
     // n_threads: user override from settings takes precedence.
-    // Otherwise auto-detect via `available_parallelism` (logical cores),
-    // capped at 8 due to memory-bandwidth diminishing returns.
-    let n_threads = n_threads_override.map(|n| n as usize).unwrap_or_else(|| {
-        std::thread::available_parallelism()
-            .map(|n| n.get())
-            .unwrap_or(4)
-            .min(8)
-    });
+    // Otherwise default to PHYSICAL cores, not logical: the encoder is
+    // compute/memory-bandwidth bound, so hyperthreads / E-cores give
+    // diminishing-to-negative returns (whisper.cpp #200). Capped at 8
+    // (bandwidth ceiling). `get_physical()` returns 0 on no platform we
+    // target, but clamp the lower bound to 1 defensively.
+    let n_threads = n_threads_override
+        .map(|n| n as usize)
+        .unwrap_or_else(|| num_cpus::get_physical().clamp(1, 8));
     params.set_n_threads(n_threads as i32);
     tracing::info!(
         n_threads,
