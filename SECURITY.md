@@ -131,7 +131,7 @@ window allowlist `["main", "overlay", "menu"]` is explicit and complete.
 
 ## Bug Reports
 
-- **Standard bugs**: [GitHub Issues](https://github.com/ks98/voicetypex/issues)
+- **Standard bugs**: [GitHub Issues](https://github.com/ks98/VoiceTypeX/issues)
 - **Security bugs**: please email `mail@kevin-stenzel.de` directly, with
   the subject prefix `[VoiceTypeX-Security]`. No public issues for
   unfixed vulnerabilities.

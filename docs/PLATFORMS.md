@@ -276,7 +276,7 @@ the Tauri installer).
 ### Windows — local LLM (embedded vs. Ollama)
 
 The **embedded LLM** (`llama-cpp-2`) is **not** compiled on Windows.
-Reason (ks98/voicetypex#1): `whisper-rs-sys` and `llama-cpp-sys-2` each
+Reason (ks98/VoiceTypeX#1): `whisper-rs-sys` and `llama-cpp-sys-2` each
 bundle their own ggml; on MSVC the duplicate `ggml_*` symbols collide at
 link time (LNK2005). Linux/ELF tolerates a symbol defined in both the
 executable **and** a shared lib, MSVC does not. `llama-cpp-2` is

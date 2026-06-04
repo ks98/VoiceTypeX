@@ -57,10 +57,10 @@ jobs:
             # the .relr.dyn sections of modern system libs (glibc >=2.36)
             # ("unknown type [0x13]"). NO_STRIP=true (build step below)
             # skips the strip pass; --verbose surfaces the stderr that
-            # linuxdeploy otherwise swallows. (ks98/voicetypex#2, tauri#14796)
+            # linuxdeploy otherwise swallows. (ks98/VoiceTypeX#2, tauri#14796)
             args: "--bundles deb,rpm,appimage --verbose"
           # Windows: STT (whisper.cpp + Vulkan) + cloud/Ollama LLM. The
-          # embedded llama-cpp-2 is stripped out on Windows (ks98/voicetypex#1),
+          # embedded llama-cpp-2 is stripped out on Windows (ks98/VoiceTypeX#1),
           # which removes the ggml-LNK2005 collision and lets the MSVC link
           # succeed. tauri-action builds the NSIS bundle (updaterJsonPreferNsis);
           # empty args = default bundles of the Windows host (nsis).
@@ -165,12 +165,12 @@ jobs:
           # linuxdeploy's bundled strip (binutils 2.35) breaks on the
           # .relr.dyn sections of modern system libs -> skip the strip
           # pass. Read by linuxdeploy (NOT by Tauri) and
-          # CANNOT live in tauri.conf.json. -> ks98/voicetypex#2
+          # CANNOT live in tauri.conf.json. -> ks98/VoiceTypeX#2
           NO_STRIP: "true"
           # linuxdeploy does not find the NEEDED libs libllama.so.0/libggml*.so
           # (Tauri resource resources/lib, not a standard linker path) -> add
           # the path so it resolves them + deploys them to usr/lib.
-          # -> ks98/voicetypex#2
+          # -> ks98/VoiceTypeX#2
           LD_LIBRARY_PATH: ${{ github.workspace }}/src-tauri/resources/lib
           # whisper-rs-sys defaults to GGML_NATIVE=ON (-march=native): on the
           # AVX-512-capable CI runner that bakes AVX-512 into whisper's static
@@ -201,7 +201,7 @@ jobs:
           # runnability (white-screen risk). Arm it once the
           # appimage-validate workflow confirms a launching AppImage.
           # (deb/rpm could also self-update with tauri-plugin-updater 2.10.1
-          # — separate path.) -> ks98/voicetypex#2
+          # — separate path.) -> ks98/VoiceTypeX#2
           # Input name is `includeUpdaterJson` on tauri-action@v0; a prior
           # `uploadUpdaterJson` was silently ignored (an unknown input ->
           # latest.json got uploaded regardless of the intended guard). The

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# TEMPORARY validation workflow for ks98/voicetypex#2.
+# TEMPORARY validation workflow for ks98/VoiceTypeX#2.
 #
 # Builds ONLY the Linux AppImage (with NO_STRIP=true + --verbose) on
 # ubuntu-24.04 and uploads it as an artifact — WITHOUT creating a release.

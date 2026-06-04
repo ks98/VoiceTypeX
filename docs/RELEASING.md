@@ -27,7 +27,7 @@ delivered to users.
 
 > **Windows is back in the release** (NSIS installer with STT + Vulkan +
 > Cloud/Ollama LLM). The embedded llama-cpp-2 has been removed on Windows
-> ([#1](https://github.com/ks98/voicetypex/issues/1): ggml symbol collision
+> ([#1](https://github.com/ks98/VoiceTypeX/issues/1): ggml symbol collision
 > when MSVC links whisper.cpp + llama.cpp) — a local LLM runs there
 > through a self-installed Ollama daemon or via the cloud.
 
@@ -98,7 +98,7 @@ The in-app updater (`tauri-plugin-updater` + `tauri-plugin-process`)
 queries the **endpoint**:
 
 ```
-https://github.com/ks98/voicetypex/releases/latest/download/latest.json
+https://github.com/ks98/VoiceTypeX/releases/latest/download/latest.json
 ```
 
 `/releases/latest/` always points to the newest **published**
@@ -136,12 +136,12 @@ offered them.
 
 - **Linux** (deb / rpm / AppImage): in the release. The AppImage build was
   fixed via `NO_STRIP=true` — background in
-  [#2](https://github.com/ks98/voicetypex/issues/2). The in-app
+  [#2](https://github.com/ks98/VoiceTypeX/issues/2). The in-app
   auto-updater (AppImage) is still **disabled** (`includeUpdaterJson: false`)
   until the `AppImage Validate` workflow confirms a launching AppImage.
 - **Windows** (NSIS): **in the release** — STT (whisper.cpp + Vulkan) +
   Cloud/Ollama LLM. The embedded llama-cpp-2 has been removed on Windows
-  ([#1](https://github.com/ks98/voicetypex/issues/1): ggml symbol collision
+  ([#1](https://github.com/ks98/VoiceTypeX/issues/1): ggml symbol collision
   between the two ggml copies when MSVC links), which lets the link
   succeed; CI builds and tests Windows fully (`cargo build + test`). The
   NSIS auto-updater is wired up; the `latest.json` is — as with AppImage —
@@ -152,6 +152,6 @@ offered them.
 
 1. `gh auth login` (scopes `repo`, `workflow`).
 2. Set the GitHub secret `TAURI_SIGNING_PRIVATE_KEY`:
-   `gh secret set TAURI_SIGNING_PRIVATE_KEY --repo ks98/voicetypex < ~/.tauri/voicetypex-updater.key`
+   `gh secret set TAURI_SIGNING_PRIVATE_KEY --repo ks98/VoiceTypeX < ~/.tauri/voicetypex-updater.key`
 3. Optional: mark `v*` as a *Protected Tag* (Settings → Tags) so that only
    maintainers can cut releases.

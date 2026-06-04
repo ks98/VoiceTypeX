@@ -16,7 +16,7 @@ The **Windows release** includes speech recognition (whisper.cpp + Vulkan)
 and cloud LLM post-processing; the **embedded local LLM (llama-cpp-2) is
 Linux/macOS-only** — on Windows its ggml symbols collided with those of
 whisper.cpp during MSVC linking (LNK2005,
-[Issue #1](https://github.com/ks98/voicetypex/issues/1)), so the local LLM
+[Issue #1](https://github.com/ks98/VoiceTypeX/issues/1)), so the local LLM
 runs there via a self-installed **Ollama** daemon or a cloud provider.
 macOS is out of scope.
 
@@ -250,7 +250,7 @@ WebView2 cache, …) are in
 - **Linux prerequisite for encryption at rest:** libsecret
   (gnome-keyring) or kwallet must be installed. Headless/server setups
   run in the plaintext fallback with a clear UI warning.
-- **Bug reports:** [GitHub Issues](https://github.com/ks98/voicetypex/issues)
+- **Bug reports:** [GitHub Issues](https://github.com/ks98/VoiceTypeX/issues)
   including `~/.config/de.kevin-stenzel.voicetypex/voicetypex.log`
   (if enabled) and the app version from *Settings → Diagnostics*.
 

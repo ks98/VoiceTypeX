@@ -157,7 +157,7 @@ jobs:
       - name: pnpm build (frontend + i18n gate)
         run: pnpm build
       # Windows links now: the embedded llama-cpp-2 is removed on Windows
-      # (ks98/voicetypex#1), leaving only whisper's static ggml
+      # (ks98/VoiceTypeX#1), leaving only whisper's static ggml
       # and eliminating the ggml symbol collision (LNK2005). cargo build
       # runs the full link (which cargo check previously masked),
       # cargo test --lib mirrors the Linux job.
