@@ -17,7 +17,7 @@ their respective licenses.
 ## Models (loaded at runtime)
 
 These models are **not** shipped in the installer. They are downloaded
-from Hugging Face to `~/.config/voicetypex/models/` on first setup
+from Hugging Face to `~/.config/de.kevin-stenzel.voicetypex/models/` on first setup
 (SHA-256-verified) and stored locally there. Each model is governed by
 its respective upstream license.
 
