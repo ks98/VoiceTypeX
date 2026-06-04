@@ -99,6 +99,12 @@ pub async fn handle_menu_hotkey(app: AppHandle, ctx: Arc<AppContext>) -> Result<
             if let Some(menu) = app.get_webview_window("menu") {
                 if let Err(e) = menu.show() {
                     tracing::warn!(error = %e, "menu.show() failed");
+                } else {
+                    // center() after show(): config-center is unreliable for a
+                    // window created `visible:false` (computed pre-map → top-left
+                    // on Windows). Per-show because the menu is re-shown on every
+                    // hotkey press, and config-center only fires once. (#5)
+                    let _ = menu.center();
                 }
                 // set_focus on Wayland is compositor-dependent. The menu
                 // window starts with `focus: true` in the config, which

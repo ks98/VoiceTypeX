@@ -492,7 +492,7 @@ code comments in `libei_worker.rs`):
 |---|---|---|---|---|---|
 | `main` | Main window (Settings, Modes, Logs) | 960 × 720, resizable | yes | yes | centered |
 | `overlay` | Status indicator during Recording / Transcribing / … | 520 × 96, **non-resizable** | **no** (`focus: false`) | **none** (CSS) | centered |
-| `menu` | Mode selection via arrow navigation + Enter | 480 × 360, non-resizable, scrollable with many modes | yes | yes | top left 24,24 |
+| `menu` | Mode selection via arrow navigation + Enter | 480 × 360, non-resizable, scrollable with many modes | yes | yes | centered |
 
 All three windows load the same `index.html`; routing happens in
 `src/main.tsx` via the `?window=overlay` / `?window=menu` URL query,
