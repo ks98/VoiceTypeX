@@ -87,9 +87,12 @@ pub struct Settings {
     pub whisper_n_threads: Option<u32>,
 
     /// Beam width for the local Whisper **final** pass (BeamSearch).
-    /// Default 5. Lower = faster, slightly less accurate (`1` ≈ greedy,
-    /// ~beam× cheaper). Clamped to `1..=10` at use. A per-mode
-    /// `Mode.whisper_beam_size` overrides this; cloud STT ignores it.
+    /// Default 2. Lower = faster, slightly less accurate (`1` ≈ greedy,
+    /// ~beam× cheaper). whisper.cpp runs `beam_size` decoders in
+    /// parallel, so cost is ~linear in the width; on short dictation
+    /// beam>2-3 buys <2 % WER for a large latency hit. Clamped to
+    /// `1..=10` at use. A per-mode `Mode.whisper_beam_size` overrides
+    /// this; cloud STT ignores it.
     #[serde(default = "default_whisper_beam_size")]
     pub whisper_beam_size: u32,
 
@@ -231,7 +234,7 @@ fn default_llm_slot() -> String {
 }
 
 fn default_whisper_beam_size() -> u32 {
-    5
+    2
 }
 
 fn default_whisper_slot() -> String {

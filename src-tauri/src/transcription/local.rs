@@ -215,17 +215,20 @@ fn run_whisper_blocking(
         .map_err(|e| VoiceTypeError::Transcription(format!("create_state: {e}")))?;
 
     // Sampling choice depends on the profile:
-    // - Final: BeamSearch (patience=1.0) — ~2-3 % WER improvement over
-    //   greedy at ~beam× the decode cost. The beam width is
-    //   configurable (Settings.whisper_beam_size + per-mode override);
-    //   default 5, clamped to 1..=10 (1 ≈ greedy).
+    // - Final: BeamSearch (patience=1.0). The beam width is configurable
+    //   (Settings.whisper_beam_size + per-mode override); default 2,
+    //   clamped to 1..=10 (1 ≈ greedy). whisper.cpp runs `beam_size`
+    //   decoders in parallel, so cost is ~linear in the width; on short
+    //   dictation beam>2-3 buys <2 % WER for a large latency hit, so the
+    //   default dropped 5→2 (perf #2). Users who want max accuracy raise
+    //   it per mode / in settings.
     // - Streaming: greedy with best_of=1 — fastest variant, because
     //   partials are overwritten anyway as soon as the next pass
     //   delivers a stable prefix. Quality is caught up in the final
     //   pass. `beam_size_override` is ignored here.
     let sampling = match profile {
         DecodeProfile::Final => SamplingStrategy::BeamSearch {
-            beam_size: beam_size_override.unwrap_or(5).clamp(1, 10) as i32,
+            beam_size: beam_size_override.unwrap_or(2).clamp(1, 10) as i32,
             patience: 1.0,
         },
         DecodeProfile::Streaming => SamplingStrategy::Greedy { best_of: 1 },
@@ -236,14 +239,15 @@ fn run_whisper_blocking(
     params.set_print_realtime(false);
     params.set_print_timestamps(false);
 
-    // `audio_ctx` trick only in the streaming profile: on short audio
-    // (<30 s) this shortens the mel encoder, ~2x speedup. On long
-    // audio it's a no-op (None) so nothing is truncated.
-    if profile == DecodeProfile::Streaming {
-        if let Some(ctx_frames) = dynamic_audio_ctx_frames(samples.len()) {
-            params.set_audio_ctx(ctx_frames);
-            tracing::debug!(audio_ctx = ctx_frames, "streaming pass audio_ctx set");
-        }
+    // `audio_ctx` trick in BOTH profiles: on short audio (<~25 s) this
+    // shortens the mel encoder (~2x speedup). `dynamic_audio_ctx_frames`
+    // returns None from ~25 s on, so long audio is never truncated.
+    // Extended from streaming-only to the Final pass too (perf #1): the
+    // felt paste latency lives in the Final pass, where the full 30 s mel
+    // encoder was the dominant cost on short dictations.
+    if let Some(ctx_frames) = dynamic_audio_ctx_frames(samples.len()) {
+        params.set_audio_ctx(ctx_frames);
+        tracing::debug!(audio_ctx = ctx_frames, ?profile, "audio_ctx set");
     }
 
     // Quality hardening:
@@ -267,7 +271,15 @@ fn run_whisper_blocking(
             params.set_temperature_inc(0.2);
         }
         DecodeProfile::Streaming => {
-            // no_speech_thold default (1.0 = never skipped), no temp_inc
+            // Make the "show uncertain partials" intent explicit. The
+            // whisper.cpp default is 0.6 (NOT 1.0) and it IS implemented
+            // in the bundled v1.8.3 — the whisper-rs "not implemented as
+            // of v1.3.0" doc is stale — so relying on the default would
+            // silently drop near-silence partials. Streaming output is
+            // throwaway (overwritten by the final pass), so we want to
+            // surface uncertain text: disable the drop with 1.0. No
+            // temp_inc: a fallback retry would double a throwaway pass.
+            params.set_no_speech_thold(1.0);
             params.set_temperature_inc(0.0);
         }
     }

@@ -473,9 +473,17 @@ async fn finish_recording_and_inject(
 
     ctx.state_bus.transition(AppState::Transcribing)?;
 
-    if let Err(e) = play_stop_cue().await {
-        tracing::warn!(error = %e, "Stop cue failed (non-fatal)");
-    }
+    // Fire-and-forget: the stop cue is UX feedback, not a dependency of
+    // finalize/transcribe. Awaiting it (sink.sleep_until_end over the
+    // whole beep) added the full cue length to the felt paste latency
+    // (perf #3). Spawn it so the pipeline proceeds to stop_and_finalize
+    // immediately; a cue failure is still logged, just off the critical
+    // path.
+    tauri::async_runtime::spawn(async {
+        if let Err(e) = play_stop_cue().await {
+            tracing::warn!(error = %e, "Stop cue failed (non-fatal)");
+        }
+    });
 
     let wav = recorder.stop_and_finalize().await.inspect_err(|e| {
         let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
