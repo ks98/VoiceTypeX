@@ -77,9 +77,12 @@ still accepted but ignored. You change the menu hotkey itself under
   silence hallucinations). Default model since May 2026:
   `ggml-large-v3-turbo-q8_0` (~874 MB) — on modern backends Q8 is just as
   fast as Q5 while delivering visibly better DE quality. Selectable slots
-  include `large-v3-turbo-german-q5_0` (primeline fine-tune, ~28 % rel.
-  WER reduction on German) and `small-q5_1` for 4 GB devices.
-  BeamSearch (size=5) with a temperature fallback. **Phase-2 streaming**:
+  include the German fine-tune (`large-v3-turbo-german-q5_0` and the
+  Vulkan-safe `-q8_0`, primeline/Apache-2.0 — best German accuracy) and
+  `small-q5_1` for 4 GB devices. The picker shows each model with
+  Speed/Accuracy bars + a hardware-aware recommendation. BeamSearch
+  (default size 2, tuned for low dictation latency) with a temperature
+  fallback. **Phase-2 streaming**:
   a greedy decode runs in parallel with recording, and the overlay shows
   the partial text as it comes in. The final pass after the stop hotkey
   overwrites it at full quality. **Phase 3a (since May 2026): Vulkan

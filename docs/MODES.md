@@ -175,10 +175,10 @@ embedded_llm_slot = "gemma4-e4b-it-q5_k_m"  # null = global default
 whisper_model_slot = "large-v3-turbo-q8_0"  # null = global default
 
 # Only if transcription = "local" — override the beam width of the
-# final pass. null = global default (Settings.whisper_beam_size, = 5).
+# final pass. null = global default (Settings.whisper_beam_size, = 2).
 # Range 1..=10: lower = faster (1 ≈ greedy), higher = marginally
 # more accurate + slower. Cloud STT ignores it.
-whisper_beam_size = 5
+whisper_beam_size = 2
 
 initial_prompt = """
 Optional Whisper glossary — proper nouns, technical terms, or spellings

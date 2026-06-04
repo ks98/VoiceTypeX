@@ -257,10 +257,12 @@ The WAV buffer goes directly to `Transcriber::transcribe_oneshot`.
 [`transcription/local.rs`](../src-tauri/src/transcription/local.rs) and
 [`transcription/model_downloader.rs`](../src-tauri/src/transcription/model_downloader.rs):
 
-**Whisper sampling (default as of Phase 1):**
-- `SamplingStrategy::BeamSearch { beam_size: 5, patience: 1.0 }` —
-  ~2–3 % WER improvement on German multi-sentence dictation over greedy,
-  ~3× slower per decode step.
+**Whisper sampling (default):**
+- `SamplingStrategy::BeamSearch { beam_size: 2, patience: 1.0 }` —
+  whisper.cpp runs `beam_size` decoders in parallel, so decode cost is
+  ~linear in the width; on short dictation beam>2-3 buys <2 % WER for a
+  large latency hit, so the default is 2 (lowered from 5). Per-mode /
+  settings override stays available for users who want max accuracy.
 - `suppress_blank=true`, `no_speech_thold=0.6`, `temperature=0.0` with
   `temperature_inc=0.2` as the fallback when `logprob_thold` trips.
 
@@ -279,9 +281,16 @@ The WAV buffer goes directly to `Transcriber::transcribe_oneshot`.
 |---|---|---|---|
 | `large-v3-turbo-q8_0` *(Default)* | `ggml-large-v3-turbo-q8_0.bin` | ~874 MB | ggerganov/whisper.cpp |
 | `large-v3-turbo-german-q5_0` | `ggml-model-q5_0.bin` | ~574 MB | cstr/whisper-large-v3-turbo-german-ggml (primeline fine-tune, Apache 2.0) |
+| `large-v3-turbo-german-q8_0` | `ggml-large-v3-turbo-german-q8_0.bin` | ~874 MB | Pomni/whisper-large-v3-turbo-german-ggml-allquants (same primeline fine-tune, Apache 2.0; Vulkan-safe Q8) |
 | `large-v3-turbo-q5_0` | `ggml-large-v3-turbo-q5_0.bin` | ~547 MB | ggerganov/whisper.cpp |
-| `small-q5_1` | `ggml-small-q5_1.bin` | ~181 MB | ggerganov/whisper.cpp |
+| `small-q5_1` | `ggml-small-q5_1.bin` | ~190 MB | ggerganov/whisper.cpp |
 | `large-v3-turbo` | `ggml-large-v3-turbo.bin` | ~1624 MB | ggerganov/whisper.cpp (F16) |
+
+The picker in Settings / the ModeEditor renders these as comparison cards
+(`src/components/WhisperModelCards.tsx`, data in `src/lib/whisperModels.ts`)
+with qualitative Speed/Accuracy bars, a DE badge on the German fine-tunes,
+the RAM footprint, and a hardware- + language-aware "recommended" marker
+(`recommendWhisperSlot`).
 
 All slots have pinned SHA-256 hashes; a mismatch triggers a re-download
 and never accepts a corrupted file. The hashes come from the HF Git-LFS
@@ -312,7 +321,7 @@ speaking.
    └─ Overlay shows "Heute scheint" under "Listening ..."
                                                        [Release]
                                                        └─►abort()
-                                                       └─►final pass (BeamSearch=5, no audio_ctx)
+                                                       └─►final pass (BeamSearch=2, audio_ctx)
                                                           overwrites everything
 ```
 
@@ -324,10 +333,13 @@ comparable streaming interface.
 **Decode profile**: streaming passes use `DecodeProfile::Streaming`:
 greedy sampling instead of BeamSearch (3× faster) plus `set_audio_ctx`
 with a dynamically computed frame count (`dynamic_audio_ctx_frames`) for
-short audio (<30 s). For audio ≥30 s the trick is dropped so the mel
-encoder cuts nothing off. The final pass after stop uses
-`DecodeProfile::Final` (BeamSearch + full audio_ctx) — it delivers the
-definitive text and overwrites any partial output.
+short audio. From ~25 s on the trick is dropped (returns `None`) so the
+mel encoder cuts nothing off. The final pass after stop uses
+`DecodeProfile::Final` (BeamSearch); it now applies the **same**
+`audio_ctx` shortening on short clips (perf #1 — the final pass
+previously always ran the full 30 s mel encoder, the dominant cost of the
+felt paste latency) and delivers the definitive text, overwriting any
+partial output.
 
 **LocalAgreement-2** (`transcription/local_agreement.rs`, Machacek et
 al. arXiv 2307.14743): computes the stable word prefix from two
