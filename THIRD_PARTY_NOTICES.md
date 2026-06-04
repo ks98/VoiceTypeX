@@ -30,6 +30,7 @@ its respective upstream license.
 | `ggml-small-q5_1.bin` | ditto | MIT |
 | `ggml-large-v3-turbo.bin` (F16) | ditto | MIT |
 | `ggml-model-q5_0.bin` (DE fine-tune) | [cstr/whisper-large-v3-turbo-german-ggml](https://huggingface.co/cstr/whisper-large-v3-turbo-german-ggml) — re-pack of [primeline/whisper-large-v3-turbo-german](https://huggingface.co/primeline/whisper-large-v3-turbo-german) | [Apache 2.0](https://huggingface.co/primeline/whisper-large-v3-turbo-german/blob/main/LICENSE) |
+| `ggml-large-v3-turbo-german-q8_0.bin` (DE fine-tune, Q8) | [Pomni/whisper-large-v3-turbo-german-ggml-allquants](https://huggingface.co/Pomni/whisper-large-v3-turbo-german-ggml-allquants) — Q8 re-pack of the same [primeline/whisper-large-v3-turbo-german](https://huggingface.co/primeline/whisper-large-v3-turbo-german) fine-tune (verified: Pomni's Q5_0 LFS oid `15e92e3d…d9d030` is byte-identical to cstr's) | [Apache 2.0](https://huggingface.co/primeline/whisper-large-v3-turbo-german/blob/main/LICENSE) |
 
 ### VAD — Voice Activity Detection
 

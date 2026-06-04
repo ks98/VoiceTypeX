@@ -23,6 +23,13 @@ const VAD_BASE: &str = "https://huggingface.co/ggml-org/whisper-vad/resolve/main
 // with GGML conversion; see THIRD_PARTY_NOTICES.md for the license chain.
 const WHISPER_GERMAN_BASE: &str =
     "https://huggingface.co/cstr/whisper-large-v3-turbo-german-ggml/resolve/main";
+// Same primeline fine-tune, Q8_0 GGUF. The cstr repo only packs Q5_0+F16,
+// so the Q8 comes from the Pomni "allquants" re-pack. Proven to be the
+// identical weight: Pomni's Q5_0 LFS oid (15e92e3d…d9d030, 574,041,195 B)
+// matches cstr's byte-for-byte, so the license chain (primeline Apache-2.0)
+// holds. See THIRD_PARTY_NOTICES.md.
+const WHISPER_GERMAN_Q8_BASE: &str =
+    "https://huggingface.co/Pomni/whisper-large-v3-turbo-german-ggml-allquants/resolve/main";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModelSlot {
@@ -35,10 +42,16 @@ pub enum ModelSlot {
     LargeV3TurboQ8,
     /// **DE Pro** — primeline/whisper-large-v3-turbo-german (Apache-2.0)
     /// as Q5_0 GGUF. ~28 % rel. WER reduction on German
-    /// CommonVoice/Tuda over the generic turbo. May 2026: only Q5_0
-    /// available in the cstr repo (Q8 not packed). Same disk footprint
-    /// as `LargeV3TurboQ5`.
+    /// CommonVoice/Tuda over the generic turbo. Same disk footprint
+    /// as `LargeV3TurboQ5`. Light-hardware German variant; on Vulkan
+    /// Intel iGPUs prefer the Q8 variant below (whisper.cpp #3047).
     LargeV3TurboGermanQ5,
+    /// **DE Pro (Q8)** — the same primeline/whisper-large-v3-turbo-german
+    /// fine-tune as `LargeV3TurboGermanQ5`, but Q8_0 (~874 MB), from the
+    /// Pomni "allquants" re-pack (cstr ships no Q8). German fine-tune
+    /// quality at the Vulkan-safe Q8 quant — the recommended DE default
+    /// for 8-16 GB with iGPU/dGPU, mirroring the generic `LargeV3TurboQ8`.
+    LargeV3TurboGermanQ8,
     /// Frugal fallback — smaller, for 4 GB devices without GPU.
     SmallQ51,
     /// Maximum quality (F16), largest disk footprint. For users with
@@ -55,6 +68,7 @@ impl ModelSlot {
             // a model-specific prefix). We keep the name because we pull
             // the file 1:1 from the source.
             Self::LargeV3TurboGermanQ5 => "ggml-model-q5_0.bin",
+            Self::LargeV3TurboGermanQ8 => "ggml-large-v3-turbo-german-q8_0.bin",
             Self::SmallQ51 => "ggml-small-q5_1.bin",
             Self::LargeV3Turbo => "ggml-large-v3-turbo.bin",
         }
@@ -65,7 +79,8 @@ impl ModelSlot {
             Self::LargeV3TurboQ5 => 547,
             Self::LargeV3TurboQ8 => 874,
             Self::LargeV3TurboGermanQ5 => 574,
-            Self::SmallQ51 => 181,
+            Self::LargeV3TurboGermanQ8 => 874,
+            Self::SmallQ51 => 190,
             Self::LargeV3Turbo => 1_624,
         }
     }
@@ -87,6 +102,9 @@ impl ModelSlot {
             Self::LargeV3TurboGermanQ5 => {
                 Some("15e92e3db0993c52fffa781513eec9253475331c1be808f8fb409285c9d9d030")
             }
+            Self::LargeV3TurboGermanQ8 => {
+                Some("8583eb7d71c59cc2d7bd7ca77fccd6108c795f3b072d0bbf50eef2e1e8204020")
+            }
             Self::SmallQ51 => {
                 Some("ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb")
             }
@@ -106,6 +124,7 @@ impl ModelSlot {
             "large-v3-turbo" => Self::LargeV3Turbo,
             "large-v3-turbo-q5_0" => Self::LargeV3TurboQ5,
             "large-v3-turbo-german-q5_0" => Self::LargeV3TurboGermanQ5,
+            "large-v3-turbo-german-q8_0" => Self::LargeV3TurboGermanQ8,
             _ => Self::LargeV3TurboQ8, // Default
         }
     }
@@ -115,6 +134,7 @@ impl ModelSlot {
     fn url(self) -> String {
         let base = match self {
             Self::LargeV3TurboGermanQ5 => WHISPER_GERMAN_BASE,
+            Self::LargeV3TurboGermanQ8 => WHISPER_GERMAN_Q8_BASE,
             _ => WHISPER_BASE,
         };
         format!("{base}/{}", self.filename())
@@ -460,6 +480,7 @@ mod tests {
             ModelSlot::LargeV3TurboQ5,
             ModelSlot::LargeV3TurboQ8,
             ModelSlot::LargeV3TurboGermanQ5,
+            ModelSlot::LargeV3TurboGermanQ8,
             ModelSlot::SmallQ51,
             ModelSlot::LargeV3Turbo,
         ] {
@@ -542,6 +563,10 @@ mod tests {
         assert_eq!(
             ModelSlot::from_setting("large-v3-turbo-german-q5_0"),
             ModelSlot::LargeV3TurboGermanQ5
+        );
+        assert_eq!(
+            ModelSlot::from_setting("large-v3-turbo-german-q8_0"),
+            ModelSlot::LargeV3TurboGermanQ8
         );
         assert_eq!(ModelSlot::from_setting("small-q5_1"), ModelSlot::SmallQ51);
         assert_eq!(
