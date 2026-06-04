@@ -48,6 +48,11 @@ pub fn run() {
     let log_buffer = LogRingBuffer::default();
     init_tracing(&log_buffer);
 
+    // Report the REAL runtime backend (not just the build flag) once at
+    // startup. On a Vulkan build with no usable Vulkan device this prints
+    // "running on CPU", which is the only way to spot a silent fallback.
+    crate::transcription::backend::log_active_backend();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
