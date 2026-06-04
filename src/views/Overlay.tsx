@@ -113,7 +113,7 @@ export default function Overlay(): JSX.Element {
           )}
           {phase === "recording" ? <RecordingDot /> : null}
         </div>
-        {phase === "recording" && visiblePartial ? (
+        {phase === "recording" && visiblePartial && !engine ? (
           <p
             key={visiblePartial}
             className="text-fg text-xs italic leading-snug pl-10 pr-1 overflow-hidden text-ellipsis whitespace-nowrap animate-[vtx-fadein_120ms_ease-out]"
@@ -175,7 +175,10 @@ function EngineSeg({
         {t(isLocal ? "overlay.engine.local" : "overlay.engine.cloud")}
       </span>
       {detail ? (
-        <span className="font-mono overflow-hidden text-ellipsis">
+        <span
+          className="font-mono overflow-hidden text-ellipsis min-w-0"
+          title={detail}
+        >
           {detail}
         </span>
       ) : null}

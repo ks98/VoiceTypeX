@@ -155,6 +155,12 @@ pub fn setup_tray(app: &AppHandle, locale: Option<&str>) -> Result<()> {
 /// this once tauri#13440 / tao ship a fix.
 fn reveal_main_window(window: &tauri::WebviewWindow) {
     let _ = window.show();
+    // center() after show(): the config `center:true` flag is unreliable for a
+    // window created `visible:false` — the runtime computes the centered
+    // coordinate from the still-unmapped window's (default) position/size, so
+    // it lands top-left on Windows. After show() the window is mapped with a
+    // real size + monitor, so centering resolves correctly. (#5)
+    let _ = window.center();
     let _ = window.set_focus();
 
     #[cfg(target_os = "linux")]

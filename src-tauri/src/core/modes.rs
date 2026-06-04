@@ -513,6 +513,17 @@ impl ModesRegistry {
         self.modes.read().iter().find(|m| m.id == id).cloned()
     }
 
+    /// Reload the mode list from `dir` immediately and notify subscribers.
+    /// For programmatic writes that shouldn't wait for the file-watcher
+    /// debounce (e.g. the onboarding re-seed). On a load error the previous
+    /// snapshot is kept and the error is returned.
+    pub fn reload(&self, dir: &Path) -> Result<()> {
+        let modes = load_modes_from_dir(dir)?;
+        *self.modes.write() = modes;
+        let _ = self.update_tx.send(ModesEvent::Reloaded);
+        Ok(())
+    }
+
     /// Subscribes to hot-reload events emitted by `start_watching`.
     pub fn subscribe(&self) -> broadcast::Receiver<ModesEvent> {
         self.update_tx.subscribe()

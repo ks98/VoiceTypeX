@@ -189,6 +189,12 @@ async fn start_recording(app: &AppHandle, ctx: &Arc<AppContext>, mode: &Mode) ->
     if let Some(overlay) = app.get_webview_window("overlay") {
         if let Err(e) = overlay.show() {
             tracing::warn!(error = %e, "Overlay show() failed (non-fatal)");
+        } else {
+            // center() after show(): config `center:true` is unreliable for a
+            // window created `visible:false` (computed pre-map → top-left on
+            // Windows). Done per-show because the overlay is re-shown every
+            // recording, and config-center only fires once at creation. (#5)
+            let _ = overlay.center();
         }
     }
 

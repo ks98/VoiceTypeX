@@ -107,7 +107,7 @@ enigo = "0.3"
 # CryptUnprotectData). User-bound, machine-bound — the standard way for
 # cleartext crypto on desktop Windows.
 [target.'cfg(target_os = "windows")'.dependencies]
-windows = { version = "0.62", features = ["Win32_Security_Cryptography", "Win32_Foundation"] }
+windows = { version = "0.62", features = ["Win32_Security_Cryptography", "Win32_Foundation", "Win32_Globalization"] }
 
 # Wayland: xdg-desktop-portal (GlobalShortcuts + RemoteDesktop) via DBus.
 # Only linked on Linux, because otherwise libdbus causes problems on Windows/macOS.

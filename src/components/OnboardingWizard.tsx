@@ -7,6 +7,7 @@ import {
   ipcDownloadLlmDefaultModel,
   ipcGetHardwareReport,
   ipcGetWhisperBackend,
+  ipcReseedDefaultModes,
   ipcSetProviderKey,
   ipcTestProviderConnection,
   type HardwareReport,
@@ -15,7 +16,7 @@ import {
 } from "../lib/tauri";
 import { recommendLlmSlot } from "../lib/recommend";
 import { isWindows } from "../lib/platform";
-import { useSettingsStore } from "../store";
+import { useModesStore, useSettingsStore } from "../store";
 import Banner from "./Banner";
 import Button from "./Button";
 import Input from "./Input";
@@ -66,6 +67,12 @@ export default function OnboardingWizard({
     void update({ locale: next }).then(() => {
       useI18nStore.setState({ locale: next });
       void emit("i18n://locale-changed", { locale: next });
+      // Re-seed the bundled default modes in the chosen language so their
+      // names / system prompts / dictation commands match the UI (#6).
+      // Onboarding-only — the user hasn't customized modes yet here.
+      void ipcReseedDefaultModes(next)
+        .then((modes) => useModesStore.setState({ modes }))
+        .catch(() => undefined);
     });
   };
 

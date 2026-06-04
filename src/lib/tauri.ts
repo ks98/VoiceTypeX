@@ -12,7 +12,10 @@ import type { Mode, Settings } from "./types";
  * finishes its one-time disk work — a transient race (issue #7).
  */
 export function isUnmanagedStateError(e: unknown): boolean {
-  return String(e).includes("State not managed");
+  // Tauri 2.x emits this LOWERCASE ("state not managed for field …" — verified
+  // in tauri-2.11.2/src/state.rs). Match case-insensitively so the retry fires
+  // for the real message and survives any future re-casing.
+  return String(e).toLowerCase().includes("state not managed");
 }
 
 /**
@@ -23,7 +26,10 @@ export function isUnmanagedStateError(e: unknown): boolean {
  */
 export async function retryWhileUnmanaged<T>(
   fn: () => Promise<T>,
-  attempts = 10,
+  // ~3s total — covers a cold first run (config dir creation + writing the 9
+  // default mode TOMLs + modes load on a cold/AV-scanned disk), where the
+  // setup hook can lag the webview's first `invoke()`.
+  attempts = 30,
   delayMs = 100,
 ): Promise<T> {
   for (let attempt = 1; ; attempt++) {
@@ -67,6 +73,10 @@ export async function ipcGetModes(): Promise<Mode[]> {
 
 export async function ipcReloadModes(): Promise<Mode[]> {
   return invoke<Mode[]>("reload_modes");
+}
+
+export async function ipcReseedDefaultModes(locale: string): Promise<Mode[]> {
+  return invoke<Mode[]>("reseed_default_modes", { locale });
 }
 
 export async function ipcCreateMode(mode: Mode): Promise<void> {

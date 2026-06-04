@@ -2,19 +2,25 @@
 import { describe, expect, it } from "vitest";
 import { isUnmanagedStateError, retryWhileUnmanaged } from "./tauri";
 
+// The real wording Tauri 2.x emits — LOWERCASE — verified against
+// tauri-2.11.2/src/state.rs. The matcher must catch this exact casing
+// (the original capital-S guess made the retry a no-op).
+const REAL_TAURI_MSG =
+  "state not managed for field `state` on command `get_modes`. You must call `.manage()` before using this command";
+
 describe("isUnmanagedStateError", () => {
-  it("matches Tauri's unmanaged-state message", () => {
-    expect(
-      isUnmanagedStateError(
-        "State not managed for field `state` on command `get_modes`: You must call `.manage()` before using this command.",
-      ),
-    ).toBe(true);
+  it("matches Tauri's real (lowercase) unmanaged-state message", () => {
+    expect(isUnmanagedStateError(REAL_TAURI_MSG)).toBe(true);
   });
 
   it("matches an Error instance carrying the message", () => {
-    expect(isUnmanagedStateError(new Error("... State not managed ..."))).toBe(
-      true,
-    );
+    expect(
+      isUnmanagedStateError(new Error(`invoke failed: ${REAL_TAURI_MSG}`)),
+    ).toBe(true);
+  });
+
+  it("is case-insensitive (robust to a future re-casing)", () => {
+    expect(isUnmanagedStateError("State Not Managed for field `x`")).toBe(true);
   });
 
   it("does not match unrelated errors", () => {
@@ -30,10 +36,10 @@ describe("retryWhileUnmanaged", () => {
     const result = await retryWhileUnmanaged(
       async () => {
         calls += 1;
-        if (calls < 3) throw new Error("State not managed for field `state`");
+        if (calls < 3) throw new Error(REAL_TAURI_MSG);
         return "ok";
       },
-      10,
+      30,
       0,
     );
     expect(result).toBe("ok");
@@ -48,7 +54,7 @@ describe("retryWhileUnmanaged", () => {
           calls += 1;
           throw new Error("boom");
         },
-        10,
+        30,
         0,
       ),
     ).rejects.toThrow("boom");
@@ -61,12 +67,12 @@ describe("retryWhileUnmanaged", () => {
       retryWhileUnmanaged(
         async () => {
           calls += 1;
-          throw new Error("State not managed");
+          throw new Error(REAL_TAURI_MSG);
         },
         3,
         0,
       ),
-    ).rejects.toThrow("State not managed");
+    ).rejects.toThrow("state not managed");
     expect(calls).toBe(3);
   });
 });

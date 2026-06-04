@@ -79,6 +79,7 @@ pub fn run() {
             ipc::reset::reset_app_factory,
             ipc::modes::get_modes,
             ipc::modes::reload_modes,
+            ipc::modes::reseed_default_modes,
             ipc::modes::create_mode,
             ipc::modes::update_mode,
             ipc::modes::delete_mode,
@@ -128,8 +129,30 @@ pub fn run() {
             // the backend (not the frontend) so the three webviews
             // (main, overlay, menu) don't race on the settings file —
             // single writer is this setup hook.
+            // On Windows `tauri_plugin_os::locale()` reads the display/UI
+            // language (GetUserPreferredUILanguages) and can return None (empty
+            // MUI list). Fall back to the regional/format locale so the
+            // first-run guess isn't a blind `en`. Additive: only used when the
+            // plugin returns None, so the English-display cohort is untouched. (#6)
+            #[cfg(windows)]
+            fn locale_fallback() -> Option<String> {
+                use windows::Win32::Globalization::GetUserDefaultLocaleName;
+                let mut buf = [0u16; 85]; // LOCALE_NAME_MAX_LENGTH
+                let len = unsafe { GetUserDefaultLocaleName(&mut buf) };
+                if len <= 0 {
+                    return None;
+                }
+                // `len` includes the trailing NUL.
+                let s = String::from_utf16_lossy(&buf[..len as usize - 1]);
+                (!s.is_empty()).then_some(s)
+            }
+            #[cfg(not(windows))]
+            fn locale_fallback() -> Option<String> {
+                None
+            }
+
             if initial_settings.locale.is_none() {
-                let detected = tauri_plugin_os::locale();
+                let detected = tauri_plugin_os::locale().or_else(locale_fallback);
                 tracing::info!(detected = ?detected, "First-run locale detection");
                 initial_settings.locale = detected;
                 if let Err(e) = initial_settings.save(&settings_path) {

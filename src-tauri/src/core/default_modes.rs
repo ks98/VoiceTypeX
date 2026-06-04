@@ -264,6 +264,24 @@ pub fn bootstrap_defaults_if_empty(dir: &Path, locale: Option<&str>) -> Result<(
     Ok(())
 }
 
+/// Overwrite the bundled default modes in `dir` with the given locale's set.
+/// Only the default filenames are written — user-created modes (other
+/// filenames) are left untouched. Used by the onboarding language picker so a
+/// switched UI language also gets matching mode names / system prompts /
+/// dictation commands; `bootstrap_defaults_if_empty` only seeds once, in the
+/// originally-detected locale.
+pub fn reseed_defaults_for_locale(dir: &Path, locale: Option<&str>) -> Result<()> {
+    std::fs::create_dir_all(dir)
+        .map_err(|e| VoiceTypeError::Mode(format!("create_dir_all({}): {e}", dir.display())))?;
+    for (name, content) in defaults_for_locale(locale) {
+        let path = dir.join(name);
+        std::fs::write(&path, content)
+            .map_err(|e| VoiceTypeError::Mode(format!("write({}): {e}", path.display())))?;
+        tracing::info!(file = %path.display(), locale = ?locale, "Default mode re-seeded");
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

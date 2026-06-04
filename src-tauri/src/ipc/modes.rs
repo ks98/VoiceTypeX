@@ -21,6 +21,23 @@ pub async fn reload_modes(state: tauri::State<'_, Arc<AppContext>>) -> IpcResult
     Ok(state.modes.current())
 }
 
+/// Re-seed the bundled default modes in `locale` (overwriting only the default
+/// filenames — user-created modes are kept) and reload. Used by the onboarding
+/// language picker so the default modes match the chosen UI language (#6).
+#[tauri::command]
+pub async fn reseed_default_modes(
+    state: tauri::State<'_, Arc<AppContext>>,
+    locale: String,
+) -> IpcResult<Vec<Mode>> {
+    crate::core::default_modes::reseed_defaults_for_locale(&state.modes_dir, Some(&locale))
+        .map_err(|e| e.to_string())?;
+    state
+        .modes
+        .reload(&state.modes_dir)
+        .map_err(|e| e.to_string())?;
+    Ok(state.modes.current())
+}
+
 #[tauri::command]
 pub async fn create_mode(state: tauri::State<'_, Arc<AppContext>>, mode: Mode) -> IpcResult<()> {
     mode.validate().map_err(|e| e.to_string())?;
