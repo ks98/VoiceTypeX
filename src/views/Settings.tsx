@@ -33,6 +33,8 @@ import {
   type WhisperBackendInfo,
 } from "../lib/tauri";
 import { recommendLlmSlot } from "../lib/recommend";
+import { recommendWhisperSlot } from "../lib/whisperModels";
+import WhisperModelCards from "../components/WhisperModelCards";
 import { isWindows } from "../lib/platform";
 import { emit } from "@tauri-apps/api/event";
 import {
@@ -48,14 +50,6 @@ import {
 
 const inputCls =
   "bg-surface border border-outline rounded-md px-3 py-2 text-sm text-fg placeholder:text-fg-faint focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/40";
-
-const WHISPER_SLOT_KEYS: Record<string, string> = {
-  "large-v3-turbo-q8_0": "settings.whisper.slot.q8",
-  "large-v3-turbo-german-q5_0": "settings.whisper.slot.de_pro",
-  "large-v3-turbo-q5_0": "settings.whisper.slot.q5_light",
-  "small-q5_1": "settings.whisper.slot.small",
-  "large-v3-turbo": "settings.whisper.slot.f16",
-};
 
 const LLM_SLOT_KEYS: Record<string, string> = {
   "gemma4-e4b-it-q5_k_m": "settings.llm.slot.gemma4_e4b",
@@ -102,6 +96,7 @@ export default function Settings(): JSX.Element {
   const load = useSettingsStore((s) => s.load);
   const loadAudioDevices = useSettingsStore((s) => s.loadAudioDevices);
   const update = useSettingsStore((s) => s.update);
+  const activeLocale = useLocale();
 
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -312,19 +307,18 @@ export default function Settings(): JSX.Element {
                 {t("settings.whisper.pick_file")}
               </Button>
             </div>
-            <select
-              className={inputCls}
+            <WhisperModelCards
               value={settings.whisper_default_slot}
-              onChange={(e) =>
-                void update({ whisper_default_slot: e.target.value })
-              }
-            >
-              {Object.entries(WHISPER_SLOT_KEYS).map(([slot, key]) => (
-                <option key={slot} value={slot}>
-                  {t(key)}
-                </option>
-              ))}
-            </select>
+              onChange={(slot) => {
+                if (slot) void update({ whisper_default_slot: slot });
+              }}
+              hardware={hardware}
+              recommendedSlot={recommendWhisperSlot(
+                hardware,
+                activeLocale.startsWith("de"),
+              )}
+              t={t}
+            />
             <div className="flex flex-col gap-1.5">
               <Button
                 onClick={() => void onDownloadDefault()}

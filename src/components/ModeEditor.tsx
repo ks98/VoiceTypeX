@@ -5,6 +5,7 @@ import { ipcCreateMode, ipcUpdateMode } from "../lib/tauri";
 import { isWindows } from "../lib/platform";
 import Button from "./Button";
 import Banner from "./Banner";
+import WhisperModelCards from "./WhisperModelCards";
 import { useT, type TranslateFn } from "../i18n";
 
 // Local input classes — the ModeEditor has ~17 sites with different
@@ -24,29 +25,10 @@ interface ModeEditorProps {
 const STT_PROVIDERS = ["xai", "openai", "groq", "deepgram"];
 const LLM_PROVIDERS = ["xai", "openai", "anthropic"];
 
-// Slot lists mirror the backend mappings (`ModelSlot::from_setting`
-// + `LlmModelSlot::from_setting`). Labels come via i18n key rather
-// than hardcoded strings, so a locale switch takes effect.
-const WHISPER_SLOTS: Array<{ value: string; key: string }> = [
-  {
-    value: "large-v3-turbo-q8_0",
-    key: "mode_editor.whisper_slot.large_v3_turbo_q8",
-  },
-  {
-    value: "large-v3-turbo-german-q5_0",
-    key: "mode_editor.whisper_slot.large_v3_turbo_german",
-  },
-  {
-    value: "large-v3-turbo-q5_0",
-    key: "mode_editor.whisper_slot.large_v3_turbo_q5",
-  },
-  { value: "small-q5_1", key: "mode_editor.whisper_slot.small_q5_1" },
-  {
-    value: "large-v3-turbo",
-    key: "mode_editor.whisper_slot.large_v3_turbo_f16",
-  },
-];
-
+// The embedded-LLM slot list mirrors the backend mapping
+// (`LlmModelSlot::from_setting`). Labels come via i18n key rather than
+// hardcoded strings, so a locale switch takes effect. (The Whisper slots
+// live in src/lib/whisperModels.ts, rendered via <WhisperModelCards />.)
 const LLM_SLOTS: Array<{ value: string; key: string }> = [
   { value: "gemma4-e4b-it-q5_k_m", key: "mode_editor.llm_slot.gemma4_e4b" },
   { value: "gemma4-e2b-it-q5_k_m", key: "mode_editor.llm_slot.gemma4_e2b" },
@@ -367,22 +349,14 @@ export default function ModeEditor({
                   label={t("mode_editor.stt.whisper_slot.label")}
                   hint={t("mode_editor.stt.whisper_slot.hint")}
                 >
-                  <select
-                    className={inputCls}
-                    value={draft.whisper_model_slot ?? ""}
-                    onChange={(e) =>
-                      update("whisper_model_slot", e.target.value || null)
-                    }
-                  >
-                    <option value="">
-                      {t("mode_editor.stt.whisper_slot.global")}
-                    </option>
-                    {WHISPER_SLOTS.map((s) => (
-                      <option key={s.value} value={s.value}>
-                        {t(s.key)}
-                      </option>
-                    ))}
-                  </select>
+                  <WhisperModelCards
+                    value={draft.whisper_model_slot ?? null}
+                    onChange={(slot) => update("whisper_model_slot", slot)}
+                    hardware={null}
+                    recommendedSlot={null}
+                    t={t}
+                    allowGlobal
+                  />
                 </Field>
                 <Field
                   label={t("mode_editor.stt.initial_prompt.label")}
