@@ -698,6 +698,71 @@ pub fn resolve_engine_status(mode: &Mode, settings: &Settings) -> EngineStatus {
 mod tests {
     use super::*;
 
+    // Contract test — PAYLOAD-SHAPE parity for `Mode` (#49).
+    //
+    // Pins the exact serialized JSON key set the backend sends over
+    // `get_modes`/`reload_modes`. The identical key list is hard-coded on
+    // the TS side in `src/lib/payload-contract.test.ts`, anchoring both
+    // sides to the same canonical fields. A Rust field add/rename/remove
+    // changes the serialized keys and fails THIS test; a TS-side `Mode`
+    // interface drift fails the TS test.
+    //
+    // `Mode::diagnostic()` has `hotkey = None`, but `hotkey` carries
+    // `skip_serializing_if = "Option::is_none"`, so it would be omitted.
+    // We set it to `Some` here to serialize the FULL superset of keys —
+    // `hotkey` is on the wire whenever a user TOML still carries it, so
+    // the contract must include it.
+    //
+    // Honest limit (contract-tests-over-codegen, no specta/ts-rs): the two
+    // sides do NOT auto-derive — a coordinated change to the struct AND
+    // both key lists would pass. Accepted trade-off.
+    #[test]
+    fn mode_serialized_key_set_is_pinned() {
+        let mut m = Mode::diagnostic();
+        m.hotkey = Some("CommandOrControl+Alt+D".to_string());
+        let value = serde_json::to_value(&m).expect("Mode serializes");
+        let mut keys: Vec<&str> = value
+            .as_object()
+            .expect("Mode serializes to a JSON object")
+            .keys()
+            .map(String::as_str)
+            .collect();
+        keys.sort_unstable();
+
+        let mut expected = [
+            "id",
+            "name",
+            "description",
+            "hotkey",
+            "transcription",
+            "processing",
+            "cloud_stt_provider",
+            "whisper_model_slot",
+            "initial_prompt",
+            "whisper_beam_size",
+            "cloud_llm_provider",
+            "cloud_llm_model",
+            "local_llm_model",
+            "local_engine",
+            "ollama_model_tag",
+            "embedded_llm_slot",
+            "injection_method",
+            "paste_shortcut",
+            "input",
+            "output",
+            "output_fallback",
+            "language",
+            "system_prompt",
+            "temperature",
+            "top_p",
+            "repeat_penalty",
+            "max_tokens",
+        ];
+        expected.sort_unstable();
+
+        assert_eq!(keys, expected);
+    }
+
     fn parse(toml_str: &str) -> Result<Mode> {
         // Mirrors `load_mode_from_path`: migration first, then
         // validation. Otherwise the engine migration would not apply

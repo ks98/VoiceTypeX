@@ -24,6 +24,7 @@ function validMode(overrides: Partial<Mode> = {}): Mode {
     initial_prompt: null,
     whisper_beam_size: null,
     injection_method: "clipboard",
+    paste_shortcut: "auto",
     input: "voice",
     output: "insert",
     output_fallback: "replace",

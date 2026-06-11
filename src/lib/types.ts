@@ -5,6 +5,8 @@
 export type TranscriptionTarget = "local" | "cloud";
 export type ProcessingTarget = "none" | "local" | "cloud";
 export type InjectionMethod = "clipboard" | "keystrokes";
+/** Which paste shortcut the clipboard injection method synthesizes. */
+export type PasteShortcut = "auto" | "ctrl_v" | "ctrl_shift_v";
 /** Where the text a mode operates on comes from. */
 export type InputSource = "voice" | "selection";
 /** What happens with the LLM result relative to the selection. */
@@ -49,6 +51,9 @@ export interface Mode {
    * global Settings.whisper_beam_size. Range 1..=10 (1 ≈ greedy). */
   whisper_beam_size: number | null;
   injection_method: InjectionMethod;
+  /** Paste shortcut for the clipboard injection method. Terminals need
+   * "ctrl_shift_v"; default "auto" behaves as "ctrl_v". */
+  paste_shortcut: PasteShortcut;
   /** Input side of edit modes: "voice" (dictation) or "selection"
    * (read the focused app's selection and transform it). */
   input: InputSource;

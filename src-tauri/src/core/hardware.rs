@@ -255,3 +255,50 @@ fn library_present(_candidates: &[&str]) -> bool {
     // hardcoded above in `detect_openblas`/`detect_vulkan`.
     false
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Contract test — PAYLOAD-SHAPE parity for `HardwareReport` (#49).
+    //
+    // Pins the exact serialized JSON key set the backend sends over
+    // `get_hardware_report`. The identical key list is hard-coded on the
+    // TS side in `src/lib/payload-contract.test.ts`, anchoring both sides
+    // to the same canonical fields. A Rust field add/rename/remove fails
+    // THIS test; a TS-side `HardwareReport` interface drift fails the TS
+    // test. The detected *values* are platform-specific, but every field
+    // serializes unconditionally, so the key SET is platform-independent.
+    //
+    // Honest limit (contract-tests-over-codegen, no specta/ts-rs): the two
+    // sides do NOT auto-derive — a coordinated change to the struct AND
+    // both key lists would pass. Accepted trade-off.
+    #[test]
+    fn hardware_report_serialized_key_set_is_pinned() {
+        let value = serde_json::to_value(detect()).expect("HardwareReport serializes");
+        let mut keys: Vec<&str> = value
+            .as_object()
+            .expect("HardwareReport serializes to a JSON object")
+            .keys()
+            .map(String::as_str)
+            .collect();
+        keys.sort_unstable();
+
+        let mut expected = [
+            "os",
+            "cpu_logical_cores",
+            "has_openblas",
+            "has_vulkan",
+            "has_nvidia_gpu",
+            "has_amd_gpu",
+            "is_apple_silicon",
+            "total_ram_gb",
+            "available_ram_gb",
+            "recommended_variant",
+            "recommended_speedup",
+        ];
+        expected.sort_unstable();
+
+        assert_eq!(keys, expected);
+    }
+}
