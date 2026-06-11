@@ -49,6 +49,20 @@ pub async fn get_hardware_report() -> IpcResult<crate::core::hardware::HardwareR
     Ok(crate::core::hardware::detect())
 }
 
+/// Upper bound for the `test_auto_paste` countdown. Guards the IPC
+/// boundary against a malformed/hostile frontend value hanging the
+/// inject diagnostic for an arbitrary duration.
+const MAX_TEST_AUTO_PASTE_DELAY_SECS: u64 = 30;
+
+fn validate_delay_secs(delay_secs: u64) -> IpcResult<()> {
+    if delay_secs > MAX_TEST_AUTO_PASTE_DELAY_SECS {
+        return Err(format!(
+            "delay_secs must be at most {MAX_TEST_AUTO_PASTE_DELAY_SECS}"
+        ));
+    }
+    Ok(())
+}
+
 /// Diagnostic test for auto-paste. Sleeps `delay_secs` seconds so
 /// the user has time to focus the target window, then triggers a
 /// complete inject (clipboard + libei-Ctrl+V) with `text`. This
@@ -61,6 +75,7 @@ pub async fn test_auto_paste(
     text: String,
     delay_secs: u64,
 ) -> IpcResult<()> {
+    validate_delay_secs(delay_secs)?;
     tracing::info!(
         delay_secs,
         text_len = text.len(),
@@ -80,4 +95,19 @@ pub async fn test_auto_paste(
         )
         .await
         .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn delay_at_cap_is_accepted() {
+        assert!(validate_delay_secs(MAX_TEST_AUTO_PASTE_DELAY_SECS).is_ok());
+    }
+
+    #[test]
+    fn delay_above_cap_is_rejected() {
+        assert!(validate_delay_secs(MAX_TEST_AUTO_PASTE_DELAY_SECS + 1).is_err());
+    }
 }
