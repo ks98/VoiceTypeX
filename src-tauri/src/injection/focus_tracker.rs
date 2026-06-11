@@ -279,12 +279,34 @@ async fn unload_script(
     Ok(())
 }
 
-/// Write the embedded KWin JS to a per-process temp file (KWin reads it at load
-/// time). Kept for the process lifetime so the retry path still finds it.
+/// Write the embedded KWin JS to a per-user, per-process file (KWin reads it at
+/// load time). Kept for the process lifetime so the retry path still finds it.
+///
+/// Security: the file is one KWin executes, so it must not be world-readable or
+/// pre-creatable by another local user. We place it under `$XDG_RUNTIME_DIR`
+/// (per-user, 0700 by spec) inside a `0700` subdir, and create the file itself
+/// `0600` so it never exists with umask-default perms. When `$XDG_RUNTIME_DIR`
+/// is unset we fall back to the world-readable `temp_dir()` — the 0600 file
+/// perms still keep the contents private there.
 fn write_script_tempfile() -> std::io::Result<std::path::PathBuf> {
-    let mut path = std::env::temp_dir();
-    path.push(format!("voicetypex-focustracker-{}.js", process::id()));
-    std::fs::write(&path, KWIN_SCRIPT_JS)?;
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+
+    let mut dir = std::env::var_os("XDG_RUNTIME_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir);
+    dir.push("voicetypex");
+    std::fs::create_dir_all(&dir)?;
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))?;
+
+    let mut path = dir;
+    path.push(format!("focustracker-{}.js", process::id()));
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(&path)?;
+    std::io::Write::write_all(&mut file, KWIN_SCRIPT_JS.as_bytes())?;
     Ok(path)
 }
 
