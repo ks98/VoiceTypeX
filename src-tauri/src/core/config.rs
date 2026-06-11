@@ -247,3 +247,92 @@ fn default_whisper_slot() -> String {
 fn default_ollama_url() -> String {
     "http://127.0.0.1:11434".to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Deserialize a `Settings` from a JSON object that only sets
+    /// `locale`, then return the post-validation `locale`. This drives
+    /// `deserialize_locale` exactly as the on-disk loader does.
+    fn locale_from_json(raw: &str) -> Option<String> {
+        let json = format!(r#"{{ "locale": {raw} }}"#);
+        serde_json::from_str::<Settings>(&json)
+            .expect("settings JSON should parse")
+            .locale
+    }
+
+    #[test]
+    fn valid_locales_round_trip_unchanged() {
+        // BCP-47-ish shapes (ASCII alnum + `-`/`_`) pass through. The
+        // backend deliberately validates *shape only* — mapping to the
+        // supported display set happens in the frontend, so unknown-but-
+        // well-formed tags like "xx" are also kept here.
+        for tag in ["de", "en", "fr", "es", "it", "en-US", "de_DE", "xx"] {
+            let raw = format!("\"{tag}\"");
+            assert_eq!(
+                locale_from_json(&raw),
+                Some(tag.to_string()),
+                "well-formed locale {tag:?} should pass through unchanged"
+            );
+        }
+    }
+
+    #[test]
+    fn path_traversal_and_slashes_neutralize_to_none() {
+        for bad in ["../", "../etc", "a/b", "..\\\\win", "de/../en"] {
+            let raw = serde_json::to_string(bad).unwrap();
+            assert_eq!(
+                locale_from_json(&raw),
+                None,
+                "path-y locale {bad:?} should be neutralized to None"
+            );
+        }
+    }
+
+    #[test]
+    fn empty_string_neutralizes_to_none() {
+        assert_eq!(locale_from_json("\"\""), None);
+    }
+
+    #[test]
+    fn over_length_neutralizes_to_none() {
+        // 36 chars — one past the 35-char cap; all otherwise valid.
+        let long = "a".repeat(36);
+        let raw = format!("\"{long}\"");
+        assert_eq!(locale_from_json(&raw), None);
+    }
+
+    #[test]
+    fn boundary_length_is_kept() {
+        // Exactly 35 chars is still valid (`len() <= 35`).
+        let max = "a".repeat(35);
+        let raw = format!("\"{max}\"");
+        assert_eq!(locale_from_json(&raw), Some(max));
+    }
+
+    #[test]
+    fn disallowed_punctuation_neutralizes_to_none() {
+        // Dots, spaces, NUL etc. are outside the alnum + `-`/`_` set.
+        for bad in ["de.DE", "en US", "x\u{0000}y", "café"] {
+            let raw = serde_json::to_string(bad).unwrap();
+            assert_eq!(
+                locale_from_json(&raw),
+                None,
+                "locale {bad:?} with disallowed chars should be None"
+            );
+        }
+    }
+
+    #[test]
+    fn explicit_null_and_absent_key_are_none() {
+        assert_eq!(locale_from_json("null"), None);
+        // Absent key falls back to the serde default (`None`).
+        assert_eq!(
+            serde_json::from_str::<Settings>("{}")
+                .expect("empty object should parse")
+                .locale,
+            None
+        );
+    }
+}
