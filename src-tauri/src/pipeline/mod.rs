@@ -204,9 +204,17 @@ async fn start_recording(app: &AppHandle, ctx: &Arc<AppContext>, mode: &Mode) ->
         }
     }
 
-    if let Err(e) = play_start_cue().await {
-        tracing::warn!(error = %e, "Start cue failed (non-fatal)");
-    }
+    // Fire-and-forget: the start cue is UX feedback, not a dependency of
+    // recording. Awaiting it (sink.sleep_until_end over the whole beep)
+    // delayed RecorderHandle::start until the beep finished, so speech on
+    // the cue clipped the first syllables (#44). Spawn it so the recorder
+    // comes up immediately; a cue failure is still logged, just off the
+    // critical path.
+    tauri::async_runtime::spawn(async {
+        if let Err(e) = play_start_cue().await {
+            tracing::warn!(error = %e, "Start cue failed (non-fatal)");
+        }
+    });
 
     let device_name = ctx.settings.read().audio_input_device.clone();
     let mut recorder = RecorderHandle::start(RecorderConfig { device_name }).inspect_err(|e| {
