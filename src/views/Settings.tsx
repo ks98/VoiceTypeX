@@ -51,6 +51,53 @@ import {
 const inputCls =
   "bg-surface border border-outline rounded-md px-3 py-2 text-sm text-fg placeholder:text-fg-faint focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/40";
 
+/**
+ * Text input that keeps a local draft while typing and only commits the
+ * value upward on blur or Enter — never per keystroke. Used for fields
+ * whose persist path is expensive or backend-validated (e.g. `ollama_url`,
+ * which `validate_settings` rejects for every incomplete URL, which would
+ * make a per-keystroke controlled input revert and become paste-only —
+ * issue #54).
+ *
+ * `value` stays the source of truth: when it changes externally (a
+ * successful persist, the file picker writing a path) the draft re-syncs.
+ */
+function CommitOnBlurInput({
+  value,
+  onCommit,
+  className,
+  placeholder,
+}: {
+  value: string;
+  onCommit: (v: string) => void;
+  className: string;
+  placeholder?: string;
+}): JSX.Element {
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+
+  const commit = () => {
+    if (draft !== value) onCommit(draft);
+  };
+
+  return (
+    <input
+      type="text"
+      className={className}
+      value={draft}
+      placeholder={placeholder}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+      }}
+    />
+  );
+}
+
 const LLM_SLOT_KEYS: Record<string, string> = {
   "gemma4-e4b-it-q5_k_m": "settings.llm.slot.gemma4_e4b",
   "gemma4-e2b-it-q5_k_m": "settings.llm.slot.gemma4_e2b",
@@ -292,15 +339,12 @@ export default function Settings(): JSX.Element {
             hint={t("settings.whisper.hint")}
           >
             <div className="flex gap-2">
-              <input
-                type="text"
+              <CommitOnBlurInput
                 className={`${inputCls} flex-1`}
                 placeholder={t("settings.whisper.path_placeholder")}
                 value={settings.whisper_model_path ?? ""}
-                onChange={(e) =>
-                  void update({
-                    whisper_model_path: e.target.value || null,
-                  })
+                onCommit={(v) =>
+                  void update({ whisper_model_path: v || null })
                 }
               />
               <Button variant="secondary" onClick={() => void onPickModel()}>
@@ -674,11 +718,10 @@ function OllamaAdvancedSection({
           label={t("settings.ollama.endpoint.label")}
           hint={t("settings.ollama.endpoint.hint")}
         >
-          <input
-            type="text"
+          <CommitOnBlurInput
             className={inputCls}
             value={url}
-            onChange={(e) => onUrlChange(e.target.value)}
+            onCommit={onUrlChange}
             placeholder="http://127.0.0.1:11434"
           />
         </Field>
