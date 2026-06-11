@@ -6,6 +6,7 @@ import { isWindows } from "../lib/platform";
 import Button from "./Button";
 import Banner from "./Banner";
 import WhisperModelCards from "./WhisperModelCards";
+import { computeBlockingReasons } from "./modeValidation";
 import { useT, type TranslateFn } from "../i18n";
 
 // Local input classes — the ModeEditor has ~17 sites with different
@@ -74,12 +75,6 @@ function emptyMode(): Mode {
   };
 }
 
-function inRange(value: number | null, min: number, max: number): boolean {
-  if (value === null) return true;
-  if (!Number.isFinite(value)) return false;
-  return value >= min && value <= max;
-}
-
 export default function ModeEditor({
   initial,
   onClose,
@@ -117,34 +112,10 @@ export default function ModeEditor({
     : draft.local_engine === "ollama"
       ? "ollama"
       : "embedded";
-  const needsOllamaTag = isLocalLLM && localEngine === "ollama";
 
-  const samplingValid =
-    inRange(draft.temperature, 0, 2) &&
-    inRange(draft.top_p, 0, 1) &&
-    inRange(draft.repeat_penalty, 0.5, 2) &&
-    inRange(draft.max_tokens, 1, 8192);
-
-  const blockingReasons: string[] = [];
-  if (draft.id.length === 0)
-    blockingReasons.push(t("mode_editor.reason.id_missing"));
-  else if (!idValid) blockingReasons.push(t("mode_editor.reason.id_invalid"));
-  if (draft.name.length === 0)
-    blockingReasons.push(t("mode_editor.reason.name_missing"));
-  if (isCloudSTT && !draft.cloud_stt_provider)
-    blockingReasons.push(t("mode_editor.reason.cloud_stt_provider"));
-  if (isCloudLLM && !draft.cloud_llm_provider)
-    blockingReasons.push(t("mode_editor.reason.cloud_llm_provider"));
-  if (needsOllamaTag && !draft.ollama_model_tag)
-    blockingReasons.push(t("mode_editor.reason.ollama_tag"));
-  if (isSelectionInput && draft.processing === "none")
-    blockingReasons.push(t("mode_editor.reason.selection_needs_llm"));
-  if (
-    needsSystemPrompt &&
-    (draft.system_prompt === null || draft.system_prompt.length === 0)
-  )
-    blockingReasons.push(t("mode_editor.reason.system_prompt"));
-  if (!samplingValid) blockingReasons.push(t("mode_editor.reason.sampling"));
+  const blockingReasons = computeBlockingReasons(draft, isWindows()).map((r) =>
+    t(`mode_editor.reason.${r}`),
+  );
   const canSave = blockingReasons.length === 0;
 
   const baseline = JSON.stringify(initial ?? emptyMode());
