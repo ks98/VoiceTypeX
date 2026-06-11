@@ -59,9 +59,7 @@ describe("recommendWhisperSlot", () => {
 
   it("treats a null hardware report as no detection (Q8 sweet-spot)", () => {
     expect(recommendWhisperSlot(null, false)).toBe("large-v3-turbo-q8_0");
-    expect(recommendWhisperSlot(null, true)).toBe(
-      "large-v3-turbo-german-q8_0",
-    );
+    expect(recommendWhisperSlot(null, true)).toBe("large-v3-turbo-german-q8_0");
   });
 
   it("picks the small fallback below 5 GB", () => {

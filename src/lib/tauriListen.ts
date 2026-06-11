@@ -23,9 +23,7 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
  * still-pending subscription unlistens itself the moment it resolves, so
  * no listener can outlive the component.
  */
-export function listenAll(
-  subscriptions: Promise<UnlistenFn>[],
-): () => void {
+export function listenAll(subscriptions: Promise<UnlistenFn>[]): () => void {
   let cancelled = false;
   const unlistens: UnlistenFn[] = [];
 
