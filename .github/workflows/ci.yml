@@ -177,9 +177,43 @@ jobs:
           cargo install --locked cargo-audit
           # --deny warnings also turns yanked crates and informational
           # advisories into errors. The --ignore list suppresses known
-          # transitive unmaintained advisories from the Tauri/GTK stack
-          # that we cannot fix ourselves. On every Tauri/GTK update
-          # check whether entries can be dropped.
+          # transitive unmaintained/unsound advisories from the Tauri/GTK3
+          # stack that we cannot fix ourselves (no maintained upstream we
+          # can pull). The dependency chain is tauri -> tray-icon ->
+          # libappindicator -> gtk 0.18 (gtk3-rs) and tauri-utils ->
+          # urlpattern -> unic-*; both are deprecated upstream. Revisit the
+          # whole list when Tauri drops GTK3 / gtk-rs ships maintained GTK4
+          # bindings (and urlpattern moves off unic). Per-entry rationale +
+          # review date below; keep this list identical to the [advisories]
+          # ignore in src-tauri/deny.toml.
+          #
+          # gtk3-rs stack (unmaintained, no fix; gtk-rs deprecated the GTK3
+          # bindings, pulled via gtk 0.18 -> libappindicator -> tray-icon ->
+          # tauri); review 2026-09:
+          #   RUSTSEC-2024-0411: gdkwayland-sys 0.18 unmaintained
+          #   RUSTSEC-2024-0412: gdk 0.18 unmaintained
+          #   RUSTSEC-2024-0413: atk 0.18 unmaintained
+          #   RUSTSEC-2024-0414: gdkx11-sys 0.18 unmaintained
+          #   RUSTSEC-2024-0415: gtk 0.18 unmaintained
+          #   RUSTSEC-2024-0416: atk-sys 0.18 unmaintained
+          #   RUSTSEC-2024-0417: gdkx11 0.18 unmaintained
+          #   RUSTSEC-2024-0418: gdk-sys 0.18 unmaintained
+          #   RUSTSEC-2024-0419: gtk3-macros 0.18 unmaintained
+          #   RUSTSEC-2024-0420: gtk-sys 0.18 unmaintained
+          # glib 0.18 stack (pulled by the gtk3-rs crates above); review
+          # 2026-09:
+          #   RUSTSEC-2024-0370: proc-macro-error 1.0.4 unmaintained
+          #     (transitive via glib-macros 0.18 + gtk3-macros 0.18)
+          #   RUSTSEC-2024-0429: glib 0.18 unsound (VariantStrIter,
+          #     patched >=0.20; gtk3-rs pins glib 0.18, cannot bump
+          #     without leaving GTK3)
+          # unic-* stack (unmaintained, RUSTSEC issue #2414; transitive via
+          #   urlpattern 0.3 -> tauri-utils); review 2026-09:
+          #   RUSTSEC-2025-0075: unic-char-range 0.9 unmaintained
+          #   RUSTSEC-2025-0080: unic-common 0.9 unmaintained
+          #   RUSTSEC-2025-0081: unic-char-property 0.9 unmaintained
+          #   RUSTSEC-2025-0098: unic-ucd-version 0.9 unmaintained
+          #   RUSTSEC-2025-0100: unic-ucd-ident 0.9 unmaintained
           cargo audit --file src-tauri/Cargo.lock --deny warnings \
             --ignore RUSTSEC-2024-0370 --ignore RUSTSEC-2024-0411 \
             --ignore RUSTSEC-2024-0412 --ignore RUSTSEC-2024-0413 \
@@ -208,4 +242,6 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: pnpm audit
-        run: pnpm audit --audit-level=high
+        # moderate floor so moderate JS advisories are caught, not just
+        # high/critical (ks98/VoiceTypeX#51).
+        run: pnpm audit --audit-level=moderate
