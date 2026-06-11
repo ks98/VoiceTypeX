@@ -32,6 +32,7 @@ import {
   type SessionInfo,
   type WhisperBackendInfo,
 } from "../lib/tauri";
+import { LLM_SLOTS } from "../lib/llmSlots";
 import { recommendLlmSlot } from "../lib/recommend";
 import { recommendWhisperSlot } from "../lib/whisperModels";
 import WhisperModelCards from "../components/WhisperModelCards";
@@ -97,15 +98,6 @@ function CommitOnBlurInput({
     />
   );
 }
-
-const LLM_SLOT_KEYS: Record<string, string> = {
-  "gemma4-e4b-it-q5_k_m": "settings.llm.slot.gemma4_e4b",
-  "gemma4-e2b-it-q5_k_m": "settings.llm.slot.gemma4_e2b",
-  "gemma3-1b-it-q5_k_m": "settings.llm.slot.gemma3_1b",
-  "gemma3-4b-it-q5_k_m": "settings.llm.slot.gemma3_4b",
-  "llama3.2-1b-instruct-q5_k_m": "settings.llm.slot.llama32_1b",
-  "qwen2.5-1.5b-instruct-q5_k_m": "settings.llm.slot.qwen25_15b",
-};
 
 const SUBNAV_ITEMS = [
   { id: "language", key: "settings.subnav.language" },
@@ -461,9 +453,9 @@ export default function Settings(): JSX.Element {
                   void update({ llm_default_slot: e.target.value })
                 }
               >
-                {Object.entries(LLM_SLOT_KEYS).map(([slot, key]) => (
-                  <option key={slot} value={slot}>
-                    {t(key)}
+                {LLM_SLOTS.map((s) => (
+                  <option key={s.slot} value={s.slot}>
+                    {t(`settings.llm.slot.${s.keySuffix}`)}
                   </option>
                 ))}
               </select>
