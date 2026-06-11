@@ -190,6 +190,15 @@ jobs:
             --ignore RUSTSEC-2025-0075 --ignore RUSTSEC-2025-0080 \
             --ignore RUSTSEC-2025-0081 --ignore RUSTSEC-2025-0098 \
             --ignore RUSTSEC-2025-0100
+      # cargo-deny gates licenses (GPL-3.0 compatibility, machine-enforced
+      # — not just THIRD_PARTY_NOTICES.md), advisories and crate sources.
+      # The advisory ignore list lives in src-tauri/deny.toml and mirrors
+      # the cargo-audit --ignore list above; keep the two in sync.
+      - uses: taiki-e/install-action@7a79fe8c3a13344501c80d99cae481c1c9085912 # v2.81.10
+        with:
+          tool: cargo-deny
+      - name: cargo-deny
+        run: cargo deny --manifest-path src-tauri/Cargo.toml check
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
         with:
           version: 9.15.0

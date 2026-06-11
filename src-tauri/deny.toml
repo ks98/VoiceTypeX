@@ -1,0 +1,82 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# cargo-deny configuration. Gates the dependency tree on license
+# compatibility and known advisories in CI (see
+# .github/workflows/ci.yml, job Supply-Chain-Audit), so GPL-3.0
+# compatibility is machine-enforced and no longer relies solely on the
+# hand-maintained THIRD_PARTY_NOTICES.md.
+#
+# Run locally: cd src-tauri && cargo deny check
+
+[licenses]
+# Permissive licenses that are compatible with distributing the binary
+# under GPL-3.0-or-later (the project license, see Cargo.toml). The list
+# is derived from the actual dependency tree (`cargo deny list`); every
+# entry below is present in src-tauri/Cargo.lock. When a dependency
+# update introduces a new license, `cargo deny check licenses` fails and
+# this list must be extended (or the dependency dropped).
+allow = [
+  # The project's own license (see Cargo.toml). cargo-deny evaluates the
+  # root crate too, so this must be allowed even though it is not a
+  # dependency.
+  "GPL-3.0-or-later",
+  "MIT",
+  "MIT-0",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "0BSD",
+  "BSL-1.0",
+  "Zlib",
+  "Unicode-3.0",
+  "CC0-1.0",
+  "CDLA-Permissive-2.0",
+  "Unlicense",
+  # Weak copyleft, file-scoped. GPL-3.0-compatible when the MPL'd files
+  # are kept as separate units (which crate-level linking satisfies).
+  "MPL-2.0",
+]
+# Crates without SPDX metadata or with a license below this confidence
+# threshold are reported, not silently accepted.
+confidence-threshold = 0.8
+
+[advisories]
+# Mirrors the cargo-audit --ignore list in ci.yml: known transitive
+# unmaintained / unfixable advisories from the Tauri/GTK stack. Keep the
+# two lists in sync — on every Tauri/GTK update check whether entries can
+# be dropped.
+ignore = [
+  "RUSTSEC-2024-0370",
+  "RUSTSEC-2024-0411",
+  "RUSTSEC-2024-0412",
+  "RUSTSEC-2024-0413",
+  "RUSTSEC-2024-0414",
+  "RUSTSEC-2024-0415",
+  "RUSTSEC-2024-0416",
+  "RUSTSEC-2024-0417",
+  "RUSTSEC-2024-0418",
+  "RUSTSEC-2024-0419",
+  "RUSTSEC-2024-0420",
+  "RUSTSEC-2024-0429",
+  "RUSTSEC-2025-0075",
+  "RUSTSEC-2025-0080",
+  "RUSTSEC-2025-0081",
+  "RUSTSEC-2025-0098",
+  "RUSTSEC-2025-0100",
+]
+
+[bans]
+# Minimal: warn on multiple versions of the same crate (large native
+# stacks like Tauri/GTK legitimately pull several), do not fail the build
+# on duplicates.
+multiple-versions = "warn"
+wildcards = "allow"
+
+[sources]
+# Only crates.io is expected; any git or alternate-registry source is a
+# supply-chain red flag and fails the build.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
