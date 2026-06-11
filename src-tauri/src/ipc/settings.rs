@@ -254,4 +254,57 @@ mod tests {
         let _ = std::fs::remove_dir_all(&p);
         assert!(result.is_err());
     }
+
+    fn settings_with_ollama_url(url: &str) -> Settings {
+        Settings {
+            ollama_url: url.to_string(),
+            ..Settings::default()
+        }
+    }
+
+    #[test]
+    fn accepts_valid_http_and_https_ollama_url() {
+        for url in ["http://localhost:11434", "https://x.example"] {
+            let result = validate_settings(&settings_with_ollama_url(url));
+            assert!(result.is_ok(), "{url} should be accepted: {result:?}");
+        }
+    }
+
+    #[test]
+    fn rejects_non_http_ollama_url_scheme() {
+        for url in ["ftp://host", "file:///etc/passwd"] {
+            let result = validate_settings(&settings_with_ollama_url(url));
+            assert!(result.is_err(), "{url} should be rejected");
+        }
+    }
+
+    #[test]
+    fn rejects_empty_ollama_url() {
+        assert!(validate_settings(&settings_with_ollama_url("")).is_err());
+    }
+
+    #[test]
+    fn rejects_host_less_ollama_url() {
+        // `http://` (empty authority) has no host to send the transcript
+        // to. For a special scheme the URL parser rejects this outright,
+        // so the failure surfaces from the `parse` step.
+        for url in ["http://", "https://"] {
+            assert!(
+                validate_settings(&settings_with_ollama_url(url)).is_err(),
+                "{url} should be rejected (host missing)"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_credentials_in_ollama_url() {
+        for url in [
+            "http://user:pw@host:11434",
+            "https://user@host",
+            "http://:pw@host",
+        ] {
+            let result = validate_settings(&settings_with_ollama_url(url));
+            assert!(result.is_err(), "{url} should be rejected (creds in URL)");
+        }
+    }
 }
