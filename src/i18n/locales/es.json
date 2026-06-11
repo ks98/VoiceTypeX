@@ -116,6 +116,7 @@
   "settings.hardware.ram_value": "{total} GB ({available} GB libres)",
   "settings.hardware.backend_desc": "{description}, ~{factor}× CPU",
   "settings.hardware.variant_hint": "Tip: una build {variant} podría dar ~{recommended}× CPU (en lugar de ~{current}× actual). La matriz de bundles Fase 3 lo abordará.",
+  "settings.hardware.read_error": "No se pudo leer el estado de hardware: {message}",
 
   "settings.audio.label": "Dispositivo de entrada de audio",
   "settings.audio.hint": "Vacío = predeterminado del SO. Los cambios afectan a la próxima grabación.",
@@ -238,6 +239,7 @@
   "settings.danger.uninstall_hint_suffix": "en el repo o la sección «Desinstalación» en el README.",
 
   "api_keys.loading": "Cargando estado de provider …",
+  "api_keys.load_error": "No se pudo cargar el estado de provider: {message}",
   "api_keys.title": "Claves API cloud (BYOK)",
   "api_keys.intro": "Las claves se guardan en secrets.json (chmod 0600) y se cifran en reposo: DPAPI en Windows, AES-256-GCM con una KEK del keyring en Linux. La UI solo ve si una clave está establecida; los registros nunca contienen material de claves.",
   "api_keys.encryption.encrypted": "Cifrado en reposo activo ({method}).",

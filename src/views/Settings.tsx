@@ -146,6 +146,7 @@ export default function Settings(): JSX.Element {
   const [activeBackend, setActiveBackend] = useState<WhisperBackendInfo | null>(
     null,
   );
+  const [hardwareError, setHardwareError] = useState<string | null>(null);
   const [llmDownloading, setLlmDownloading] = useState(false);
   const [llmDownloadError, setLlmDownloadError] = useState<string | null>(null);
   const [llmProgress, setLlmProgress] = useState<ModelDownloadProgress | null>(
@@ -163,10 +164,10 @@ export default function Settings(): JSX.Element {
       .catch(() => null);
     void ipcGetHardwareReport()
       .then(setHardware)
-      .catch(() => null);
+      .catch((e) => setHardwareError(String(e)));
     void ipcGetWhisperBackend()
       .then(setActiveBackend)
-      .catch(() => null);
+      .catch((e) => setHardwareError(String(e)));
   }, [load, loadAudioDevices]);
 
   useEffect(() => {
@@ -273,6 +274,7 @@ export default function Settings(): JSX.Element {
           <HardwareStatusField
             hardware={hardware}
             activeBackend={activeBackend}
+            error={hardwareError}
             currentLlmSlot={settings.llm_default_slot}
             onPickLlmSlot={(slot) => void update({ llm_default_slot: slot })}
           />
@@ -800,11 +802,13 @@ function MenuHotkeyField({
 function HardwareStatusField({
   hardware,
   activeBackend,
+  error,
   currentLlmSlot,
   onPickLlmSlot,
 }: {
   hardware: HardwareReport | null;
   activeBackend: WhisperBackendInfo | null;
+  error: string | null;
   currentLlmSlot: string;
   onPickLlmSlot: (slot: string) => void;
 }): JSX.Element {
@@ -816,7 +820,13 @@ function HardwareStatusField({
         label={t("settings.hardware.detecting_label")}
         hint={t("settings.hardware.detecting_hint")}
       >
-        <Loading label={t("settings.hardware.loading")} inline />
+        {error ? (
+          <Banner tone="error">
+            {t("settings.hardware.read_error", { message: error })}
+          </Banner>
+        ) : (
+          <Loading label={t("settings.hardware.loading")} inline />
+        )}
       </Field>
     );
   }
