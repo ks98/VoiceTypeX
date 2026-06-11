@@ -116,6 +116,7 @@
   "settings.hardware.ram_value": "{total} Go ({available} Go libres)",
   "settings.hardware.backend_desc": "{description}, ~{factor}× CPU",
   "settings.hardware.variant_hint": "Astuce : un build {variant} pourrait donner ~{recommended}× CPU (au lieu de ~{current}× actuellement). La matrice des bundles Phase 3 abordera cela.",
+  "settings.hardware.read_error": "Impossible de lire le statut matériel : {message}",
 
   "settings.audio.label": "Périphérique d'entrée audio",
   "settings.audio.hint": "Vide = défaut du SE. Les changements prennent effet au prochain enregistrement.",
@@ -238,6 +239,7 @@
   "settings.danger.uninstall_hint_suffix": "dans le repo ou la section « Désinstallation » du README.",
 
   "api_keys.loading": "Chargement du statut des providers …",
+  "api_keys.load_error": "Impossible de charger le statut des providers : {message}",
   "api_keys.title": "Clés API cloud (BYOK)",
   "api_keys.intro": "Les clés sont stockées dans secrets.json (chmod 0600) et chiffrées au repos : DPAPI sous Windows, AES-256-GCM avec une KEK du keyring sous Linux. L'interface ne voit que si une clé est définie ; les journaux ne contiennent jamais de matériel de clé.",
   "api_keys.encryption.encrypted": "Chiffrement au repos actif ({method}).",

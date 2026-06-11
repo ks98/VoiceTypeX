@@ -129,6 +129,7 @@
   "settings.hardware.ram_value": "{total} GB ({available} GB free)",
   "settings.hardware.backend_desc": "{description}, ~{factor}× CPU",
   "settings.hardware.variant_hint": "Tip: A {variant} build could give ~{recommended}× CPU (instead of currently ~{current}×). The Phase-3 bundle matrix will address this.",
+  "settings.hardware.read_error": "Could not read hardware status: {message}",
 
   "settings.audio.label": "Audio input device",
   "settings.audio.hint": "Empty = OS default. Changes take effect on the next recording.",
@@ -251,6 +252,7 @@
   "settings.danger.uninstall_hint_suffix": "in the repo or the \"Uninstall\" section in the README.",
 
   "api_keys.loading": "Loading provider status…",
+  "api_keys.load_error": "Could not load provider status: {message}",
   "api_keys.title": "Cloud API keys (BYOK)",
   "api_keys.intro": "Keys are stored in secrets.json (chmod 0600) and encrypted at rest using DPAPI on Windows or AES-256-GCM with a keyring-resident KEK on Linux. The UI only sees whether a key is set; logs never contain key material.",
   "api_keys.encryption.encrypted": "Encryption at rest is active ({method}).",

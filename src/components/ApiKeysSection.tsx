@@ -92,6 +92,7 @@ export default function ApiKeysSection(): JSX.Element {
   const t = useT();
   const [status, setStatus] = useState<ProviderStatus[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [editingProvider, setEditingProvider] = useState<string | null>(null);
   const [draftKey, setDraftKey] = useState("");
   const [showKey, setShowKey] = useState(false);
@@ -110,11 +111,13 @@ export default function ApiKeysSection(): JSX.Element {
 
   const refresh = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const fresh = await ipcGetProviderStatus();
       setStatus(fresh);
     } catch (e) {
       console.error("get_provider_status:", e);
+      setLoadError(String(e));
     } finally {
       setLoading(false);
     }
@@ -199,6 +202,12 @@ export default function ApiKeysSection(): JSX.Element {
       ) : null}
 
       {saveError ? <Banner tone="error">{saveError}</Banner> : null}
+
+      {loadError ? (
+        <Banner tone="error">
+          {t("api_keys.load_error", { message: loadError })}
+        </Banner>
+      ) : null}
 
       <div className="flex flex-col gap-2">
         {status.map((s) => {
