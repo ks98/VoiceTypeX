@@ -14,16 +14,58 @@
 
 use thiserror::Error;
 
+/// Structured provider-failure discriminant for the cloud-backed stages.
+///
+/// `#40` will populate `status` and `provider` at the client call sites
+/// (e.g. from the real HTTP response) and then `kind()`/`is_retryable()`
+/// will read these exclusively, dropping the substring fallback. Until
+/// then every construction site passes `ProviderFault::unknown()`, so the
+/// fields stay `None` and the legacy substring classification still runs.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ProviderFault {
+    /// HTTP status from the provider response, when the failure came from
+    /// an HTTP exchange. `None` for non-HTTP failures (parse, IO, …).
+    pub status: Option<u16>,
+    /// Which provider the failure originated from, when known.
+    pub provider: Option<ProviderId>,
+}
+
+impl ProviderFault {
+    /// A fault with no structured information yet — classification falls
+    /// back to substring matching on the message. Removed in `#40`.
+    pub fn unknown() -> Self {
+        Self::default()
+    }
+}
+
+/// Cloud provider a transcription/processing failure originated from.
+/// Populated by `#40`; today every construction site leaves it `None`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProviderId {
+    Xai,
+    OpenAi,
+    Groq,
+    Deepgram,
+    Anthropic,
+    Ollama,
+}
+
 #[derive(Debug, Error)]
 pub enum VoiceTypeError {
     #[error("Audio stage: {0}")]
     Audio(String),
 
-    #[error("Transcription: {0}")]
-    Transcription(String),
+    #[error("Transcription: {message}")]
+    Transcription {
+        message: String,
+        fault: ProviderFault,
+    },
 
-    #[error("Post-processing: {0}")]
-    Processing(String),
+    #[error("Post-processing: {message}")]
+    Processing {
+        message: String,
+        fault: ProviderFault,
+    },
 
     #[error("Text injection: {0}")]
     Injection(String),
@@ -76,13 +118,35 @@ pub enum ErrorKind {
 }
 
 impl VoiceTypeError {
+    /// Construct a `Transcription` error with no structured fault yet.
+    /// `#40` adds variants/overloads that pass a populated `ProviderFault`.
+    pub fn transcription(message: impl Into<String>) -> Self {
+        Self::Transcription {
+            message: message.into(),
+            fault: ProviderFault::unknown(),
+        }
+    }
+
+    /// Construct a `Processing` error with no structured fault yet.
+    /// `#40` adds variants/overloads that pass a populated `ProviderFault`.
+    pub fn processing(message: impl Into<String>) -> Self {
+        Self::Processing {
+            message: message.into(),
+            fault: ProviderFault::unknown(),
+        }
+    }
+
     /// Classify the error into a machine-readable category.
-    /// Heuristic: match on variant + string-message contents.
+    ///
+    /// For the cloud stages this reads the structured `ProviderFault`
+    /// first and only falls back to substring matching on the message
+    /// when no status is set. `#40` populates `fault` at every client and
+    /// then removes the substring fallback entirely.
     pub fn kind(&self) -> ErrorKind {
         match self {
             Self::Audio(msg) => classify_audio(msg),
-            Self::Transcription(msg) => classify_network_or_other(msg),
-            Self::Processing(msg) => classify_network_or_other(msg),
+            Self::Transcription { message, fault } => classify_provider(message, fault),
+            Self::Processing { message, fault } => classify_provider(message, fault),
             Self::Injection(msg) => classify_injection(msg),
             Self::Hotkey(msg) => {
                 if msg.to_ascii_lowercase().contains("wayland") {
@@ -106,11 +170,25 @@ impl VoiceTypeError {
         match self.kind() {
             ErrorKind::Network => true,
             ErrorKind::HttpStatus => {
-                // 5xx is retryable, 4xx is not. Heuristic via message.
+                // Prefer the structured status; 5xx and 429 are retryable.
+                // `#40` removes the substring fallback once every client
+                // populates `fault.status`.
+                if let Some(status) = self.fault_status() {
+                    return status >= 500 || status == 429;
+                }
                 let msg = self.to_string();
                 msg.contains("HTTP 5") || msg.contains("HTTP 429")
             }
             _ => false,
+        }
+    }
+
+    /// The structured HTTP status carried by a cloud-stage error, if any.
+    /// `None` until `#40` populates `ProviderFault` at the call sites.
+    fn fault_status(&self) -> Option<u16> {
+        match self {
+            Self::Transcription { fault, .. } | Self::Processing { fault, .. } => fault.status,
+            _ => None,
         }
     }
 
@@ -160,6 +238,22 @@ fn classify_audio(msg: &str) -> ErrorKind {
     } else {
         ErrorKind::Hardware
     }
+}
+
+/// Classify a cloud-stage (Transcription/Processing) failure.
+///
+/// Reads the structured `ProviderFault` first; only when it carries no
+/// status do we fall back to substring matching on the message. `#40`
+/// populates `fault` at every client and drops the substring branch.
+fn classify_provider(msg: &str, fault: &ProviderFault) -> ErrorKind {
+    if let Some(status) = fault.status {
+        return if status == 401 || status == 403 {
+            ErrorKind::Authentication
+        } else {
+            ErrorKind::HttpStatus
+        };
+    }
+    classify_network_or_other(msg)
 }
 
 fn classify_network_or_other(msg: &str) -> ErrorKind {
@@ -228,34 +322,59 @@ mod tests {
 
     #[test]
     fn http_500_is_retryable() {
-        let e = VoiceTypeError::Processing("HTTP 502: Bad Gateway".into());
+        let e = VoiceTypeError::processing("HTTP 502: Bad Gateway");
         assert_eq!(e.kind(), ErrorKind::HttpStatus);
         assert!(e.is_retryable());
     }
 
     #[test]
     fn http_401_is_authentication_not_retryable() {
-        let e = VoiceTypeError::Processing("HTTP 401: Unauthorized".into());
+        let e = VoiceTypeError::processing("HTTP 401: Unauthorized");
         assert_eq!(e.kind(), ErrorKind::Authentication);
         assert!(!e.is_retryable());
     }
 
     #[test]
     fn http_429_rate_limit_is_retryable() {
-        let e = VoiceTypeError::Transcription("HTTP 429: Too Many Requests".into());
+        let e = VoiceTypeError::transcription("HTTP 429: Too Many Requests");
         assert!(e.is_retryable());
     }
 
     #[test]
     fn missing_api_key_classifies_as_authentication_en() {
-        let e = VoiceTypeError::Transcription("No API key set for 'xai'".into());
+        let e = VoiceTypeError::transcription("No API key set for 'xai'");
         assert_eq!(e.kind(), ErrorKind::Authentication);
     }
 
     #[test]
     fn missing_api_key_classifies_as_authentication_de_legacy() {
-        let e = VoiceTypeError::Transcription("API-Key fuer Provider 'xai' nicht gesetzt".into());
+        let e = VoiceTypeError::transcription("API-Key fuer Provider 'xai' nicht gesetzt");
         assert_eq!(e.kind(), ErrorKind::Authentication);
+    }
+
+    #[test]
+    fn structured_status_classifies_without_substring_match() {
+        // `#40` will populate `fault`; verify the structured path works
+        // and takes precedence over the (here absent) substring signal.
+        let e = VoiceTypeError::Transcription {
+            message: "opaque provider error".into(),
+            fault: ProviderFault {
+                status: Some(503),
+                provider: Some(ProviderId::Groq),
+            },
+        };
+        assert_eq!(e.kind(), ErrorKind::HttpStatus);
+        assert!(e.is_retryable());
+
+        let e = VoiceTypeError::Processing {
+            message: "opaque provider error".into(),
+            fault: ProviderFault {
+                status: Some(401),
+                provider: Some(ProviderId::Anthropic),
+            },
+        };
+        assert_eq!(e.kind(), ErrorKind::Authentication);
+        assert!(!e.is_retryable());
     }
 
     #[test]
@@ -294,7 +413,7 @@ mod tests {
                 let dummy = match k {
                     ErrorKind::Configuration => VoiceTypeError::Config("x".into()),
                     ErrorKind::Authentication => VoiceTypeError::Secrets("x".into()),
-                    ErrorKind::Network => VoiceTypeError::Processing("HTTP timeout".into()),
+                    ErrorKind::Network => VoiceTypeError::processing("HTTP timeout"),
                     ErrorKind::Hardware => VoiceTypeError::Audio("x".into()),
                     _ => unreachable!(),
                 };

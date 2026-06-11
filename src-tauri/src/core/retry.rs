@@ -97,9 +97,7 @@ mod tests {
             async move {
                 let n = c.fetch_add(1, Ordering::SeqCst) + 1;
                 if n < 3 {
-                    Err(VoiceTypeError::Processing(
-                        "HTTP 503: Service Unavailable".into(),
-                    ))
+                    Err(VoiceTypeError::processing("HTTP 503: Service Unavailable"))
                 } else {
                     Ok(n)
                 }
@@ -119,7 +117,7 @@ mod tests {
             let c = Arc::clone(&c);
             async move {
                 c.fetch_add(1, Ordering::SeqCst);
-                Err::<i32, _>(VoiceTypeError::Processing("HTTP 401: Unauthorized".into()))
+                Err::<i32, _>(VoiceTypeError::processing("HTTP 401: Unauthorized"))
             }
         })
         .await
@@ -137,7 +135,7 @@ mod tests {
                 let c = Arc::clone(&c);
                 async move {
                     c.fetch_add(1, Ordering::SeqCst);
-                    Err::<i32, _>(VoiceTypeError::Processing("HTTP 502: Bad Gateway".into()))
+                    Err::<i32, _>(VoiceTypeError::processing("HTTP 502: Bad Gateway"))
                 }
             },
             3,

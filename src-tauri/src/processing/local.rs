@@ -79,18 +79,18 @@ impl Processor for OllamaProcessor {
             .json(&req)
             .send()
             .await
-            .map_err(|e| VoiceTypeError::Processing(format!("HTTP {url}: {e}")))?;
+            .map_err(|e| VoiceTypeError::processing(format!("HTTP {url}: {e}")))?;
 
         let status = response.status();
         if !status.is_success() {
             tracing::warn!(provider = "ollama", %status, "process call failed");
-            return Err(VoiceTypeError::Processing(format!("Ollama HTTP {status}")));
+            return Err(VoiceTypeError::processing(format!("Ollama HTTP {status}")));
         }
 
         let parsed: OllamaChatResponse = response
             .json()
             .await
-            .map_err(|e| VoiceTypeError::Processing(format!("Ollama-JSON-Parse: {e}")))?;
+            .map_err(|e| VoiceTypeError::processing(format!("Ollama-JSON-Parse: {e}")))?;
         Ok(parsed.message.content)
     }
 }

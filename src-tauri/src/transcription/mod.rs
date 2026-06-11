@@ -25,7 +25,7 @@ use std::sync::Arc;
 /// if the key is not set.
 pub fn make_cloud_transcriber(provider: &str) -> Result<Arc<dyn Transcriber>> {
     let key = SecretStore::get(provider)?.ok_or_else(|| {
-        VoiceTypeError::Transcription(format!(
+        VoiceTypeError::transcription(format!(
             "No API key set for provider '{provider}' — add it under Settings"
         ))
     })?;
@@ -34,7 +34,7 @@ pub fn make_cloud_transcriber(provider: &str) -> Result<Arc<dyn Transcriber>> {
         "openai" => Ok(Arc::new(cloud::openai::OpenAITranscriber::new(key))),
         "groq" => Ok(Arc::new(cloud::groq::GroqTranscriber::new(key))),
         "deepgram" => Ok(Arc::new(cloud::deepgram::DeepgramTranscriber::new(key))),
-        other => Err(VoiceTypeError::Transcription(format!(
+        other => Err(VoiceTypeError::transcription(format!(
             "Unknown STT provider: {other}"
         ))),
     }

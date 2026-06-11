@@ -53,7 +53,7 @@ fn ensure_backend() -> Result<&'static LlamaBackend> {
         return Ok(b);
     }
     let backend = LlamaBackend::init()
-        .map_err(|e| VoiceTypeError::Processing(format!("LlamaBackend::init failed: {e}")))?;
+        .map_err(|e| VoiceTypeError::processing(format!("LlamaBackend::init failed: {e}")))?;
     // Races are fine: `get_or_init` drops the loser, the first one
     // sets the value.
     Ok(LLAMA_BACKEND.get_or_init(|| backend))
@@ -91,7 +91,7 @@ impl LlamaEmbeddedProcessor {
             return Ok(());
         }
         if !self.model_path.exists() {
-            return Err(VoiceTypeError::Processing(format!(
+            return Err(VoiceTypeError::processing(format!(
                 "LLM model file missing: {} (download it via Settings)",
                 self.model_path.display()
             )));
@@ -99,7 +99,7 @@ impl LlamaEmbeddedProcessor {
         let backend = ensure_backend()?;
         let params = LlamaModelParams::default();
         let model = LlamaModel::load_from_file(backend, &self.model_path, &params)
-            .map_err(|e| VoiceTypeError::Processing(format!("LlamaModel::load_from_file: {e}")))?;
+            .map_err(|e| VoiceTypeError::processing(format!("LlamaModel::load_from_file: {e}")))?;
         *guard = Some(model);
         tracing::info!(model = %self.model_path.display(), "LLM model loaded");
         Ok(())
@@ -140,7 +140,7 @@ impl Processor for LlamaEmbeddedProcessor {
             )
         })
         .await
-        .map_err(|e| VoiceTypeError::Processing(format!("spawn_blocking: {e}")))?
+        .map_err(|e| VoiceTypeError::processing(format!("spawn_blocking: {e}")))?
     }
 }
 
@@ -160,41 +160,41 @@ fn run_llama_blocking(
     let guard = model_arc.read();
     let model = guard
         .as_ref()
-        .ok_or_else(|| VoiceTypeError::Processing("LLM model not loaded".into()))?;
+        .ok_or_else(|| VoiceTypeError::processing("LLM model not loaded"))?;
     let backend = LLAMA_BACKEND
         .get()
-        .ok_or_else(|| VoiceTypeError::Processing("LlamaBackend not initialised".into()))?;
+        .ok_or_else(|| VoiceTypeError::processing("LlamaBackend not initialised"))?;
 
     // Pull the chat template from the GGUF. Almost all modern models
     // (gemma3, llama3, qwen3, mistral-nemo) bundle a suitable one.
     // `None` = use the default stored in the model.
     let template = model
         .chat_template(None)
-        .map_err(|e| VoiceTypeError::Processing(format!("chat_template: {e}")))?;
+        .map_err(|e| VoiceTypeError::processing(format!("chat_template: {e}")))?;
 
     let messages = vec![
         LlamaChatMessage::new("system".to_string(), system_prompt)
-            .map_err(|e| VoiceTypeError::Processing(format!("LlamaChatMessage system: {e}")))?,
+            .map_err(|e| VoiceTypeError::processing(format!("LlamaChatMessage system: {e}")))?,
         LlamaChatMessage::new("user".to_string(), transcript)
-            .map_err(|e| VoiceTypeError::Processing(format!("LlamaChatMessage user: {e}")))?,
+            .map_err(|e| VoiceTypeError::processing(format!("LlamaChatMessage user: {e}")))?,
     ];
     // add_ass=true: the template ends with the assistant opening tag,
     // so the model doesn't have to generate an "assistant:" header
     // itself.
     let prompt = model
         .apply_chat_template(&template, &messages, true)
-        .map_err(|e| VoiceTypeError::Processing(format!("apply_chat_template: {e}")))?;
+        .map_err(|e| VoiceTypeError::processing(format!("apply_chat_template: {e}")))?;
 
     let tokens = model
         .str_to_token(&prompt, AddBos::Always)
-        .map_err(|e| VoiceTypeError::Processing(format!("str_to_token: {e}")))?;
+        .map_err(|e| VoiceTypeError::processing(format!("str_to_token: {e}")))?;
 
     let prompt_len = tokens.len() as i32;
     if prompt_len > 4000 {
         // Default ctx 4096; over 4000 prompt tokens leaves <100
         // tokens for the answer. The dictation use case should never
         // hit this, but we check defensively.
-        return Err(VoiceTypeError::Processing(format!(
+        return Err(VoiceTypeError::processing(format!(
             "Prompt too long ({prompt_len} tokens) — shorten the dictation or increase ctx_size"
         )));
     }
@@ -202,7 +202,7 @@ fn run_llama_blocking(
     let ctx_params = LlamaContextParams::default();
     let mut ctx = model
         .new_context(backend, ctx_params)
-        .map_err(|e| VoiceTypeError::Processing(format!("new_context: {e}")))?;
+        .map_err(|e| VoiceTypeError::processing(format!("new_context: {e}")))?;
 
     // Build the batch for the prompt. Logits only for the last token,
     // because we only need the next token's prediction.
@@ -212,10 +212,10 @@ fn run_llama_blocking(
         let is_last = i as i32 == last_idx;
         batch
             .add(token, i as i32, &[0], is_last)
-            .map_err(|e| VoiceTypeError::Processing(format!("batch.add prompt: {e}")))?;
+            .map_err(|e| VoiceTypeError::processing(format!("batch.add prompt: {e}")))?;
     }
     ctx.decode(&mut batch)
-        .map_err(|e| VoiceTypeError::Processing(format!("decode prompt: {e}")))?;
+        .map_err(|e| VoiceTypeError::processing(format!("decode prompt: {e}")))?;
 
     // Sampler chain: penalties → top_p → temperature → dist. At
     // temperature == 0 we use greedy instead of dist, for strictly
@@ -252,17 +252,17 @@ fn run_llama_blocking(
         // dropped; only "visible" text comes out.
         let piece = model
             .token_to_str(token, Special::Plaintext)
-            .map_err(|e| VoiceTypeError::Processing(format!("token_to_str: {e}")))?;
+            .map_err(|e| VoiceTypeError::processing(format!("token_to_str: {e}")))?;
         output.push_str(&piece);
 
         // Feed the next decode with the sampled token.
         batch.clear();
         batch
             .add(token, cursor, &[0], true)
-            .map_err(|e| VoiceTypeError::Processing(format!("batch.add gen: {e}")))?;
+            .map_err(|e| VoiceTypeError::processing(format!("batch.add gen: {e}")))?;
         cursor += 1;
         ctx.decode(&mut batch)
-            .map_err(|e| VoiceTypeError::Processing(format!("decode gen: {e}")))?;
+            .map_err(|e| VoiceTypeError::processing(format!("decode gen: {e}")))?;
     }
 
     Ok(output.trim().to_string())

@@ -88,14 +88,14 @@ impl LocalTranscriber {
         let path_str = self
             .model_path
             .to_str()
-            .ok_or_else(|| VoiceTypeError::Transcription("Model path not UTF-8".into()))?;
+            .ok_or_else(|| VoiceTypeError::transcription("Model path not UTF-8"))?;
         if !self.model_path.exists() {
-            return Err(VoiceTypeError::Transcription(format!(
+            return Err(VoiceTypeError::transcription(format!(
                 "Model file missing: {path_str} (see the model downloader)"
             )));
         }
         let ctx = WhisperContext::new_with_params(path_str, WhisperContextParameters::default())
-            .map_err(|e| VoiceTypeError::Transcription(format!("WhisperContext: {e}")))?;
+            .map_err(|e| VoiceTypeError::transcription(format!("WhisperContext: {e}")))?;
         *guard = Some(ctx);
         tracing::info!(model = %path_str, "Whisper model loaded");
         Ok(())
@@ -136,7 +136,7 @@ impl Transcriber for LocalTranscriber {
             )
         })
         .await
-        .map_err(|e| VoiceTypeError::Transcription(format!("spawn_blocking: {e}")))?
+        .map_err(|e| VoiceTypeError::transcription(format!("spawn_blocking: {e}")))?
     }
 }
 
@@ -182,7 +182,7 @@ impl LocalTranscriber {
             )
         })
         .await
-        .map_err(|e| VoiceTypeError::Transcription(format!("spawn_blocking: {e}")))?
+        .map_err(|e| VoiceTypeError::transcription(format!("spawn_blocking: {e}")))?
     }
 }
 
@@ -204,7 +204,7 @@ fn run_whisper_blocking(
 ) -> Result<String> {
     let guard = ctx.read();
     let context = guard.as_ref().ok_or_else(|| {
-        VoiceTypeError::Transcription(format!(
+        VoiceTypeError::transcription(format!(
             "Whisper context not loaded ({})",
             model_path.display()
         ))
@@ -212,7 +212,7 @@ fn run_whisper_blocking(
 
     let mut state = context
         .create_state()
-        .map_err(|e| VoiceTypeError::Transcription(format!("create_state: {e}")))?;
+        .map_err(|e| VoiceTypeError::transcription(format!("create_state: {e}")))?;
 
     // Sampling choice depends on the profile:
     // - Final: BeamSearch (patience=1.0). The beam width is configurable
@@ -340,7 +340,7 @@ fn run_whisper_blocking(
 
     state
         .full(params, samples)
-        .map_err(|e| VoiceTypeError::Transcription(format!("whisper full: {e}")))?;
+        .map_err(|e| VoiceTypeError::transcription(format!("whisper full: {e}")))?;
 
     // whisper-rs 0.16: `full_n_segments` returns i32 directly (no
     // Result); `get_segment(i)` returns `Option<WhisperSegment>` with
@@ -352,11 +352,11 @@ fn run_whisper_blocking(
     let mut text = String::new();
     for i in 0..n_segments {
         let segment = state.get_segment(i).ok_or_else(|| {
-            VoiceTypeError::Transcription(format!("get_segment({i}) returned None"))
+            VoiceTypeError::transcription(format!("get_segment({i}) returned None"))
         })?;
         let segment_text = segment
             .to_str_lossy()
-            .map_err(|e| VoiceTypeError::Transcription(format!("segment {i} to_str: {e}")))?;
+            .map_err(|e| VoiceTypeError::transcription(format!("segment {i} to_str: {e}")))?;
         text.push_str(&segment_text);
     }
     Ok(text.trim().to_string())
@@ -368,16 +368,16 @@ fn run_whisper_blocking(
 fn decode_wav_to_f32_mono_16k(wav_bytes: &[u8]) -> Result<Vec<f32>> {
     let cursor = std::io::Cursor::new(wav_bytes);
     let reader = hound::WavReader::new(cursor)
-        .map_err(|e| VoiceTypeError::Transcription(format!("WavReader: {e}")))?;
+        .map_err(|e| VoiceTypeError::transcription(format!("WavReader: {e}")))?;
     let spec = reader.spec();
     if spec.sample_rate != 16_000 {
-        return Err(VoiceTypeError::Transcription(format!(
+        return Err(VoiceTypeError::transcription(format!(
             "Expected 16 kHz, got {} Hz",
             spec.sample_rate
         )));
     }
     if spec.channels != 1 {
-        return Err(VoiceTypeError::Transcription(format!(
+        return Err(VoiceTypeError::transcription(format!(
             "Expected mono, got {} channels",
             spec.channels
         )));
@@ -386,23 +386,23 @@ fn decode_wav_to_f32_mono_16k(wav_bytes: &[u8]) -> Result<Vec<f32>> {
     match (spec.sample_format, spec.bits_per_sample) {
         (hound::SampleFormat::Int, 16) => {
             let mut reader = hound::WavReader::new(std::io::Cursor::new(wav_bytes))
-                .map_err(|e| VoiceTypeError::Transcription(format!("WavReader: {e}")))?;
+                .map_err(|e| VoiceTypeError::transcription(format!("WavReader: {e}")))?;
             let scale = i16::MAX as f32;
             reader
                 .samples::<i16>()
                 .map(|r| r.map(|s| s as f32 / scale))
                 .collect::<std::result::Result<Vec<_>, _>>()
-                .map_err(|e| VoiceTypeError::Transcription(format!("samples<i16>: {e}")))
+                .map_err(|e| VoiceTypeError::transcription(format!("samples<i16>: {e}")))
         }
         (hound::SampleFormat::Float, 32) => {
             let mut reader = hound::WavReader::new(std::io::Cursor::new(wav_bytes))
-                .map_err(|e| VoiceTypeError::Transcription(format!("WavReader: {e}")))?;
+                .map_err(|e| VoiceTypeError::transcription(format!("WavReader: {e}")))?;
             reader
                 .samples::<f32>()
                 .collect::<std::result::Result<Vec<_>, _>>()
-                .map_err(|e| VoiceTypeError::Transcription(format!("samples<f32>: {e}")))
+                .map_err(|e| VoiceTypeError::transcription(format!("samples<f32>: {e}")))
         }
-        other => Err(VoiceTypeError::Transcription(format!(
+        other => Err(VoiceTypeError::transcription(format!(
             "Unsupported WAV-Format: {other:?}"
         ))),
     }

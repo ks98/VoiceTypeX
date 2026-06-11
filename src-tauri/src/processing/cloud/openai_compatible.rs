@@ -76,25 +76,25 @@ impl OpenAICompatibleClient {
                 .json(&req)
                 .send()
                 .await
-                .map_err(|e| VoiceTypeError::Processing(format!("HTTP {url}: {e}")))?;
+                .map_err(|e| VoiceTypeError::processing(format!("HTTP {url}: {e}")))?;
 
             let status = response.status();
             if !status.is_success() {
                 tracing::warn!(provider = "openai_compatible", %status, "process call failed");
-                return Err(VoiceTypeError::Processing(format!("HTTP {status}")));
+                return Err(VoiceTypeError::processing(format!("HTTP {status}")));
             }
 
             let parsed: ChatCompletionResponse = response
                 .json()
                 .await
-                .map_err(|e| VoiceTypeError::Processing(format!("Response-JSON-Parse: {e}")))?;
+                .map_err(|e| VoiceTypeError::processing(format!("Response-JSON-Parse: {e}")))?;
 
             parsed
                 .choices
                 .into_iter()
                 .next()
                 .map(|c| c.message.content)
-                .ok_or_else(|| VoiceTypeError::Processing("No choices in response".into()))
+                .ok_or_else(|| VoiceTypeError::processing("No choices in response"))
         })
         .await
     }
@@ -109,11 +109,11 @@ impl OpenAICompatibleClient {
             .bearer_auth(&self.api_key)
             .send()
             .await
-            .map_err(|e| VoiceTypeError::Processing(format!("HTTP {url}: {e}")))?;
+            .map_err(|e| VoiceTypeError::processing(format!("HTTP {url}: {e}")))?;
         let status = response.status();
         if !status.is_success() {
             tracing::warn!(provider = "openai_compatible", %status, "test_connection failed");
-            return Err(VoiceTypeError::Processing(format!("HTTP {status}")));
+            return Err(VoiceTypeError::processing(format!("HTTP {status}")));
         }
         Ok(())
     }

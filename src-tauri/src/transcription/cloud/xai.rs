@@ -44,7 +44,7 @@ impl Transcriber for XaiTranscriber {
             let part = reqwest::multipart::Part::bytes(audio.to_vec())
                 .file_name("audio.wav")
                 .mime_str("audio/wav")
-                .map_err(|e| VoiceTypeError::Transcription(format!("multipart-Part: {e}")))?;
+                .map_err(|e| VoiceTypeError::transcription(format!("multipart-Part: {e}")))?;
 
             // xAI `/v1/stt` accepts no `model` and no `initial_prompt`
             // field (verified against the official docs — only `file`/
@@ -64,12 +64,12 @@ impl Transcriber for XaiTranscriber {
                 .multipart(form)
                 .send()
                 .await
-                .map_err(|e| VoiceTypeError::Transcription(format!("HTTP {url}: {e}")))?;
+                .map_err(|e| VoiceTypeError::transcription(format!("HTTP {url}: {e}")))?;
 
             let status = response.status();
             if !status.is_success() {
                 tracing::warn!(provider = "xai", %status, "transcribe call failed");
-                return Err(VoiceTypeError::Transcription(format!(
+                return Err(VoiceTypeError::transcription(format!(
                     "xAI STT HTTP {status}"
                 )));
             }
@@ -77,7 +77,7 @@ impl Transcriber for XaiTranscriber {
             let parsed: SttResponse = response
                 .json()
                 .await
-                .map_err(|e| VoiceTypeError::Transcription(format!("xAI-STT-JSON-Parse: {e}")))?;
+                .map_err(|e| VoiceTypeError::transcription(format!("xAI-STT-JSON-Parse: {e}")))?;
             Ok(parsed.text.trim().to_string())
         })
         .await

@@ -39,11 +39,11 @@ impl DeepgramTranscriber {
             .header("Authorization", format!("Token {}", self.api_key))
             .send()
             .await
-            .map_err(|e| VoiceTypeError::Transcription(format!("HTTP {url}: {e}")))?;
+            .map_err(|e| VoiceTypeError::transcription(format!("HTTP {url}: {e}")))?;
         let status = response.status();
         if !status.is_success() {
             tracing::warn!(provider = "deepgram", %status, "test_connection failed");
-            return Err(VoiceTypeError::Transcription(format!(
+            return Err(VoiceTypeError::transcription(format!(
                 "Deepgram HTTP {status}"
             )));
         }
@@ -77,12 +77,12 @@ impl Transcriber for DeepgramTranscriber {
                 .body(audio.to_vec())
                 .send()
                 .await
-                .map_err(|e| VoiceTypeError::Transcription(format!("HTTP {url}: {e}")))?;
+                .map_err(|e| VoiceTypeError::transcription(format!("HTTP {url}: {e}")))?;
 
             let status = response.status();
             if !status.is_success() {
                 tracing::warn!(provider = "deepgram", %status, "transcribe call failed");
-                return Err(VoiceTypeError::Transcription(format!(
+                return Err(VoiceTypeError::transcription(format!(
                     "Deepgram HTTP {status}"
                 )));
             }
@@ -90,7 +90,7 @@ impl Transcriber for DeepgramTranscriber {
             let parsed: DeepgramResponse = response
                 .json()
                 .await
-                .map_err(|e| VoiceTypeError::Transcription(format!("Deepgram-JSON-Parse: {e}")))?;
+                .map_err(|e| VoiceTypeError::transcription(format!("Deepgram-JSON-Parse: {e}")))?;
             let transcript = parsed
                 .results
                 .and_then(|r| r.channels.into_iter().next())
