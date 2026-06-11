@@ -1,21 +1,17 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default capabilities fuer das Hauptfenster von VoiceTypeX. Fuer Phase 1 liberal gesetzt; in Phase 6 (Production-Hardening) auf konkrete allow-* Permissions reduzieren.",
+  "description": "Default capabilities for the main windows of VoiceTypeX. Scoped to the explicit allow-* permissions the webview actually uses. The store, clipboard-manager, global-shortcut, autostart and notification plugins are driven exclusively from the Rust backend (which is not gated by capabilities), so the webview is granted none of their commands.",
   "windows": ["main", "overlay", "menu"],
   "permissions": [
     "core:default",
     "core:window:allow-show",
     "core:window:allow-hide",
     "core:window:allow-set-focus",
-    "global-shortcut:default",
-    "store:default",
-    "dialog:default",
-    "notification:default",
-    "os:default",
-    "clipboard-manager:default",
-    "autostart:default",
-    "updater:default",
-    "process:default"
+    "dialog:allow-open",
+    "os:allow-platform",
+    "updater:allow-check",
+    "updater:allow-download-and-install",
+    "process:allow-restart"
   ]
 }
