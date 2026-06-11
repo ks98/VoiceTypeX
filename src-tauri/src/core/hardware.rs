@@ -249,13 +249,6 @@ fn library_present(candidates: &[&str]) -> bool {
     false
 }
 
-#[cfg(target_os = "windows")]
-fn library_present(_candidates: &[&str]) -> bool {
-    // DLL lookup is more involved on Windows; the specific paths are
-    // hardcoded above in `detect_openblas`/`detect_vulkan`.
-    false
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
