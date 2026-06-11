@@ -98,8 +98,11 @@ Rust, TypeScript, Systems Programming und Cross-Platform-Desktop-Apps.
 - **Tests:** Unit-Tests für reine Logik (Modi-Parsing, State-Machine,
   Retry, Error-Klassifikation). Plattform-Code wird manuell verifiziert,
   Verifikationsschritte werden in der Antwort/PR dokumentiert.
-- **Push-to-Talk** ist Default; Toggle-Mode bleibt Fallback für
-  Wayland-Compositors mit unzuverlässigem Release-Signal.
+- **Ein globaler Menü-Hotkey** (`Settings.menu_hotkey`) steuert die App:
+  im `Idle`-Zustand öffnet er das Menü, im `Recording`-Zustand stoppt er
+  die laufende Aufnahme (Toggle-Stop, derselbe Hotkey). Es wird nur
+  `ShortcutState::Pressed` ausgewertet — Release-Events sind irrelevant
+  (kein Push-to-Talk mehr).
 - **Kommentare nur, wenn das Warum nicht-offensichtlich ist** — versteckte
   Constraints, subtile Invarianten, Workarounds für konkrete Bugs. Das
   WAS steht im Code.
