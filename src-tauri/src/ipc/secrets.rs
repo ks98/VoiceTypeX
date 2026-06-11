@@ -60,22 +60,39 @@ pub async fn get_provider_status() -> IpcResult<Vec<ProviderStatus>> {
 }
 
 #[tauri::command]
-pub async fn set_provider_key(provider: String, key: String) -> IpcResult<()> {
+pub async fn set_provider_key(
+    state: tauri::State<'_, Arc<AppContext>>,
+    provider: String,
+    key: String,
+) -> IpcResult<()> {
     if !PROVIDERS.contains(&provider.as_str()) {
         return Err(format!("Unknown provider: {provider}"));
     }
     if key.trim().is_empty() {
         return Err("API key must not be empty".into());
     }
-    SecretStore::set(&provider, key.trim()).map_err(|e| e.to_string())
+    SecretStore::set(&provider, key.trim()).map_err(|e| e.to_string())?;
+    // Drop the cached cloud transcriber/processor for this provider so
+    // the next dictation rebuilds them with the new key (issue #42) — a
+    // stale client must never outlive a key change.
+    state.invalidate_cloud_provider(&provider);
+    Ok(())
 }
 
 #[tauri::command]
-pub async fn delete_provider_key(provider: String) -> IpcResult<()> {
+pub async fn delete_provider_key(
+    state: tauri::State<'_, Arc<AppContext>>,
+    provider: String,
+) -> IpcResult<()> {
     if !PROVIDERS.contains(&provider.as_str()) {
         return Err(format!("Unknown provider: {provider}"));
     }
-    SecretStore::delete(&provider).map_err(|e| e.to_string())
+    SecretStore::delete(&provider).map_err(|e| e.to_string())?;
+    // Drop the cached cloud client for this provider (issue #42): the
+    // next dictation rebuilds and surfaces the "no key set" error
+    // instead of silently using the deleted key's cached wrapper.
+    state.invalidate_cloud_provider(&provider);
+    Ok(())
 }
 
 /// Check provider connectivity with the currently stored API key.

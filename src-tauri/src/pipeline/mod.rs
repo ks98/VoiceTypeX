@@ -25,7 +25,7 @@ use crate::transcription::local_agreement::stable_prefix;
 #[cfg(not(target_os = "windows"))]
 use crate::transcription::model_downloader::LlmModelSlot;
 use crate::transcription::model_downloader::ModelSlot;
-use crate::transcription::{make_cloud_transcriber, TranscribeOpts};
+use crate::transcription::{make_cloud_transcriber, TranscribeOpts, Transcriber};
 use serde::Serialize;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
@@ -561,7 +561,7 @@ async fn finish_recording_and_inject(
         }
         TranscriptionTarget::Cloud => {
             let provider = mode.cloud_stt_provider.as_deref().unwrap_or("xai");
-            match make_cloud_transcriber(provider, ctx.http_client.clone()) {
+            match resolve_cloud_transcriber(ctx, provider) {
                 Ok(transcriber) => match encode_wav_16k_mono(&samples) {
                     Ok(wav) => transcriber.transcribe_oneshot(&wav, opts).await,
                     Err(e) => Err(e),
@@ -908,6 +908,60 @@ fn resolve_local_transcriber(ctx: &Arc<AppContext>, mode: &Mode) -> Arc<LocalTra
     new_transcriber
 }
 
+/// Resolver for the cloud STT transcriber of a provider, with a
+/// per-provider cache in `ctx.cloud_transcribers` (issue #42).
+///
+/// On a cache miss the wrapper is built once via `make_cloud_transcriber`
+/// (which reads the provider's keychain entry) and cached; every further
+/// dictation with the same provider reuses it instead of re-reading the
+/// keychain and re-constructing the `Arc`. The entry is dropped when the
+/// provider's key changes (`AppContext::invalidate_cloud_provider` /
+/// `clear_cloud_caches`), so a stale key is never served.
+fn resolve_cloud_transcriber(
+    ctx: &Arc<AppContext>,
+    provider: &str,
+) -> Result<Arc<dyn Transcriber>> {
+    {
+        let cache = ctx.cloud_transcribers.lock();
+        if let Some(found) = cache.get(provider) {
+            return Ok(found.clone());
+        }
+    }
+
+    // Build outside the lock — `make_cloud_transcriber` does a keychain
+    // read, which we don't want to hold the cache mutex across.
+    let new_transcriber = make_cloud_transcriber(provider, ctx.http_client.clone())?;
+    let mut cache = ctx.cloud_transcribers.lock();
+    // Re-check under the lock: a concurrent resolver may have inserted
+    // this provider between the read above and now. Reuse theirs.
+    if let Some(found) = cache.get(provider) {
+        return Ok(found.clone());
+    }
+    cache.insert(provider.to_string(), new_transcriber.clone());
+    Ok(new_transcriber)
+}
+
+/// Resolver for the cloud LLM processor of a provider, with a
+/// per-provider cache in `ctx.cloud_processors` (issue #42). Mirrors
+/// `resolve_cloud_transcriber`; see there for the cache/invalidation
+/// contract.
+fn resolve_cloud_processor(ctx: &Arc<AppContext>, provider: &str) -> Result<Arc<dyn Processor>> {
+    {
+        let cache = ctx.cloud_processors.lock();
+        if let Some(found) = cache.get(provider) {
+            return Ok(found.clone());
+        }
+    }
+
+    let new_processor = make_cloud_processor(provider, ctx.http_client.clone())?;
+    let mut cache = ctx.cloud_processors.lock();
+    if let Some(found) = cache.get(provider) {
+        return Ok(found.clone());
+    }
+    cache.insert(provider.to_string(), new_processor.clone());
+    Ok(new_processor)
+}
+
 /// Analogous resolver for the embedded LLM processor
 /// (`mode.embedded_llm_slot`). Linux/macOS-only — the embedded engine is
 /// not compiled on Windows (issue #1), where `run_local_processing`
@@ -959,7 +1013,7 @@ async fn run_cloud_processing(
             mode.id
         ))
     })?;
-    let processor: Arc<dyn Processor> = make_cloud_processor(provider, ctx.http_client.clone())?;
+    let processor: Arc<dyn Processor> = resolve_cloud_processor(ctx, provider)?;
     let system_prompt = mode.system_prompt.as_deref().unwrap_or("");
     let opts = ProcessOpts {
         model: mode.cloud_llm_model.clone(),

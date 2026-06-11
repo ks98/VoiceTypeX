@@ -36,6 +36,7 @@ use crate::transcription::local::LocalTranscriber;
 #[cfg(not(target_os = "windows"))]
 use crate::transcription::model_downloader::LlmModelSlot;
 use parking_lot::{Mutex, RwLock};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::Manager;
@@ -301,6 +302,8 @@ pub fn run() {
                 extra_transcribers: Arc::new(Mutex::new(BoundedLru::new(EXTRA_ENGINE_CACHE_CAP))),
                 #[cfg(not(target_os = "windows"))]
                 extra_llm_processors: Arc::new(Mutex::new(BoundedLru::new(EXTRA_ENGINE_CACHE_CAP))),
+                cloud_transcribers: Mutex::new(HashMap::new()),
+                cloud_processors: Mutex::new(HashMap::new()),
                 active_streaming_handle: Arc::new(Mutex::new(None)),
                 http_client,
                 injector,
