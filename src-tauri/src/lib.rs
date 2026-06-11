@@ -41,12 +41,19 @@ use std::sync::Arc;
 use tauri::Manager;
 use tauri_plugin_autostart::MacosLauncher;
 use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::registry::Registry;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::EnvFilter;
+use tracing_subscriber::{reload, EnvFilter, Layer};
+
+/// Reloadable slot for the on-disk file layer. `init_tracing` installs it
+/// empty (`None` = no-op) because the app log dir isn't known until the
+/// Tauri `.setup()` hook; `.setup()` then swaps in the real rolling-file
+/// layer. The boxed trait object fixes the reload type at init time.
+type FileLayerSlot = Option<Box<dyn Layer<Registry> + Send + Sync>>;
 
 pub fn run() {
     let log_buffer = LogRingBuffer::default();
-    init_tracing(&log_buffer);
+    let file_layer_handle = init_tracing(&log_buffer);
 
     // Report the REAL runtime backend (not just the build flag) once at
     // startup. On a Vulkan build with no usable Vulkan device this prints
@@ -106,6 +113,22 @@ pub fn run() {
         ])
         .setup(move |app| {
             let app_handle = app.handle().clone();
+
+            // Now that the app handle exists, resolve the per-OS app log dir
+            // and swap the real rolling-file layer into the slot installed by
+            // `init_tracing`. Daily rotation, last 7 files kept (bounded).
+            // A failure here is non-fatal: stdout + the ring buffer still
+            // work, so startup proceeds with only a warn.
+            match app.path().app_log_dir() {
+                Ok(log_dir) => {
+                    if let Err(e) = init_file_logging(&log_dir, &file_layer_handle) {
+                        tracing::warn!(error = %e, "On-disk log file disabled");
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "app_log_dir unavailable — on-disk log file disabled");
+                }
+            }
 
             let config_dir = app
                 .path()
@@ -360,14 +383,58 @@ pub fn run() {
         .expect("Tauri app failed to start");
 }
 
-fn init_tracing(buffer: &LogRingBuffer) {
+/// Installs the global tracing subscriber: `EnvFilter` + stdout + the
+/// in-memory ring buffer, plus an empty reloadable slot for the on-disk
+/// file layer. The returned handle lets `.setup()` swap in the rolling-file
+/// layer once `app_log_dir()` is available. Trade-off: events emitted
+/// before `.setup()` (e.g. the active-backend line, Tauri plugin init)
+/// reach stdout + the ring buffer but NOT the file.
+fn init_tracing(buffer: &LogRingBuffer) -> reload::Handle<FileLayerSlot, Registry> {
     let filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new("voicetypex=info,tauri=info,warn"));
     let fmt_layer = tracing_subscriber::fmt::layer().with_target(true);
     let buffer_layer = buffer.layer();
+    // The reload slot is added first (its `S` is the bare `Registry`, so the
+    // boxed file layer downstream only needs `Layer<Registry>`). `EnvFilter`
+    // as a layer filters the whole subscriber regardless of position, so the
+    // `voicetypex=info,tauri=info,warn` default still gates the file layer too.
+    let (file_slot, file_handle) =
+        reload::Layer::new(None::<Box<dyn Layer<Registry> + Send + Sync>>);
     tracing_subscriber::registry()
+        .with(file_slot)
         .with(filter)
         .with(fmt_layer)
         .with(buffer_layer)
         .init();
+    file_handle
+}
+
+/// Builds the bounded daily rolling-file layer in `log_dir` and swaps it
+/// into the reloadable slot. Called from `.setup()` once the app log dir is
+/// known. The non-blocking `WorkerGuard` is leaked on purpose: it must stay
+/// alive for the whole process so buffered lines keep flushing, and the
+/// process lifetime *is* the app lifetime — there is nowhere meaningful to
+/// drop it earlier.
+fn init_file_logging(
+    log_dir: &std::path::Path,
+    handle: &reload::Handle<FileLayerSlot, Registry>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    std::fs::create_dir_all(log_dir)?;
+    let appender = tracing_appender::rolling::RollingFileAppender::builder()
+        .rotation(tracing_appender::rolling::Rotation::DAILY)
+        .filename_prefix("voicetypex")
+        .filename_suffix("log")
+        .max_log_files(7)
+        .build(log_dir)?;
+    let (non_blocking, guard) = tracing_appender::non_blocking(appender);
+    std::mem::forget(guard);
+    // No ANSI colour codes in the file; the same target/level format as
+    // stdout so the two views stay comparable.
+    let file_layer = tracing_subscriber::fmt::layer()
+        .with_target(true)
+        .with_ansi(false)
+        .with_writer(non_blocking)
+        .boxed();
+    handle.reload(Some(file_layer))?;
+    Ok(())
 }
