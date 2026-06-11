@@ -7,6 +7,7 @@ import Button from "./Button";
 import Banner from "./Banner";
 import WhisperModelCards from "./WhisperModelCards";
 import { computeBlockingReasons } from "./modeValidation";
+import { LLM_SLOTS } from "../lib/llmSlots";
 import { useT, type TranslateFn } from "../i18n";
 
 // Local input classes — the ModeEditor has ~17 sites with different
@@ -25,25 +26,6 @@ interface ModeEditorProps {
 
 const STT_PROVIDERS = ["xai", "openai", "groq", "deepgram"];
 const LLM_PROVIDERS = ["xai", "openai", "anthropic"];
-
-// The embedded-LLM slot list mirrors the backend mapping
-// (`LlmModelSlot::from_setting`). Labels come via i18n key rather than
-// hardcoded strings, so a locale switch takes effect. (The Whisper slots
-// live in src/lib/whisperModels.ts, rendered via <WhisperModelCards />.)
-const LLM_SLOTS: Array<{ value: string; key: string }> = [
-  { value: "gemma4-e4b-it-q5_k_m", key: "mode_editor.llm_slot.gemma4_e4b" },
-  { value: "gemma4-e2b-it-q5_k_m", key: "mode_editor.llm_slot.gemma4_e2b" },
-  { value: "gemma3-1b-it-q5_k_m", key: "mode_editor.llm_slot.gemma3_1b" },
-  { value: "gemma3-4b-it-q5_k_m", key: "mode_editor.llm_slot.gemma3_4b" },
-  {
-    value: "llama3.2-1b-instruct-q5_k_m",
-    key: "mode_editor.llm_slot.llama32_1b",
-  },
-  {
-    value: "qwen2.5-1.5b-instruct-q5_k_m",
-    key: "mode_editor.llm_slot.qwen25_15b",
-  },
-];
 
 function emptyMode(): Mode {
   return {
@@ -424,8 +406,8 @@ export default function ModeEditor({
                         {t("mode_editor.llm.embedded_slot.global")}
                       </option>
                       {LLM_SLOTS.map((s) => (
-                        <option key={s.value} value={s.value}>
-                          {t(s.key)}
+                        <option key={s.slot} value={s.slot}>
+                          {t(`mode_editor.llm_slot.${s.keySuffix}`)}
                         </option>
                       ))}
                     </select>
