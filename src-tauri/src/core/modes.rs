@@ -424,6 +424,48 @@ impl Mode {
             self.local_engine = Some("ollama".to_string());
         }
     }
+
+    /// A minimal voice/local/pass-through mode for the test-transcription
+    /// diagnostic (issue #37). The diagnostic records, transcribes and
+    /// reports RTF — it has no user mode, no processing and no injection,
+    /// so it routes the captured samples through the shared `run_stages`
+    /// core with this stand-in: `input = Voice` (transcript is the output,
+    /// nothing composed), `transcription = Local` (app-default Whisper),
+    /// `processing = None` (no LLM, no `Postprocessing` transition). The
+    /// caller never injects — `run_stages` stops at the inject boundary and
+    /// returns the transcript — so the diagnostic stays silent (no overlay,
+    /// no cues, no injection).
+    pub(crate) fn diagnostic() -> Mode {
+        Mode {
+            id: "__diagnostic__".to_string(),
+            name: "Test transcription".to_string(),
+            description: String::new(),
+            hotkey: None,
+            transcription: TranscriptionTarget::Local,
+            processing: ProcessingTarget::None,
+            cloud_stt_provider: None,
+            whisper_model_slot: None,
+            initial_prompt: None,
+            whisper_beam_size: None,
+            cloud_llm_provider: None,
+            cloud_llm_model: None,
+            local_llm_model: None,
+            local_engine: None,
+            ollama_model_tag: None,
+            embedded_llm_slot: None,
+            injection_method: InjectionMethod::default(),
+            paste_shortcut: PasteShortcut::default(),
+            input: InputSource::Voice,
+            output: OutputAction::Insert,
+            output_fallback: default_output_fallback(),
+            language: None,
+            system_prompt: None,
+            temperature: None,
+            top_p: None,
+            repeat_penalty: None,
+            max_tokens: None,
+        }
+    }
 }
 
 /// Load a single mode from a TOML file.

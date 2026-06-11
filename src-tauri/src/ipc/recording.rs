@@ -142,20 +142,25 @@ pub async fn run_test_transcription(
     // auto-detect. Previously hardcoded "de", which broke English
     // testers. Anyone who wants to test a specific language uses a
     // mode with the `language` field set.
-    // Route through the same resolver the dictation path uses so the
-    // diagnostic reflects a slot/path change without an app restart
-    // (issue #30).
-    let result = crate::pipeline::app_default_transcriber(state.inner())
-        .transcribe_samples(
-            &samples,
-            TranscribeOpts {
-                language: None,
-                initial_prompt: None,
-                n_threads,
-                beam_size: Some(beam_size),
-            },
-        )
-        .await;
+    //
+    // Route the STT through the shared `run_stages` core (issue #37)
+    // instead of a second hand-rolled transcribe choreography. The
+    // diagnostic is silent: `run_stages` stops at the inject boundary
+    // and returns the transcript, so nothing here injects or touches the
+    // overlay/cues. The app-default transcriber (resolved inside
+    // `run_test_transcription_stage`) keeps the slot/path-change behaviour
+    // without an app restart (issue #30).
+    let result = crate::pipeline::run_test_transcription_stage(
+        state.inner(),
+        &samples,
+        TranscribeOpts {
+            language: None,
+            initial_prompt: None,
+            n_threads,
+            beam_size: Some(beam_size),
+        },
+    )
+    .await;
     let elapsed = start.elapsed();
 
     if let Err(e) = state.state_bus.transition(AppState::Idle) {

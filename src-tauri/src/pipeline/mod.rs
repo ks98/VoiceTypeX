@@ -909,6 +909,57 @@ async fn finish_recording_and_inject(
     Ok(())
 }
 
+/// Drive the captured diagnostic samples through the shared stage core
+/// (issue #37): the test-transcription IPC command no longer hand-rolls a
+/// second Transcribe choreography — it records, transitions the bus to
+/// `Transcribing`, and then calls this, so STT flows through the same
+/// `run_stages` path (and the same `Transcribing → Error` parking on an
+/// STT failure) as a real dictation.
+///
+/// The diagnostic is mode-less, so it uses `Mode::diagnostic()`
+/// (voice/local/pass-through). `run_stages` is invoked with no processor
+/// (`resolve_processor = None`), so there is no `Postprocessing`
+/// transition and no LLM pass; the returned `final_text` is exactly the
+/// transcript. The diagnostic stays silent: `run_stages` stops at the
+/// inject boundary, the caller never injects, and nothing here touches the
+/// overlay, cues or tray.
+///
+/// Returns just the transcript — the caller measures RTF/`processing_ms`
+/// itself (it wraps the call in its own `Instant`), so the #43 stage
+/// timings inside `StageOutput` are unused here.
+pub(crate) async fn run_test_transcription_stage(
+    ctx: &Arc<AppContext>,
+    samples: &[f32],
+    transcribe_opts: TranscribeOpts,
+) -> Result<String> {
+    let mode = Mode::diagnostic();
+    let transcriber = app_default_transcriber(ctx);
+    let deps = PipelineDeps {
+        state_bus: &ctx.state_bus,
+        transcriber: StageTranscriber::Local(transcriber.as_ref()),
+        transcribe_opts,
+        // Pass-through diagnostic: `run_stages` skips the processor when
+        // `resolve_processor` is `None`, so these opts are never read.
+        process_opts: StageProcessOpts {
+            system_prompt: "",
+            opts: ProcessOpts::default(),
+        },
+    };
+
+    // `None` = pass-through. The turbofish names a concrete `F` for the
+    // never-taken `Some` arm so the generic `run_stages` resolves; a
+    // fn-pointer satisfies `FnOnce() -> Result<Arc<dyn Processor>>`.
+    let out = run_stages(
+        &deps,
+        samples,
+        &mode,
+        None,
+        None::<fn() -> Result<Arc<dyn Processor>>>,
+    )
+    .await?;
+    Ok(out.final_text)
+}
+
 /// Resolve the `Processor` instance a mode should use, dispatching on
 /// `mode.processing` (issue #34/#35). Pure resolution: it builds (or
 /// fetches from cache) the cloud / embedded / Ollama processor and
