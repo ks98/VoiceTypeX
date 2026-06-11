@@ -118,8 +118,9 @@ Hotkey press in the Recording state
 finish_recording_and_inject(app, ctx, active_mode)
    │  • ctx.active_mode = None
    │  • State → Transcribing, Stop-Cue
-   │  • recorder.stop_and_finalize() → 16 kHz Mono PCM s16 LE WAV
-   │  • Transcriber::transcribe_oneshot
+   │  • recorder.stop_and_finalize() → 16 kHz mono f32 samples
+   │  • Local STT: LocalTranscriber::transcribe_samples (f32 straight in)
+   │    Cloud STT: encode_wav_16k_mono → Transcriber::transcribe_oneshot
    │  • If processing != none: State → Postprocessing,
    │    Processor::process (Ollama or cloud LLM)
    │  • State → Injecting
@@ -244,13 +245,23 @@ the 9 default TOMLs embedded in the binary into
 
 `cpal::Stream` is `!Send`. Solution: a dedicated thread holds the
 stream, and a send-able handle (`RecorderHandle`) communicates with the
-worker over a channel. Audio is collected as f32; on stop:
+worker over a channel. Audio is collected as f32; on stop
+`stop_and_finalize` runs:
 
 1. Stereo→mono mix (mean per frame)
 2. `rubato::SincFixedIn` resampling to 16 kHz
-3. `hound` WAV encoding (PCM s16 LE)
 
-The WAV buffer goes directly to `Transcriber::transcribe_oneshot`.
+It returns the **16 kHz mono f32 samples**, not a WAV. The split per STT
+target (issue #46):
+
+- **Local** — the f32 buffer goes straight to
+  `LocalTranscriber::transcribe_samples`; whisper-rs consumes f32
+  natively, so there is no encode/decode and no s16 quantization.
+- **Cloud** — `encode_wav_16k_mono` lazily wraps the f32 in a `hound`
+  WAV (PCM s16 LE) for the multipart upload, then
+  `Transcriber::transcribe_oneshot` runs. The trait entry on the local
+  transcriber stays (decode WAV → delegate to `transcribe_samples`) for
+  parity, but the pipeline's local path does not use it.
 
 ## Local STT Pipeline (Phase 1, May 2026)
 

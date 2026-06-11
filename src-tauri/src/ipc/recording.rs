@@ -116,8 +116,10 @@ pub async fn run_test_transcription(
 
     tokio::time::sleep(Duration::from_secs(seconds as u64)).await;
 
-    let wav = match recorder.stop_and_finalize().await {
-        Ok(w) => w,
+    // 16 kHz mono f32 — fed straight to the local Whisper path
+    // (`transcribe_samples`), no WAV encode/decode roundtrip (issue #46).
+    let samples = match recorder.stop_and_finalize().await {
+        Ok(s) => s,
         Err(e) => {
             if let Err(e) = state.state_bus.transition(AppState::Idle) {
                 tracing::error!(error = %e, "Failed to reset state to Idle after recorder finalize error");
@@ -141,9 +143,9 @@ pub async fn run_test_transcription(
     // testers. Anyone who wants to test a specific language uses a
     // mode with the `language` field set.
     let result = state
-        .transcriber
-        .transcribe_oneshot(
-            &wav,
+        .local_transcriber
+        .transcribe_samples(
+            &samples,
             TranscribeOpts {
                 language: None,
                 initial_prompt: None,

@@ -12,7 +12,10 @@
 //!     -> stop signal: worker thread drops the stream, we get the samples
 //!     -> stereo->mono downmix (L+R)/2 if channels > 1
 //!     -> resampling to 16 kHz mono via `rubato::SincFixedIn` (speech-grade)
-//!     -> WAV encoding (s16le) via hound -> `Vec<u8>`
+//!     -> `stop_and_finalize` returns the 16 kHz mono `Vec<f32>` directly.
+//!        The local Whisper path consumes f32 as-is; only the cloud
+//!        multipart upload lazily wraps it via `encode_wav_16k_mono`
+//!        (s16le, hound) — so no f32->WAV->f32 roundtrip on local STT.
 
 use crate::core::error::{Result, VoiceTypeError};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -57,7 +60,7 @@ pub struct RecorderHandle {
 
 impl RecorderHandle {
     /// Start recording. Audio accumulates in the buffer;
-    /// `stop_and_finalize` returns the complete WAV.
+    /// `stop_and_finalize` returns the resampled 16 kHz mono f32 samples.
     pub fn start(config: RecorderConfig) -> Result<Self> {
         let samples: Arc<Mutex<Vec<f32>>> = Arc::new(Mutex::new(Vec::with_capacity(16_000 * 30)));
         let is_recording = Arc::new(AtomicBool::new(true));
@@ -85,14 +88,19 @@ impl RecorderHandle {
     }
 
     /// Stop recording, wait for the worker thread, and return the
-    /// finished WAV file (16 kHz mono PCM s16le) as a byte buffer.
+    /// resampled 16 kHz mono f32 samples.
+    ///
+    /// The local Whisper path feeds these straight to whisper-rs; the
+    /// cloud path wraps them via `encode_wav_16k_mono` (the WAV
+    /// container is only needed for the multipart upload). This avoids
+    /// the lossy f32->s16-WAV->f32 roundtrip the local path used to pay.
     ///
     /// Async-conformity: three blocking steps (worker join, sample
-    /// lock, CPU-bound resampling/encoding) run in `spawn_blocking`,
-    /// so the tokio runtime doesn't panic ("Cannot block the current
-    /// thread from within a runtime"). The meta channel is read with
-    /// `await` instead.
-    pub async fn stop_and_finalize(mut self) -> Result<Vec<u8>> {
+    /// lock, CPU-bound resampling) run in `spawn_blocking`, so the
+    /// tokio runtime doesn't panic ("Cannot block the current thread
+    /// from within a runtime"). The meta channel is read with `await`
+    /// instead.
+    pub async fn stop_and_finalize(mut self) -> Result<Vec<f32>> {
         self.is_recording.store(false, Ordering::SeqCst);
         if let Some(tx) = self.stop_tx.take() {
             let _ = tx.send(());
@@ -109,20 +117,18 @@ impl RecorderHandle {
         let meta = self.resolve_meta().await?;
         let samples_arc = Arc::clone(&self.samples);
 
-        // Resampling + WAV encoding are CPU-bound (~hundreds of ms for
-        // 30 s of audio). Move to the blocking pool so the async
-        // worker stays free.
-        tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
+        // Resampling is CPU-bound (~hundreds of ms for 30 s of audio).
+        // Move to the blocking pool so the async worker stays free.
+        tokio::task::spawn_blocking(move || -> Result<Vec<f32>> {
             let raw_samples = std::mem::take(&mut *samples_arc.lock());
             if raw_samples.is_empty() {
                 return Err(VoiceTypeError::Audio("No audio data recorded".into()));
             }
             let mono = stereo_to_mono(&raw_samples, meta.channels);
-            let resampled = resample_to_16k(&mono, meta.sample_rate)?;
-            encode_wav_16k_mono(&resampled)
+            resample_to_16k(&mono, meta.sample_rate)
         })
         .await
-        .map_err(|e| VoiceTypeError::Audio(format!("encoding spawn_blocking: {e}")))?
+        .map_err(|e| VoiceTypeError::Audio(format!("resampling spawn_blocking: {e}")))?
     }
 
     async fn resolve_meta(&mut self) -> Result<StreamMeta> {
@@ -327,7 +333,11 @@ fn resample_to_16k(mono: &[f32], source_rate: u32) -> Result<Vec<f32>> {
 }
 
 /// Encode f32 mono samples (16 kHz) as WAV (PCM s16le).
-fn encode_wav_16k_mono(samples: &[f32]) -> Result<Vec<u8>> {
+///
+/// Only the cloud STT path needs this — its multipart upload requires
+/// a WAV container. The local Whisper path consumes the f32 samples
+/// from `stop_and_finalize` directly, skipping the lossy s16 quantize.
+pub fn encode_wav_16k_mono(samples: &[f32]) -> Result<Vec<u8>> {
     let spec = hound::WavSpec {
         channels: 1,
         sample_rate: WHISPER_SAMPLE_RATE,

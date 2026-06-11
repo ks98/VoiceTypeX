@@ -8,8 +8,11 @@
 //! - whisper-rs is not async; we wrap the call in
 //!   `tokio::task::spawn_blocking`, because transcription needs several
 //!   seconds of CPU and we don't want to block the tokio runtime.
-//! - Input is 16 kHz mono f32 (Whisper convention). We take WAV in,
-//!   decode with hound, convert to f32 [-1, 1].
+//! - Input is 16 kHz mono f32 (Whisper convention). The local pipeline
+//!   feeds these samples straight in via `transcribe_samples`. The
+//!   `Transcriber::transcribe_oneshot(&[u8])` entry stays for the trait
+//!   contract (cloud parity): it decodes the WAV with hound, converts
+//!   to f32 [-1, 1], and delegates to `transcribe_samples`.
 
 use crate::core::error::{Result, VoiceTypeError};
 use crate::transcription::{TranscribeOpts, Transcriber};
@@ -109,8 +112,30 @@ impl Transcriber for LocalTranscriber {
         "local-whisper"
     }
 
+    /// Trait entry for parity with the cloud transcribers: takes a WAV
+    /// byte buffer, decodes it to 16 kHz mono f32, and delegates to
+    /// `transcribe_samples`. The local pipeline does NOT use this — it
+    /// calls `transcribe_samples` directly to skip the f32->WAV->f32
+    /// roundtrip; this entry stays for the `Transcriber` trait contract.
     async fn transcribe_oneshot(&self, audio: &[u8], opts: TranscribeOpts) -> Result<String> {
         let samples = decode_wav_to_f32_mono_16k(audio)?;
+        self.transcribe_samples(&samples, opts).await
+    }
+}
+
+impl LocalTranscriber {
+    /// Final-pass f32 entry: takes already converted 16 kHz mono f32
+    /// samples and runs the quality-first decode (BeamSearch, no
+    /// `audio_ctx` truncation cap). The local pipeline calls this
+    /// directly from `stop_and_finalize`'s f32 output — no WAV
+    /// encode/decode. `transcribe_oneshot` (the trait entry) decodes a
+    /// WAV and then delegates here.
+    pub async fn transcribe_samples(
+        &self,
+        samples: &[f32],
+        opts: TranscribeOpts,
+    ) -> Result<String> {
+        let samples = samples.to_vec();
         let ctx = Arc::clone(&self.context);
         let model_path = self.model_path.clone();
         let vad_model_path = self.vad_model_path.clone();
@@ -138,9 +163,7 @@ impl Transcriber for LocalTranscriber {
         .await
         .map_err(|e| VoiceTypeError::transcription(format!("spawn_blocking: {e}")))?
     }
-}
 
-impl LocalTranscriber {
     /// Streaming pass: takes already converted 16 kHz mono f32 samples,
     /// runs with greedy + dynamic `audio_ctx`, returns the current
     /// decode as a string. Idempotent — the `WhisperContext` stays warm
