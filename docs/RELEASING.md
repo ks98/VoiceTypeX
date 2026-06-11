@@ -17,12 +17,12 @@ delivered to users.
   │       • builds deb / rpm / AppImage                           │
   │       • signs the updater artifacts (minisign)                │
   │       • creates a GitHub release as a DRAFT                   │
-  │       • uploads assets + latest.json                          │
+  │       • uploads assets (latest.json NOT yet — see #2)         │
   └──────────────────────────────────────────────────────────────┘
         │
         ▼  You review the draft release and click "Publish"
-   → /releases/latest/download/latest.json goes live
-   → the in-app updater offers the new version
+   → assets are downloadable from the published release
+   → the in-app updater stays inactive until latest.json is armed (#2)
 ```
 
 > **Windows is back in the release** (NSIS installer with STT + Vulkan +
@@ -80,7 +80,7 @@ Local preview: `git cliff --unreleased` or `git cliff --latest`.
 - **`ci.yml`** — on every push to `main` and every PR: `cargo fmt`,
   `clippy`, `pnpm lint`/`format:check`, `cargo test`, `vitest`,
   `cargo audit`/`pnpm audit`. Linux (full) + Windows
-  (`cargo check` smoke test) + audit.
+  (full build + `cargo test --lib`) + audit.
 - **`release.yml`** — only on `v*` tags: changelog + tauri-action.
 
 ## Auto-update
