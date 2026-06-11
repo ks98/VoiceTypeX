@@ -75,31 +75,32 @@ impl LocalTranscriber {
             context: Arc::new(RwLock::new(None)),
         }
     }
+}
 
-    /// Load the model if not already done. Idempotent.
-    fn ensure_loaded(&self) -> Result<()> {
-        if self.context.read().is_some() {
-            return Ok(());
-        }
-        let mut guard = self.context.write();
-        if guard.is_some() {
-            return Ok(());
-        }
-        let path_str = self
-            .model_path
-            .to_str()
-            .ok_or_else(|| VoiceTypeError::transcription("Model path not UTF-8"))?;
-        if !self.model_path.exists() {
-            return Err(VoiceTypeError::transcription(format!(
-                "Model file missing: {path_str} (see the model downloader)"
-            )));
-        }
-        let ctx = WhisperContext::new_with_params(path_str, WhisperContextParameters::default())
-            .map_err(|e| VoiceTypeError::transcription(format!("WhisperContext: {e}")))?;
-        *guard = Some(ctx);
-        tracing::info!(model = %path_str, "Whisper model loaded");
-        Ok(())
+/// Load the model if not already done. Idempotent. Runs on the blocking
+/// pool (called inside `spawn_blocking`), so the ~1.6 GB load and the
+/// write lock never sit on an async runtime thread.
+fn ensure_loaded(context: &Arc<RwLock<Option<WhisperContext>>>, model_path: &Path) -> Result<()> {
+    if context.read().is_some() {
+        return Ok(());
     }
+    let mut guard = context.write();
+    if guard.is_some() {
+        return Ok(());
+    }
+    let path_str = model_path
+        .to_str()
+        .ok_or_else(|| VoiceTypeError::transcription("Model path not UTF-8"))?;
+    if !model_path.exists() {
+        return Err(VoiceTypeError::transcription(format!(
+            "Model file missing: {path_str} (see the model downloader)"
+        )));
+    }
+    let ctx = WhisperContext::new_with_params(path_str, WhisperContextParameters::default())
+        .map_err(|e| VoiceTypeError::transcription(format!("WhisperContext: {e}")))?;
+    *guard = Some(ctx);
+    tracing::info!(model = %path_str, "Whisper model loaded");
+    Ok(())
 }
 
 #[async_trait]
@@ -113,16 +114,15 @@ impl Transcriber for LocalTranscriber {
         let ctx = Arc::clone(&self.context);
         let model_path = self.model_path.clone();
         let vad_model_path = self.vad_model_path.clone();
-
-        // ensure_loaded on the current thread before spawn_blocking.
-        self.ensure_loaded()?;
-
         let language = opts.language.clone();
         let initial_prompt = opts.initial_prompt.clone();
         let n_threads_override = opts.n_threads;
         let beam_size_override = opts.beam_size;
 
         tokio::task::spawn_blocking(move || -> Result<String> {
+            // Load on the blocking pool: the heavy model load and its
+            // write lock stay off the async runtime thread.
+            ensure_loaded(&ctx, &model_path)?;
             run_whisper_blocking(
                 &ctx,
                 &model_path,
@@ -158,9 +158,6 @@ impl LocalTranscriber {
         let ctx = Arc::clone(&self.context);
         let model_path = self.model_path.clone();
         let vad_model_path = self.vad_model_path.clone();
-
-        self.ensure_loaded()?;
-
         let language = opts.language.clone();
         let initial_prompt = opts.initial_prompt.clone();
         let n_threads_override = opts.n_threads;
@@ -169,6 +166,9 @@ impl LocalTranscriber {
         let beam_size_override = opts.beam_size;
 
         tokio::task::spawn_blocking(move || -> Result<String> {
+            // Load on the blocking pool: the heavy model load and its
+            // write lock stay off the async runtime thread.
+            ensure_loaded(&ctx, &model_path)?;
             run_whisper_blocking(
                 &ctx,
                 &model_path,

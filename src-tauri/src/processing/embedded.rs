@@ -40,7 +40,7 @@ use llama_cpp_2::model::params::LlamaModelParams;
 use llama_cpp_2::model::{AddBos, LlamaChatMessage, LlamaModel, Special};
 use llama_cpp_2::sampling::LlamaSampler;
 use parking_lot::RwLock;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
 /// Backend singleton. `LlamaBackend::init()` may only run once per
@@ -78,32 +78,34 @@ impl LlamaEmbeddedProcessor {
             model: Arc::new(RwLock::new(None)),
         }
     }
+}
 
-    /// Lazily loads the GGUF model into the llama-cpp-2 context.
-    /// Subsequent calls are no-ops thanks to the inner double-checked
-    /// lock — idempotent and safe to call before every `process()`.
-    fn ensure_loaded(&self) -> Result<()> {
-        if self.model.read().is_some() {
-            return Ok(());
-        }
-        let mut guard = self.model.write();
-        if guard.is_some() {
-            return Ok(());
-        }
-        if !self.model_path.exists() {
-            return Err(VoiceTypeError::processing(format!(
-                "LLM model file missing: {} (download it via Settings)",
-                self.model_path.display()
-            )));
-        }
-        let backend = ensure_backend()?;
-        let params = LlamaModelParams::default();
-        let model = LlamaModel::load_from_file(backend, &self.model_path, &params)
-            .map_err(|e| VoiceTypeError::processing(format!("LlamaModel::load_from_file: {e}")))?;
-        *guard = Some(model);
-        tracing::info!(model = %self.model_path.display(), "LLM model loaded");
-        Ok(())
+/// Lazily loads the GGUF model into the llama-cpp-2 context. Subsequent
+/// calls are no-ops thanks to the inner double-checked lock —
+/// idempotent. Runs on the blocking pool (called inside
+/// `spawn_blocking`), so the ~5 GB load and the write lock never sit on
+/// an async runtime thread.
+fn ensure_loaded(model: &Arc<RwLock<Option<LlamaModel>>>, model_path: &Path) -> Result<()> {
+    if model.read().is_some() {
+        return Ok(());
     }
+    let mut guard = model.write();
+    if guard.is_some() {
+        return Ok(());
+    }
+    if !model_path.exists() {
+        return Err(VoiceTypeError::processing(format!(
+            "LLM model file missing: {} (download it via Settings)",
+            model_path.display()
+        )));
+    }
+    let backend = ensure_backend()?;
+    let params = LlamaModelParams::default();
+    let loaded = LlamaModel::load_from_file(backend, model_path, &params)
+        .map_err(|e| VoiceTypeError::processing(format!("LlamaModel::load_from_file: {e}")))?;
+    *guard = Some(loaded);
+    tracing::info!(model = %model_path.display(), "LLM model loaded");
+    Ok(())
 }
 
 #[async_trait]
@@ -118,9 +120,8 @@ impl Processor for LlamaEmbeddedProcessor {
         system_prompt: &str,
         opts: ProcessOpts,
     ) -> Result<String> {
-        self.ensure_loaded()?;
-
         let model_arc = Arc::clone(&self.model);
+        let model_path = self.model_path.clone();
         let transcript = transcript.to_string();
         let system_prompt = system_prompt.to_string();
         let temperature = opts.temperature.unwrap_or(0.2);
@@ -129,6 +130,9 @@ impl Processor for LlamaEmbeddedProcessor {
         let max_tokens = opts.max_tokens.unwrap_or(1024) as i32;
 
         tokio::task::spawn_blocking(move || -> Result<String> {
+            // Load on the blocking pool: the heavy model load and its
+            // write lock stay off the async runtime thread.
+            ensure_loaded(&model_arc, &model_path)?;
             run_llama_blocking(
                 &model_arc,
                 transcript,
