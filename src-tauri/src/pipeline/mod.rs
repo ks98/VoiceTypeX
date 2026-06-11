@@ -493,9 +493,15 @@ async fn finish_recording_and_inject(
         }
     });
 
+    // Per-stage latency instrumentation (issue #43): mark the boundary
+    // before each stage so felt paste latency can be attributed to
+    // finalize vs. STT vs. LLM vs. inject on real dictations. Logged once
+    // at the end at info level (Logs tab). No transcript text is logged.
+    let t_finalize_start = std::time::Instant::now();
     let wav = recorder.stop_and_finalize().await.inspect_err(|e| {
         let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
     })?;
+    let finalize_ms = t_finalize_start.elapsed().as_millis() as u64;
 
     // STT — local (with optional mode-override slot) or cloud, depending
     // on the mode.
@@ -523,6 +529,7 @@ async fn finish_recording_and_inject(
             mode.whisper_beam_size.unwrap_or(s.whisper_beam_size),
         )
     };
+    let t_transcribe_start = std::time::Instant::now();
     let transcript = transcriber
         .transcribe_oneshot(
             &wav,
@@ -537,6 +544,7 @@ async fn finish_recording_and_inject(
         .inspect_err(|e| {
             let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
         })?;
+    let transcribe_ms = t_transcribe_start.elapsed().as_millis() as u64;
 
     // For edit modes ("Bearbeiten") the LLM input is the captured
     // selection plus the spoken instruction; for voice modes it is just
@@ -557,7 +565,9 @@ async fn finish_recording_and_inject(
         }
     };
 
-    // Postprocessing — none / local (Ollama) / cloud LLM.
+    // Postprocessing — none / local (Ollama) / cloud LLM. The `None` arm
+    // is a pass-through and reads ~0 ms, which is the correct attribution.
+    let t_process_start = std::time::Instant::now();
     let llm_output = match mode.processing {
         ProcessingTarget::None => processing_input,
         ProcessingTarget::Local => {
@@ -577,6 +587,7 @@ async fn finish_recording_and_inject(
                 })?
         }
     };
+    let process_ms = t_process_start.elapsed().as_millis() as u64;
 
     // For edit modes, resolve the effective injection action and strip
     // the auto-mode sentinel; voice modes inject at the cursor as
@@ -642,6 +653,7 @@ async fn finish_recording_and_inject(
         }
     };
 
+    let t_inject_start = std::time::Instant::now();
     ctx.injector
         .inject(
             &final_text,
@@ -655,8 +667,23 @@ async fn finish_recording_and_inject(
         .inspect_err(|e| {
             let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
         })?;
+    let inject_ms = t_inject_start.elapsed().as_millis() as u64;
 
     ctx.state_bus.transition(AppState::Idle)?;
+    // Per-stage latency summary (issue #43). The stage durations sum to
+    // less than felt latency because fixed glue (overlay hide + 80 ms
+    // focus-handoff sleep, audio cues) sits between them; `total` is the
+    // sum of the measured stages, not wall-clock from the stop hotkey.
+    let total_ms = finalize_ms + transcribe_ms + process_ms + inject_ms;
+    tracing::info!(
+        mode = %mode.id,
+        finalize_ms,
+        transcribe_ms,
+        process_ms,
+        inject_ms,
+        total_ms,
+        "pipeline stage timings"
+    );
     tracing::info!(mode = %mode.id, len = final_text.len(), "pipeline complete");
 
     Ok(())
