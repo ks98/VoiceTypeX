@@ -170,9 +170,12 @@ toggle logic is the same as for the hotkey.
   the `Idle` transition and the #43 stage-timing log. `run_stages` has
   zero window/cue/tray/emit calls.
 
-The `run_pipeline_stages_for_test` helper in the test module still
-mirrors the pre-extraction stage choreography and is kept untouched for
-now (issue #38 later deletes the copy and tests `run_stages` directly).
+The pipeline tests drive the **real** `run_stages` core directly (issue
+#38): mock `Transcriber`/`Processor` trait impls are injected via
+`StageTranscriber::Cloud(&dyn Transcriber)` and the `resolve_processor`
+closure, and the tests assert the actual `Postprocessing` transition and
+`Error(_)` parking against a real `StateBus` — no hand-maintained copy of
+the stage choreography exists anymore.
 
 ## Edit Modes (selection → LLM → replace/insert)
 

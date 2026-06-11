@@ -98,6 +98,7 @@ struct StageProcessOpts<'a> {
 /// around the inject (issue #36). The `transcribe_ms`/`process_ms` fields
 /// are the #43 stage timings, returned so the caller logs byte-identical
 /// numbers.
+#[derive(Debug)]
 struct StageOutput {
     final_text: String,
     output_action: OutputAction,
@@ -1469,17 +1470,23 @@ pub fn spawn_tray_state_listener(app: AppHandle) {
 
 /// Pipeline-stage choreography tests.
 ///
-/// Background: the real pipeline functions (`finish_recording_and_inject`
-/// etc.) are tightly coupled to `tauri::AppHandle` (window show/hide,
-/// event emit, audio cues, `RecorderHandle`). Mocking them directly
-/// would require refactoring that goes beyond the scope of these tests.
+/// These drive the **real** `run_stages` core (issue #38) — not a
+/// hand-maintained copy — via mock `Transcriber`/`Processor` trait
+/// impls. `run_stages` is `AppHandle`-free by design (issues #34–#36):
+/// the caller resolves the deps (transcriber, opts, processor closure)
+/// and owns the overlay/cue/inject glue, so the stage core can be
+/// exercised here with a real `StateBus` and mock traits, and we assert
+/// against the actual choreography instead of a parallel one.
 ///
-/// Instead, `run_pipeline_stages_for_test` checks the trait choreography
-/// from the point after recorder stop: Transcribe → Optional Process →
-/// Inject, plus the state transitions. That's the core that breaks most
-/// often on mode changes and provider switches. Window / audio-cue /
-/// recorder calls are deliberately not covered — they are pure I/O glue
-/// and clearly isolated in the real function.
+/// `StageTranscriber::Cloud(&dyn Transcriber)` is the injection point for
+/// a mock transcriber (the `Local` arm needs a real `LocalTranscriber` +
+/// model); the `resolve_processor` closure injects a mock processor.
+/// Because `run_stages` starts from the point after the caller has
+/// transitioned the bus to `Transcribing` and stops at the inject
+/// boundary, these tests pre-transition `Idle → Recording → Transcribing`
+/// and assert the `Postprocessing` transition + the `Error(_)` parking it
+/// performs; the inject and the final `Injecting → Idle` live in the
+/// caller and are out of scope here.
 ///
 /// Additionally we test the state-based trigger logic from
 /// `execute_mode` / `handle_menu_hotkey` (hotkey-while-busy) directly on
@@ -1490,17 +1497,16 @@ mod tests {
     use super::*;
     use crate::core::error::VoiceTypeError;
     use crate::core::state::{AppState, StateBus};
-    use crate::injection::{InjectOptions, InjectorCapabilities, TextInjector};
     use crate::processing::{ProcessOpts, Processor};
     use crate::transcription::{TranscribeOpts, Transcriber};
     use async_trait::async_trait;
+    use parking_lot::Mutex;
     use std::sync::Arc;
-    use tokio::sync::Mutex as TokioMutex;
 
     // --- Mock implementations of the pipeline traits ---
     //
-    // Constant output (transcriber/processor) or collecting Vec
-    // (injector). No sleeps, no random values → deterministic.
+    // Constant output, or a recording Mutex that captures the argument
+    // `run_stages` passed. No sleeps, no random values → deterministic.
 
     struct MockTranscriber {
         output: String,
@@ -1528,10 +1534,17 @@ mod tests {
         }
     }
 
-    struct PassthroughProcessor;
+    /// Records the `transcript` argument `run_stages` hands the processor
+    /// (so the composed edit-mode input can be asserted) and returns a
+    /// fixed output, so the processed result is distinguishable from the
+    /// raw transcript.
+    struct MockProcessor {
+        output: String,
+        seen_input: Arc<Mutex<Option<String>>>,
+    }
 
     #[async_trait]
-    impl Processor for PassthroughProcessor {
+    impl Processor for MockProcessor {
         fn name(&self) -> &str {
             "mock-processor"
         }
@@ -1541,125 +1554,132 @@ mod tests {
             _system_prompt: &str,
             _opts: ProcessOpts,
         ) -> Result<String> {
-            Ok(transcript.to_string())
+            *self.seen_input.lock() = Some(transcript.to_string());
+            Ok(self.output.clone())
         }
     }
 
-    struct CollectingInjector {
-        injected: Arc<TokioMutex<Vec<String>>>,
-    }
+    struct FailingProcessor;
 
     #[async_trait]
-    impl TextInjector for CollectingInjector {
+    impl Processor for FailingProcessor {
         fn name(&self) -> &str {
-            "mock-injector"
+            "failing-processor"
         }
-        fn capabilities(&self) -> InjectorCapabilities {
-            InjectorCapabilities {
-                supports_clipboard: true,
-                supports_keystrokes: true,
-            }
-        }
-        async fn inject(&self, text: &str, _opts: InjectOptions) -> Result<()> {
-            self.injected.lock().await.push(text.to_string());
-            Ok(())
-        }
-        async fn read_selection(&self) -> Result<Option<String>> {
-            Ok(None)
+        async fn process(
+            &self,
+            _transcript: &str,
+            _system_prompt: &str,
+            _opts: ProcessOpts,
+        ) -> Result<String> {
+            Err(VoiceTypeError::processing("mock LLM failure"))
         }
     }
 
-    /// Test-only stage choreography from the point after recorder stop.
-    ///
-    /// Mirrors the state transitions and trait calls from
-    /// `finish_recording_and_inject` (lines 404-512) 1:1, **without**
-    /// AppHandle calls (overlay hide, emit, window lookups). If the real
-    /// function changes its ordering or its error-recovery path, this
-    /// helper must be updated in sync — that is the deliberate trade-off
-    /// against a full Tauri mock.
-    async fn run_pipeline_stages_for_test(
-        state_bus: &StateBus,
-        transcriber: Arc<dyn Transcriber>,
-        processor: Option<Arc<dyn Processor>>,
-        injector: Arc<dyn TextInjector>,
-        wav: &[u8],
-    ) -> Result<String> {
-        state_bus.transition(AppState::Transcribing)?;
-
-        let transcript = match transcriber
-            .transcribe_oneshot(wav, TranscribeOpts::default())
-            .await
-        {
-            Ok(t) => t,
-            Err(e) => {
-                let _ = state_bus.transition(AppState::Error(e.to_string()));
-                return Err(e);
-            }
-        };
-
-        let final_text = match processor {
-            Some(p) => {
-                state_bus.transition(AppState::Postprocessing)?;
-                match p.process(&transcript, "", ProcessOpts::default()).await {
-                    Ok(t) => t,
-                    Err(e) => {
-                        let _ = state_bus.transition(AppState::Error(e.to_string()));
-                        return Err(e);
-                    }
-                }
-            }
-            None => transcript,
-        };
-
-        state_bus.transition(AppState::Injecting)?;
-        injector
-            .inject(
-                &final_text,
-                InjectOptions {
-                    strategy: crate::injection::InjectionStrategy::Clipboard,
-                    action: OutputAction::Insert,
-                    paste_with_shift: false,
-                },
-            )
-            .await
-            .inspect_err(|e| {
-                let _ = state_bus.transition(AppState::Error(e.to_string()));
-            })?;
-        state_bus.transition(AppState::Idle)?;
-        Ok(final_text)
+    /// `PipelineDeps` for a cloud-transcriber-driven stage run, with the
+    /// given system prompt. The `'a` borrows keep the deps tied to the
+    /// caller's `bus`/`transcriber`, matching the real call site.
+    fn cloud_deps<'a>(
+        bus: &'a StateBus,
+        transcriber: &'a dyn Transcriber,
+        system_prompt: &'a str,
+    ) -> PipelineDeps<'a> {
+        PipelineDeps {
+            state_bus: bus,
+            transcriber: StageTranscriber::Cloud(transcriber),
+            transcribe_opts: TranscribeOpts::default(),
+            process_opts: StageProcessOpts {
+                system_prompt,
+                opts: ProcessOpts::default(),
+            },
+        }
     }
 
-    /// Happy path: the mock transcriber returns a fixed string, the
-    /// passthrough processor passes it through, the mock injector
-    /// collects it. State must be Idle again at the end. Defends against
-    /// regressions in the stage order and in the trait signatures.
-    #[tokio::test]
-    async fn pipeline_happy_path_mock_chain_finishes_idle() {
+    /// Move the bus to the state `run_stages` expects on entry: the caller
+    /// has already transitioned `Idle → Recording → Transcribing` before
+    /// invoking the core.
+    fn bus_at_transcribing() -> StateBus {
         let bus = StateBus::new();
         bus.transition(AppState::Recording).unwrap();
-        let injected = Arc::new(TokioMutex::new(Vec::<String>::new()));
-        let injector: Arc<dyn TextInjector> = Arc::new(CollectingInjector {
-            injected: Arc::clone(&injected),
-        });
-        let transcriber: Arc<dyn Transcriber> = Arc::new(MockTranscriber {
-            output: "Hallo Welt".into(),
-        });
-        let processor: Arc<dyn Processor> = Arc::new(PassthroughProcessor);
+        bus.transition(AppState::Transcribing).unwrap();
+        bus
+    }
 
-        let result = run_pipeline_stages_for_test(
-            &bus,
-            transcriber,
-            Some(processor),
-            injector,
-            b"dummy-wav-bytes",
+    /// Happy path with postprocessing: `run_stages` runs the cloud STT
+    /// mock, transitions `Transcribing → Postprocessing`, invokes the
+    /// processor with the transcript, and returns the processed text with
+    /// the voice-mode `Insert` action. Defends the stage order, the
+    /// `Postprocessing` transition, and the trait signatures.
+    #[tokio::test]
+    async fn run_stages_happy_path_runs_processor_and_transitions_postprocessing() {
+        let bus = bus_at_transcribing();
+        let transcriber = MockTranscriber {
+            output: "Hallo Welt".into(),
+        };
+        let seen = Arc::new(Mutex::new(None));
+        let processor = Arc::new(MockProcessor {
+            output: "Hallo Welt!".into(),
+            seen_input: Arc::clone(&seen),
+        });
+        let mode = Mode::diagnostic();
+        let deps = cloud_deps(&bus, &transcriber, "");
+
+        let out = run_stages(
+            &deps,
+            &[0.0_f32; 16],
+            &mode,
+            None,
+            Some(|| Ok(processor as Arc<dyn Processor>)),
         )
         .await
-        .expect("pipeline should succeed");
+        .expect("happy path should succeed");
 
-        assert_eq!(result, "Hallo Welt");
-        assert_eq!(bus.current(), AppState::Idle);
-        let recorded = injected.lock().await;
-        assert_eq!(recorded.as_slice(), &["Hallo Welt".to_string()]);
+        assert_eq!(out.final_text, "Hallo Welt!");
+        assert_eq!(out.output_action, OutputAction::Insert);
+        assert_eq!(
+            seen.lock().as_deref(),
+            Some("Hallo Welt"),
+            "the processor must receive the raw transcript for a voice mode"
+        );
+        assert_eq!(
+            bus.current(),
+            AppState::Postprocessing,
+            "a processing mode must transition through Postprocessing"
+        );
+    }
+
+    /// No-processing path: with `resolve_processor = None`, `run_stages`
+    /// returns the transcript verbatim and performs **no** `Postprocessing`
+    /// transition (the bus stays in `Transcribing`).
+    #[tokio::test]
+    async fn run_stages_no_processor_skips_postprocessing_and_passes_transcript_through() {
+        let bus = bus_at_transcribing();
+        let transcriber = MockTranscriber {
+            output: "nur Diktat".into(),
+        };
+        let mode = Mode::diagnostic();
+        let deps = cloud_deps(&bus, &transcriber, "");
+
+        // The turbofish names a concrete `F` for the never-taken `Some`
+        // arm so the generic `run_stages` resolves (the real pass-through
+        // caller uses the same fn-pointer type).
+        let out = run_stages(
+            &deps,
+            &[0.0_f32; 16],
+            &mode,
+            None,
+            None::<fn() -> Result<Arc<dyn Processor>>>,
+        )
+        .await
+        .expect("pass-through should succeed");
+
+        assert_eq!(out.final_text, "nur Diktat");
+        assert_eq!(out.output_action, OutputAction::Insert);
+        assert_eq!(
+            bus.current(),
+            AppState::Transcribing,
+            "the None path must not transition to Postprocessing"
+        );
     }
 
     /// Error surfacing: a transcriber failure must leave the bus parked in
@@ -1670,26 +1690,101 @@ mod tests {
     /// the menu hotkey (see
     /// `menu_hotkey_from_error_clears_to_idle_and_opens_menu`).
     #[tokio::test]
-    async fn pipeline_transcriber_error_parks_in_error_state() {
-        let bus = StateBus::new();
-        bus.transition(AppState::Recording).unwrap();
-        let injected = Arc::new(TokioMutex::new(Vec::<String>::new()));
-        let injector: Arc<dyn TextInjector> = Arc::new(CollectingInjector {
-            injected: Arc::clone(&injected),
-        });
-        let transcriber: Arc<dyn Transcriber> = Arc::new(FailingTranscriber);
+    async fn run_stages_transcriber_error_parks_in_error_state() {
+        let bus = bus_at_transcribing();
+        let transcriber = FailingTranscriber;
+        let mode = Mode::diagnostic();
+        let deps = cloud_deps(&bus, &transcriber, "");
 
-        let err = run_pipeline_stages_for_test(&bus, transcriber, None, injector, b"wav")
-            .await
-            .expect_err("transcriber failure should propagate");
+        let err = run_stages(
+            &deps,
+            &[0.0_f32; 16],
+            &mode,
+            None,
+            None::<fn() -> Result<Arc<dyn Processor>>>,
+        )
+        .await
+        .expect_err("transcriber failure should propagate");
 
         assert!(matches!(err, VoiceTypeError::Transcription { .. }));
         assert!(
             matches!(bus.current(), AppState::Error(_)),
             "STT failure must park in Error, not snap back to Idle"
         );
-        let recorded = injected.lock().await;
-        assert!(recorded.is_empty(), "no inject after STT failure");
+    }
+
+    /// A processing failure parks in `Error(_)` too — but only after the
+    /// `Postprocessing` transition (the STT pass already ran). This mirrors
+    /// the inline ordering: a processor failure must park from
+    /// `Postprocessing`, never skip STT.
+    #[tokio::test]
+    async fn run_stages_processor_error_parks_in_error_after_postprocessing() {
+        let bus = bus_at_transcribing();
+        let transcriber = MockTranscriber {
+            output: "Hallo Welt".into(),
+        };
+        let processor = Arc::new(FailingProcessor);
+        let mode = Mode::diagnostic();
+        let deps = cloud_deps(&bus, &transcriber, "");
+
+        let err = run_stages(
+            &deps,
+            &[0.0_f32; 16],
+            &mode,
+            None,
+            Some(|| Ok(processor as Arc<dyn Processor>)),
+        )
+        .await
+        .expect_err("processor failure should propagate");
+
+        assert!(matches!(err, VoiceTypeError::Processing { .. }));
+        assert!(
+            matches!(bus.current(), AppState::Error(_)),
+            "LLM failure must park in Error"
+        );
+    }
+
+    /// Edit-mode path: a `Selection` mode composes the captured selection
+    /// plus the spoken instruction into the processor input, and the
+    /// resolved `output_action` follows the mode's fixed `output`
+    /// (`Replace` here), returning the processed text unchanged.
+    #[tokio::test]
+    async fn run_stages_edit_mode_composes_selection_and_resolves_output_action() {
+        let bus = bus_at_transcribing();
+        let transcriber = MockTranscriber {
+            output: "make it formal".into(),
+        };
+        let seen = Arc::new(Mutex::new(None));
+        let processor = Arc::new(MockProcessor {
+            output: "Sehr geehrte Damen und Herren".into(),
+            seen_input: Arc::clone(&seen),
+        });
+        let mode = Mode {
+            input: InputSource::Selection,
+            processing: ProcessingTarget::Cloud,
+            output: OutputAction::Replace,
+            ..Mode::diagnostic()
+        };
+        let deps = cloud_deps(&bus, &transcriber, "");
+
+        let out = run_stages(
+            &deps,
+            &[0.0_f32; 16],
+            &mode,
+            Some("Hallo Leute".to_string()),
+            Some(|| Ok(processor as Arc<dyn Processor>)),
+        )
+        .await
+        .expect("edit mode should succeed");
+
+        assert_eq!(out.final_text, "Sehr geehrte Damen und Herren");
+        assert_eq!(out.output_action, OutputAction::Replace);
+        let composed = seen.lock().clone().expect("processor must be invoked");
+        assert_eq!(
+            composed,
+            compose_edit_input("Hallo Leute", "make it formal")
+        );
+        assert_eq!(bus.current(), AppState::Postprocessing);
     }
 
     /// Hotkey-while-busy: `execute_mode` ignores triggers when the
