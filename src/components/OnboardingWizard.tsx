@@ -392,68 +392,6 @@ export default function OnboardingWizard({
     );
   }
 
-  function StepApiKey({
-    xaiKey,
-    setXaiKey,
-    keyStatus,
-    onSaveKey,
-  }: {
-    xaiKey: string;
-    setXaiKey: (v: string) => void;
-    keyStatus:
-      | null
-      | { kind: "saving" }
-      | { kind: "ok" }
-      | { kind: "error"; msg: string };
-    onSaveKey: () => Promise<void>;
-  }): JSX.Element {
-    return (
-      <div className="flex flex-col gap-4">
-        <Hero icon={<KeyIcon />} />
-        <div>
-          <h3 className="text-lg font-semibold text-fg">
-            {t("wizard.api_key.title")}
-          </h3>
-          <p className="text-sm text-fg-muted mt-1">
-            {t("wizard.api_key.intro_prefix")}{" "}
-            <code className="text-brand font-mono">console.x.ai</code>
-            {t("wizard.api_key.intro_suffix")}
-          </p>
-          <p className="text-xs text-fg-faint mt-1">
-            {t("wizard.api_key.hint_keychain")}
-          </p>
-        </div>
-        <Input
-          type="password"
-          value={xaiKey}
-          onChange={(e) => setXaiKey(e.target.value)}
-          placeholder={t("wizard.api_key.placeholder")}
-          className="font-mono"
-        />
-        <div className="flex items-center gap-3">
-          <Button
-            onClick={() => void onSaveKey()}
-            disabled={
-              !xaiKey || (keyStatus !== null && keyStatus.kind === "saving")
-            }
-          >
-            {keyStatus?.kind === "saving"
-              ? t("wizard.api_key.btn.running")
-              : t("wizard.api_key.btn.idle")}
-          </Button>
-          {keyStatus?.kind === "ok" ? (
-            <span className="text-xs text-status-done">
-              {t("wizard.api_key.ok")}
-            </span>
-          ) : null}
-        </div>
-        {keyStatus?.kind === "error" ? (
-          <div className="text-xs text-status-error">{keyStatus.msg}</div>
-        ) : null}
-      </div>
-    );
-  }
-
   function StepLlmDownload({
     hardware,
     currentSlot,
@@ -625,6 +563,69 @@ export default function OnboardingWizard({
       </div>
     );
   }
+}
+
+function StepApiKey({
+  xaiKey,
+  setXaiKey,
+  keyStatus,
+  onSaveKey,
+}: {
+  xaiKey: string;
+  setXaiKey: (v: string) => void;
+  keyStatus:
+    | null
+    | { kind: "saving" }
+    | { kind: "ok" }
+    | { kind: "error"; msg: string };
+  onSaveKey: () => Promise<void>;
+}): JSX.Element {
+  const t = useT();
+  return (
+    <div className="flex flex-col gap-4">
+      <Hero icon={<KeyIcon />} />
+      <div>
+        <h3 className="text-lg font-semibold text-fg">
+          {t("wizard.api_key.title")}
+        </h3>
+        <p className="text-sm text-fg-muted mt-1">
+          {t("wizard.api_key.intro_prefix")}{" "}
+          <code className="text-brand font-mono">console.x.ai</code>
+          {t("wizard.api_key.intro_suffix")}
+        </p>
+        <p className="text-xs text-fg-faint mt-1">
+          {t("wizard.api_key.hint_keychain")}
+        </p>
+      </div>
+      <Input
+        type="password"
+        value={xaiKey}
+        onChange={(e) => setXaiKey(e.target.value)}
+        placeholder={t("wizard.api_key.placeholder")}
+        className="font-mono"
+      />
+      <div className="flex items-center gap-3">
+        <Button
+          onClick={() => void onSaveKey()}
+          disabled={
+            !xaiKey || (keyStatus !== null && keyStatus.kind === "saving")
+          }
+        >
+          {keyStatus?.kind === "saving"
+            ? t("wizard.api_key.btn.running")
+            : t("wizard.api_key.btn.idle")}
+        </Button>
+        {keyStatus?.kind === "ok" ? (
+          <span className="text-xs text-status-done">
+            {t("wizard.api_key.ok")}
+          </span>
+        ) : null}
+      </div>
+      {keyStatus?.kind === "error" ? (
+        <div className="text-xs text-status-error">{keyStatus.msg}</div>
+      ) : null}
+    </div>
+  );
 }
 
 interface MiniProgressStackProps {
