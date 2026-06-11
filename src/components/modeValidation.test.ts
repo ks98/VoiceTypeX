@@ -212,7 +212,9 @@ describe("computeBlockingReasons — system prompt", () => {
       cloud_llm_provider: "openai",
       system_prompt: null,
     });
-    expect(computeBlockingReasons(mode, NOT_WINDOWS)).toContain("system_prompt");
+    expect(computeBlockingReasons(mode, NOT_WINDOWS)).toContain(
+      "system_prompt",
+    );
   });
 
   it("blocks a processing mode with an empty system prompt", () => {
@@ -221,7 +223,9 @@ describe("computeBlockingReasons — system prompt", () => {
       cloud_llm_provider: "openai",
       system_prompt: "",
     });
-    expect(computeBlockingReasons(mode, NOT_WINDOWS)).toContain("system_prompt");
+    expect(computeBlockingReasons(mode, NOT_WINDOWS)).toContain(
+      "system_prompt",
+    );
   });
 
   it("does not require a system prompt when processing is none", () => {

@@ -25,6 +25,9 @@ pub struct SessionInfo {
     pub auto_paste_supported: bool,
 }
 
+// cfg-dispatch: exactly one arm survives per target, each `return`s its
+// SessionInfo — needless only because the other arms are stripped.
+#[allow(clippy::needless_return)]
 pub fn detect_session() -> SessionInfo {
     #[cfg(target_os = "windows")]
     {

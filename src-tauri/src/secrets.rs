@@ -42,6 +42,7 @@ use std::sync::OnceLock;
 /// - Windows (Credential Manager): `target_name = "<provider>.voicetypex"`.
 ///   Relevant for `scripts/uninstall-cleanup.ps1`.
 /// - macOS (Keychain): out of scope.
+#[cfg(target_os = "linux")] // only the keyring (AES KEK) path reads it
 const SERVICE: &str = "voicetypex";
 
 /// Keyring entry name under which the AES-256-GCM key-encryption-key
@@ -76,6 +77,7 @@ struct FileSecretsV2 {
 enum Cipher {
     /// AES-256-GCM with a KEK held in the OS keyring. Linux only — the
     /// embedded byte array is the 32-byte KEK.
+    #[allow(dead_code)] // constructed only on Linux
     AesGcm256([u8; 32]),
     /// Windows DPAPI: encryption is delegated to the OS, no KEK to manage.
     #[allow(dead_code)] // constructed only on Windows
@@ -83,6 +85,7 @@ enum Cipher {
     /// Cleartext on disk. Used as a soft fallback when no keychain is
     /// available, and as a hard fallback on macOS until the platform path
     /// is implemented.
+    #[allow(dead_code)] // constructed only on Linux/macOS fallback
     Plain,
 }
 
@@ -100,6 +103,9 @@ impl Cipher {
     }
 
     /// Pick the strongest cipher the host system supports.
+    // cfg-dispatch: exactly one arm survives per target, each `return`s its
+    // cipher — needless only because the other arms are stripped.
+    #[allow(clippy::needless_return)]
     fn select_default() -> Cipher {
         #[cfg(target_os = "windows")]
         {

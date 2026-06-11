@@ -176,8 +176,9 @@ export default function Settings(): JSX.Element {
       listen<ModelDownloadProgress>(EVENTS.MODEL_DOWNLOAD_PROGRESS, (event) =>
         setProgress(event.payload),
       ),
-      listen<ModelDownloadProgress>(EVENTS.LLM_MODEL_DOWNLOAD_PROGRESS, (event) =>
-        setLlmProgress(event.payload),
+      listen<ModelDownloadProgress>(
+        EVENTS.LLM_MODEL_DOWNLOAD_PROGRESS,
+        (event) => setLlmProgress(event.payload),
       ),
     ]);
   }, []);
@@ -336,9 +337,7 @@ export default function Settings(): JSX.Element {
                 className={`${inputCls} flex-1`}
                 placeholder={t("settings.whisper.path_placeholder")}
                 value={settings.whisper_model_path ?? ""}
-                onCommit={(v) =>
-                  void update({ whisper_model_path: v || null })
-                }
+                onCommit={(v) => void update({ whisper_model_path: v || null })}
               />
               <Button variant="secondary" onClick={() => void onPickModel()}>
                 {t("settings.whisper.pick_file")}

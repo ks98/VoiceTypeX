@@ -112,8 +112,9 @@ export default function OnboardingWizard({
       listen<ModelDownloadProgress>(EVENTS.MODEL_DOWNLOAD_PROGRESS, (event) =>
         setWhisperProgress(event.payload),
       ),
-      listen<ModelDownloadProgress>(EVENTS.LLM_MODEL_DOWNLOAD_PROGRESS, (event) =>
-        setLlmProgress(event.payload),
+      listen<ModelDownloadProgress>(
+        EVENTS.LLM_MODEL_DOWNLOAD_PROGRESS,
+        (event) => setLlmProgress(event.payload),
       ),
     ]);
     void ipcGetWhisperBackend()
@@ -528,7 +529,10 @@ function StepFinish({
           </div>
         ) : null}
         {hardware && backend ? (
-          <HardwareRecommendation hardware={hardware} active={backend.backend} />
+          <HardwareRecommendation
+            hardware={hardware}
+            active={backend.backend}
+          />
         ) : null}
       </div>
       <p className="text-sm text-fg-muted">
