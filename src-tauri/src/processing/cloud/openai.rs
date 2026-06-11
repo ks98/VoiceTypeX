@@ -12,13 +12,14 @@ pub struct OpenAIProcessor {
 }
 
 impl OpenAIProcessor {
-    pub fn new(api_key: String) -> Self {
+    pub fn new(api_key: String, client: reqwest::Client) -> Self {
         Self {
             inner: OpenAICompatibleClient::new(
                 ProviderId::OpenAi,
                 "https://api.openai.com/v1",
                 "gpt-4o-mini",
                 api_key,
+                client,
             ),
         }
     }

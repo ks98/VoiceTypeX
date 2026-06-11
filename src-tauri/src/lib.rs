@@ -262,6 +262,15 @@ pub fn run() {
             let injector_box = make_default_injector(app_handle.clone(), wayland_token_path);
             let injector: Arc<dyn TextInjector> = Arc::from(injector_box);
 
+            // One shared HTTP client for all cloud STT/LLM calls (issue #41):
+            // a single connection pool reused across dictations recovers
+            // TLS/keep-alive instead of a fresh handshake per call. No default
+            // timeout here — each provider sets its own per-request budget
+            // (STT 120 s, LLM 60 s). rustls is the workspace TLS backend.
+            let http_client = reqwest::Client::builder()
+                .build()
+                .expect("reqwest client builder");
+
             // KDE/Wayland terminal auto-detection (drives `paste_shortcut =
             // auto`). Filled asynchronously so a slow or absent KWin/D-Bus
             // setup never blocks or panics startup; until it lands the paste
@@ -293,6 +302,7 @@ pub fn run() {
                 #[cfg(not(target_os = "windows"))]
                 extra_llm_processors: Arc::new(Mutex::new(BoundedLru::new(EXTRA_ENGINE_CACHE_CAP))),
                 active_streaming_handle: Arc::new(Mutex::new(None)),
+                http_client,
                 injector,
                 selection_buffer: Arc::new(Mutex::new(None)),
                 settings: Arc::new(RwLock::new(initial_settings)),

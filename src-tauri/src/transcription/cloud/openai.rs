@@ -12,13 +12,14 @@ pub struct OpenAITranscriber {
 }
 
 impl OpenAITranscriber {
-    pub fn new(api_key: String) -> Self {
+    pub fn new(api_key: String, client: reqwest::Client) -> Self {
         Self {
             inner: WhisperCompatibleClient::new(
                 ProviderId::OpenAi,
                 "https://api.openai.com/v1",
                 "whisper-1",
                 api_key,
+                client,
             ),
         }
     }

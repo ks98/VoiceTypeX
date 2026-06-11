@@ -21,15 +21,12 @@ pub struct AnthropicProcessor {
 }
 
 impl AnthropicProcessor {
-    pub fn new(api_key: String) -> Self {
+    pub fn new(api_key: String, client: reqwest::Client) -> Self {
         Self {
             api_key,
             base_url: "https://api.anthropic.com/v1".to_string(),
             default_model: "claude-sonnet-4-6".to_string(),
-            client: reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(60))
-                .build()
-                .expect("reqwest client builder (timeout)"),
+            client,
         }
     }
 
@@ -47,6 +44,9 @@ impl AnthropicProcessor {
         let response = self
             .client
             .post(&url)
+            // The shared client carries no default timeout (issue #41);
+            // keep the per-request 60 s budget the dedicated client used.
+            .timeout(std::time::Duration::from_secs(60))
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", API_VERSION)
             .json(&body)
@@ -104,6 +104,9 @@ impl Processor for AnthropicProcessor {
             let response = self
                 .client
                 .post(&url)
+                // The shared client carries no default timeout (issue #41);
+                // keep the per-request 60 s budget the dedicated client used.
+                .timeout(std::time::Duration::from_secs(60))
                 .header("x-api-key", &self.api_key)
                 .header("anthropic-version", API_VERSION)
                 .json(&req)

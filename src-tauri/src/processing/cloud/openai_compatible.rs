@@ -29,17 +29,14 @@ impl OpenAICompatibleClient {
         base_url: impl Into<String>,
         default_model: impl Into<String>,
         api_key: String,
+        client: reqwest::Client,
     ) -> Self {
         Self {
             base_url: base_url.into(),
             default_model: default_model.into(),
             api_key,
             provider,
-            // A 60 s timeout covers almost all chat-completion calls.
-            client: reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(60))
-                .build()
-                .expect("reqwest client builder (timeout)"),
+            client,
         }
     }
 
@@ -75,6 +72,10 @@ impl OpenAICompatibleClient {
             let response = self
                 .client
                 .post(&url)
+                // A 60 s timeout covers almost all chat-completion calls.
+                // The shared client carries no default timeout (issue #41),
+                // so set it per request.
+                .timeout(std::time::Duration::from_secs(60))
                 .bearer_auth(&self.api_key)
                 .json(&req)
                 .send()
@@ -115,6 +116,10 @@ impl OpenAICompatibleClient {
         let response = self
             .client
             .get(&url)
+            // A 60 s timeout covers almost all chat-completion calls.
+            // The shared client carries no default timeout (issue #41),
+            // so set it per request.
+            .timeout(std::time::Duration::from_secs(60))
             .bearer_auth(&self.api_key)
             .send()
             .await

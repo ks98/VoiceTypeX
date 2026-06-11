@@ -561,7 +561,7 @@ async fn finish_recording_and_inject(
         }
         TranscriptionTarget::Cloud => {
             let provider = mode.cloud_stt_provider.as_deref().unwrap_or("xai");
-            match make_cloud_transcriber(provider) {
+            match make_cloud_transcriber(provider, ctx.http_client.clone()) {
                 Ok(transcriber) => match encode_wav_16k_mono(&samples) {
                     Ok(wav) => transcriber.transcribe_oneshot(&wav, opts).await,
                     Err(e) => Err(e),
@@ -609,7 +609,7 @@ async fn finish_recording_and_inject(
         }
         ProcessingTarget::Cloud => {
             ctx.state_bus.transition(AppState::Postprocessing)?;
-            run_cloud_processing(mode, &processing_input)
+            run_cloud_processing(ctx, mode, &processing_input)
                 .await
                 .inspect_err(|e| {
                     let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
@@ -948,14 +948,18 @@ fn resolve_embedded_llm(ctx: &Arc<AppContext>, mode: &Mode) -> Arc<LlamaEmbedded
     new_processor
 }
 
-async fn run_cloud_processing(mode: &Mode, transcript: &str) -> Result<String> {
+async fn run_cloud_processing(
+    ctx: &Arc<AppContext>,
+    mode: &Mode,
+    transcript: &str,
+) -> Result<String> {
     let provider = mode.cloud_llm_provider.as_deref().ok_or_else(|| {
         VoiceTypeError::Mode(format!(
             "Mode '{}': processing=cloud, but no cloud_llm_provider set",
             mode.id
         ))
     })?;
-    let processor: Arc<dyn Processor> = make_cloud_processor(provider)?;
+    let processor: Arc<dyn Processor> = make_cloud_processor(provider, ctx.http_client.clone())?;
     let system_prompt = mode.system_prompt.as_deref().unwrap_or("");
     let opts = ProcessOpts {
         model: mode.cloud_llm_model.clone(),

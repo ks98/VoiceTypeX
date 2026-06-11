@@ -23,7 +23,14 @@ use std::sync::Arc;
 /// Factory: returns the matching `Transcriber` for a cloud provider.
 /// Reads the API key from the OS keychain. Fails with a clear message
 /// if the key is not set.
-pub fn make_cloud_transcriber(provider: &str) -> Result<Arc<dyn Transcriber>> {
+///
+/// `client` is the app-wide shared `reqwest::Client` (issue #41) — it
+/// is internally `Arc`'d, so cloning it per call reuses one connection
+/// pool across dictations.
+pub fn make_cloud_transcriber(
+    provider: &str,
+    client: reqwest::Client,
+) -> Result<Arc<dyn Transcriber>> {
     let key = SecretStore::get(provider)?.ok_or_else(|| {
         // A missing key is an auth problem, not a transcription transport
         // failure — route it through `Secrets` so `kind()` reports
@@ -33,10 +40,12 @@ pub fn make_cloud_transcriber(provider: &str) -> Result<Arc<dyn Transcriber>> {
         ))
     })?;
     match provider {
-        "xai" => Ok(Arc::new(cloud::xai::XaiTranscriber::new(key))),
-        "openai" => Ok(Arc::new(cloud::openai::OpenAITranscriber::new(key))),
-        "groq" => Ok(Arc::new(cloud::groq::GroqTranscriber::new(key))),
-        "deepgram" => Ok(Arc::new(cloud::deepgram::DeepgramTranscriber::new(key))),
+        "xai" => Ok(Arc::new(cloud::xai::XaiTranscriber::new(key, client))),
+        "openai" => Ok(Arc::new(cloud::openai::OpenAITranscriber::new(key, client))),
+        "groq" => Ok(Arc::new(cloud::groq::GroqTranscriber::new(key, client))),
+        "deepgram" => Ok(Arc::new(cloud::deepgram::DeepgramTranscriber::new(
+            key, client,
+        ))),
         other => Err(VoiceTypeError::transcription(format!(
             "Unknown STT provider: {other}"
         ))),

@@ -17,14 +17,11 @@ pub struct XaiTranscriber {
 }
 
 impl XaiTranscriber {
-    pub fn new(api_key: String) -> Self {
+    pub fn new(api_key: String, client: reqwest::Client) -> Self {
         Self {
             api_key,
             base_url: "https://api.x.ai/v1".to_string(),
-            client: reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(120))
-                .build()
-                .expect("reqwest client builder (timeout)"),
+            client,
         }
     }
 }
@@ -60,6 +57,9 @@ impl Transcriber for XaiTranscriber {
             let response = self
                 .client
                 .post(&url)
+                // The shared client carries no default timeout (issue #41);
+                // keep the per-request 120 s budget the dedicated client used.
+                .timeout(std::time::Duration::from_secs(120))
                 .bearer_auth(&self.api_key)
                 .multipart(form)
                 .send()
