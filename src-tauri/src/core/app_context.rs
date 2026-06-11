@@ -14,7 +14,6 @@ use crate::injection::TextInjector;
 #[cfg(not(target_os = "windows"))]
 use crate::processing::embedded::LlamaEmbeddedProcessor;
 use crate::transcription::local::LocalTranscriber;
-use crate::transcription::Transcriber;
 use parking_lot::{Mutex, RwLock};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -38,12 +37,10 @@ pub struct AppContext {
     /// session has delivered its first response; on X11/Windows the
     /// value stays `None` — there `Settings.menu_hotkey` is the truth.
     pub effective_menu_hotkey: Arc<RwLock<Option<String>>>,
-    pub transcriber: Arc<dyn Transcriber>,
-    /// Direct handle on the `LocalTranscriber` — needed by the
-    /// streaming worker (phase 2), which calls the non-trait method
-    /// `transcribe_streaming_pass`. Points to the same instance as
-    /// `transcriber` if the app default is local; otherwise to a
-    /// separate `LocalTranscriber` instance in parallel.
+    /// The app-default local Whisper transcriber. The streaming worker
+    /// (phase 2) calls its non-trait `transcribe_streaming_pass`; the
+    /// final pass and the `run_test_transcription` diagnostic call
+    /// `transcribe_samples` (f32 in, no WAV roundtrip — issue #46).
     pub local_transcriber: Arc<LocalTranscriber>,
     /// **Phase 3b** — embedded LLM processor. Lazy model load on the
     /// first `process()` call; afterwards held for the app's lifetime.

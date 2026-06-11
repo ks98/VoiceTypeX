@@ -34,7 +34,6 @@ use crate::transcription::local::LocalTranscriber;
 #[cfg(not(target_os = "windows"))]
 use crate::transcription::model_downloader::LlmModelSlot;
 use crate::transcription::model_downloader::ModelSlot;
-use crate::transcription::Transcriber;
 use parking_lot::{Mutex, RwLock};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -233,16 +232,13 @@ pub fn run() {
             // Whisper transparently runs without VAD, with one WARN
             // log line per call.
             let vad_model_path = Some(model_dir.join("ggml-silero-v6.2.0.bin"));
-            // Phase 2: two Arcs onto the same `LocalTranscriber`
-            // instance. The dyn-trait Arc goes to the trait-based
-            // pipeline sites, the concrete Arc to the streaming
-            // worker (which needs the non-trait method
-            // `transcribe_streaming_pass`).
-            let local_transcriber = Arc::new(LocalTranscriber::new(
-                model_path.clone(),
-                vad_model_path,
-            ));
-            let transcriber: Arc<dyn Transcriber> = local_transcriber.clone();
+            // The app-default local Whisper transcriber. The streaming
+            // worker calls `transcribe_streaming_pass`, the final pass
+            // and the diagnostic call `transcribe_samples` (f32, no WAV
+            // roundtrip — issue #46). Cloud modes build their own
+            // transcriber per pass via `make_cloud_transcriber`.
+            let local_transcriber =
+                Arc::new(LocalTranscriber::new(model_path.clone(), vad_model_path));
 
             // Phase 3b: embedded LLM processor. Path: user override
             // takes precedence, otherwise the slot-based default. The
@@ -289,7 +285,6 @@ pub fn run() {
                 recorder_slot: Arc::new(Mutex::new(None)),
                 active_mode: Arc::new(Mutex::new(None)),
                 effective_menu_hotkey: Arc::new(RwLock::new(None)),
-                transcriber,
                 local_transcriber,
                 #[cfg(not(target_os = "windows"))]
                 local_llm_processor,

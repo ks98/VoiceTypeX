@@ -7,7 +7,10 @@
 //! starts via the `start_recording` IPC command. In the `Recording` state
 //! the same hotkey stops recording and lets the pipeline run through.
 
-use crate::audio::{play_start_cue, play_stop_cue, recorder::RecorderHandle, RecorderConfig};
+use crate::audio::{
+    play_start_cue, play_stop_cue, recorder::encode_wav_16k_mono, recorder::RecorderHandle,
+    RecorderConfig,
+};
 use crate::core::edit::{compose_edit_input, resolve_output_action};
 use crate::core::error::{Result, VoiceTypeError};
 use crate::core::modes::{InputSource, Mode, OutputAction, ProcessingTarget, TranscriptionTarget};
@@ -22,7 +25,7 @@ use crate::transcription::local_agreement::stable_prefix;
 #[cfg(not(target_os = "windows"))]
 use crate::transcription::model_downloader::LlmModelSlot;
 use crate::transcription::model_downloader::ModelSlot;
-use crate::transcription::{make_cloud_transcriber, TranscribeOpts, Transcriber};
+use crate::transcription::{make_cloud_transcriber, TranscribeOpts};
 use serde::Serialize;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
@@ -498,25 +501,12 @@ async fn finish_recording_and_inject(
     // finalize vs. STT vs. LLM vs. inject on real dictations. Logged once
     // at the end at info level (Logs tab). No transcript text is logged.
     let t_finalize_start = std::time::Instant::now();
-    let wav = recorder.stop_and_finalize().await.inspect_err(|e| {
+    // 16 kHz mono f32 — the local path feeds these straight to whisper;
+    // only the cloud path lazily wraps them in a WAV (issue #46).
+    let samples = recorder.stop_and_finalize().await.inspect_err(|e| {
         let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
     })?;
     let finalize_ms = t_finalize_start.elapsed().as_millis() as u64;
-
-    // STT — local (with optional mode-override slot) or cloud, depending
-    // on the mode.
-    let transcriber: Arc<dyn Transcriber> = match mode.transcription {
-        TranscriptionTarget::Local => {
-            let local = resolve_local_transcriber(ctx, mode);
-            local as Arc<dyn Transcriber>
-        }
-        TranscriptionTarget::Cloud => {
-            let provider = mode.cloud_stt_provider.as_deref().unwrap_or("xai");
-            make_cloud_transcriber(provider).inspect_err(|e| {
-                let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
-            })?
-        }
-    };
 
     // Settings read here before the await — the parking_lot
     // RwLockReadGuard is not Send and must not live across await points.
@@ -529,21 +519,38 @@ async fn finish_recording_and_inject(
             mode.whisper_beam_size.unwrap_or(s.whisper_beam_size),
         )
     };
+    let opts = TranscribeOpts {
+        language: mode.language.clone(),
+        initial_prompt: mode.initial_prompt.clone(),
+        n_threads,
+        beam_size: Some(beam_size),
+    };
+
+    // STT — local (with optional mode-override slot) or cloud, depending
+    // on the mode. The #43 timing mark wraps the whole step including the
+    // cloud-only WAV encode, so the cost lands in `transcribe_ms`.
+    // - Local: f32 straight to whisper-rs (`transcribe_samples`), no WAV.
+    // - Cloud: `encode_wav_16k_mono` then the WAV-based trait entry.
     let t_transcribe_start = std::time::Instant::now();
-    let transcript = transcriber
-        .transcribe_oneshot(
-            &wav,
-            TranscribeOpts {
-                language: mode.language.clone(),
-                initial_prompt: mode.initial_prompt.clone(),
-                n_threads,
-                beam_size: Some(beam_size),
-            },
-        )
-        .await
-        .inspect_err(|e| {
-            let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
-        })?;
+    let transcript = match mode.transcription {
+        TranscriptionTarget::Local => {
+            let local = resolve_local_transcriber(ctx, mode);
+            local.transcribe_samples(&samples, opts).await
+        }
+        TranscriptionTarget::Cloud => {
+            let provider = mode.cloud_stt_provider.as_deref().unwrap_or("xai");
+            match make_cloud_transcriber(provider) {
+                Ok(transcriber) => match encode_wav_16k_mono(&samples) {
+                    Ok(wav) => transcriber.transcribe_oneshot(&wav, opts).await,
+                    Err(e) => Err(e),
+                },
+                Err(e) => Err(e),
+            }
+        }
+    }
+    .inspect_err(|e| {
+        let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
+    })?;
     let transcribe_ms = t_transcribe_start.elapsed().as_millis() as u64;
 
     // For edit modes ("Bearbeiten") the LLM input is the captured
