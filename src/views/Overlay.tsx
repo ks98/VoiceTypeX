@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { listen, emit } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { listenAll } from "../lib/tauriListen";
+import { EVENTS } from "../lib/events";
 import { useT, type TranslateFn } from "../i18n";
 
 type Phase =
@@ -48,7 +49,7 @@ export default function Overlay(): JSX.Element {
 
   useEffect(() => {
     return listenAll([
-      listen<StatePayload>("app://state", (event) => {
+      listen<StatePayload>(EVENTS.STATE, (event) => {
         setPhase(event.payload.state);
         setErrorMsg(event.payload.error ?? null);
         // Phase leaves recording → clear partial so the next recording
@@ -57,12 +58,12 @@ export default function Overlay(): JSX.Element {
           setPartial("");
         }
       }),
-      listen<PartialTranscriptPayload>("app://partial-transcript", (event) => {
+      listen<PartialTranscriptPayload>(EVENTS.PARTIAL_TRANSCRIPT, (event) => {
         setPartial(event.payload.text ?? "");
       }),
       // Engine status (issue #8): emitted by the backend when a mode becomes
       // active (recording start). Stays until the next recording overwrites it.
-      listen<EngineStatusPayload>("app://active-engine", (event) => {
+      listen<EngineStatusPayload>(EVENTS.ACTIVE_ENGINE, (event) => {
         setEngine(event.payload);
       }),
     ]);
@@ -193,7 +194,7 @@ async function openLogsInMainWindow(): Promise<void> {
       await main.show();
       await main.setFocus();
     }
-    await emit("app://focus-logs");
+    await emit(EVENTS.FOCUS_LOGS);
   } catch {
     // The window API can fail on restrictive capabilities — in that
     // case the user still sees the full error text in the overlay

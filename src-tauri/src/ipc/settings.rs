@@ -138,7 +138,7 @@ pub async fn download_default_model(
     let app_for_progress = app.clone();
     let result = download_model(slot, &dest_dir, move |progress| {
         let _ = app_for_progress.emit(
-            "model-download-progress",
+            crate::core::events::MODEL_DOWNLOAD_PROGRESS,
             ModelDownloadProgress {
                 downloaded: progress.bytes_downloaded,
                 total: progress.bytes_total,
@@ -174,7 +174,7 @@ pub async fn download_llm_default_model(
     let app_for_progress = app.clone();
     let result = download_llm(slot, &dest_dir, move |progress| {
         let _ = app_for_progress.emit(
-            "llm-model-download-progress",
+            crate::core::events::LLM_MODEL_DOWNLOAD_PROGRESS,
             ModelDownloadProgress {
                 downloaded: progress.bytes_downloaded,
                 total: progress.bytes_total,
