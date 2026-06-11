@@ -40,6 +40,71 @@ struct PartialTranscriptPayload {
     text: String,
 }
 
+/// The `AppHandle`-free dependency bundle the pure stage core
+/// (`run_stages`) needs: the `StateBus` for the transitions, the resolved
+/// transcriber, and the per-stage opts the caller computed from the
+/// mode + settings (issue #34).
+///
+/// The processor is **not** bundled here: it is resolved lazily by the
+/// caller-provided `resolve_processor` closure passed to `run_stages`, so
+/// a processor-resolution failure surfaces *after* the `Postprocessing`
+/// transition — preserving the original parked-from state (a resolve
+/// failure must park from `Postprocessing`, not earlier, and must not
+/// skip the STT pass). The transcriber, by contrast, is resolved by the
+/// caller while the bus is already `Transcribing`, so its resolve failure
+/// parks from `Transcribing` exactly as before; no closure is needed
+/// there.
+///
+/// Resolving these (model/provider caches, beam/thread settings, the WAV
+/// branch) and all the UI/glue (overlay, cues, events, the 80 ms
+/// focus-handoff sleep, and the inject itself) stays in the caller;
+/// `run_stages` only borrows what it executes up to the inject boundary,
+/// so it carries no `AppHandle` and no `AppContext`. The injector and the
+/// inject options stay caller-side because the inject is inseparable from
+/// the Wayland overlay choreography (issue #36).
+struct PipelineDeps<'a> {
+    state_bus: &'a crate::core::state::StateBus,
+    transcriber: StageTranscriber<'a>,
+    transcribe_opts: TranscribeOpts,
+    /// The processor's `system_prompt` + `ProcessOpts`, resolved by the
+    /// caller from the mode/settings. Only consulted when the caller
+    /// supplies a `resolve_processor` closure (processing != none).
+    process_opts: StageProcessOpts<'a>,
+}
+
+/// How `run_stages` performs the STT step. The local path feeds the f32
+/// samples straight to whisper-rs; the cloud path wraps them in a WAV
+/// once and calls the `Transcriber` trait. The caller picks the variant
+/// (resolving the local/cloud instance via the caches); `run_stages`
+/// only runs it, so the #46 f32/WAV split stays a caller decision.
+enum StageTranscriber<'a> {
+    Local(&'a LocalTranscriber),
+    Cloud(&'a dyn Transcriber),
+}
+
+/// The processor's `system_prompt`, resolved by the caller from the mode,
+/// plus the `ProcessOpts`. Held in `PipelineDeps` so the core stays free
+/// of mode lookups.
+struct StageProcessOpts<'a> {
+    system_prompt: &'a str,
+    opts: ProcessOpts,
+}
+
+/// The `final_text` plus the resolved injection action `run_stages`
+/// produced for the caller to inject. `run_stages` runs the STT pass, the
+/// optional `Postprocessing` transition + LLM pass, and the output-action
+/// resolution, then returns at the inject boundary — so the caller keeps
+/// the Wayland-critical overlay-hide + 80 ms focus-handoff sleep wrapped
+/// around the inject (issue #36). The `transcribe_ms`/`process_ms` fields
+/// are the #43 stage timings, returned so the caller logs byte-identical
+/// numbers.
+struct StageOutput {
+    final_text: String,
+    output_action: OutputAction,
+    transcribe_ms: u64,
+    process_ms: u64,
+}
+
 /// Configuration of the streaming decode loop. Kept centrally here so the
 /// latency/CPU trade-offs are visible in one place.
 ///
@@ -449,6 +514,129 @@ pub fn spawn_tray_recording_pulse(app: AppHandle) {
     });
 }
 
+/// Pure, `AppHandle`-free stage core (issue #35): runs the STT →
+/// (optional) LLM stage sequence on the captured `samples`, plus the
+/// edit-mode composition and the output-action resolution, and drives the
+/// `Postprocessing` AppState transition with the same per-stage
+/// `Error(state)` recovery as before. The caller has already transitioned
+/// the bus to `Transcribing` (that transition is coupled to the finalize
+/// step, whose failure must park from `Transcribing`), so this core does
+/// not touch it. It stops at the inject boundary and returns the
+/// `final_text` plus the resolved action so the caller keeps the inject
+/// and the surrounding Wayland overlay-hide + 80 ms focus-handoff sleep
+/// (issue #36) — that choreography is timing-critical and must stay
+/// around the inject, not inside this core.
+///
+/// `resolve_processor` is `Some(closure)` when `processing != none` and
+/// `None` for pass-through. The closure is invoked *after* the
+/// `Postprocessing` transition so a processor-resolution failure parks
+/// from `Postprocessing` (not earlier) and never skips the STT pass —
+/// matching the original inline behavior. The closure carries the only
+/// `AppContext` dependency the processing step has; the core itself names
+/// neither `AppHandle` nor `AppContext`.
+///
+/// `selection` is the eager-captured edit-mode selection (already taken
+/// out of `ctx.selection_buffer` by the caller); for voice modes it is
+/// `None`. The #43 transcribe/process timings are measured here and
+/// returned so the caller logs byte-identical numbers.
+async fn run_stages<F>(
+    deps: &PipelineDeps<'_>,
+    samples: &[f32],
+    mode: &Mode,
+    selection: Option<String>,
+    resolve_processor: Option<F>,
+) -> Result<StageOutput>
+where
+    F: FnOnce() -> Result<Arc<dyn Processor>>,
+{
+    // STT — local (f32 straight to whisper-rs) or cloud (WAV-wrapped by
+    // the caller's `StageTranscriber::Cloud` resolution). The #43 timing
+    // mark wraps the whole step including the cloud-only WAV encode, so
+    // the cost lands in `transcribe_ms`.
+    let t_transcribe_start = std::time::Instant::now();
+    let transcript = match &deps.transcriber {
+        StageTranscriber::Local(local) => {
+            local
+                .transcribe_samples(samples, deps.transcribe_opts.clone())
+                .await
+        }
+        StageTranscriber::Cloud(transcriber) => match encode_wav_16k_mono(samples) {
+            Ok(wav) => {
+                transcriber
+                    .transcribe_oneshot(&wav, deps.transcribe_opts.clone())
+                    .await
+            }
+            Err(e) => Err(e),
+        },
+    }
+    .inspect_err(|e| {
+        let _ = deps.state_bus.transition(AppState::Error(e.to_string()));
+    })?;
+    let transcribe_ms = t_transcribe_start.elapsed().as_millis() as u64;
+
+    // For edit modes ("Bearbeiten") the LLM input is the captured
+    // selection plus the spoken instruction; for voice modes it is just
+    // the transcript. The Processor trait is unchanged — it receives the
+    // composed string as its "transcript".
+    let processing_input = match mode.input {
+        InputSource::Voice => transcript,
+        InputSource::Selection => {
+            let selection = selection.unwrap_or_default();
+            if selection.is_empty() {
+                tracing::warn!(
+                    mode = %mode.id,
+                    "Edit mode without a captured selection — applying the instruction to an empty selection"
+                );
+            }
+            compose_edit_input(&selection, &transcript)
+        }
+    };
+
+    // Postprocessing — pass-through (`None`) / processor. The pass-through
+    // arm reads ~0 ms, which is the correct attribution. The
+    // `Postprocessing` transition precedes the processor resolution, so a
+    // resolve failure parks from `Postprocessing` exactly as the inline
+    // `run_local_processing` / `run_cloud_processing` did.
+    let t_process_start = std::time::Instant::now();
+    let llm_output = match resolve_processor {
+        None => processing_input,
+        Some(resolve) => {
+            deps.state_bus.transition(AppState::Postprocessing)?;
+            let processor = resolve().inspect_err(|e| {
+                let _ = deps.state_bus.transition(AppState::Error(e.to_string()));
+            })?;
+            processor
+                .process(
+                    &processing_input,
+                    deps.process_opts.system_prompt,
+                    deps.process_opts.opts.clone(),
+                )
+                .await
+                .inspect_err(|e| {
+                    let _ = deps.state_bus.transition(AppState::Error(e.to_string()));
+                })?
+        }
+    };
+    let process_ms = t_process_start.elapsed().as_millis() as u64;
+
+    // For edit modes, resolve the effective injection action and strip
+    // the auto-mode sentinel; voice modes inject at the cursor.
+    let (output_action, final_text) = match mode.input {
+        InputSource::Selection => {
+            resolve_output_action(mode.output, mode.output_fallback, &llm_output)
+        }
+        InputSource::Voice => (OutputAction::Insert, llm_output),
+    };
+    tracing::debug!(input = ?mode.input, action = ?output_action, "Injection action resolved");
+
+    Ok(StageOutput {
+        final_text,
+        output_action,
+        transcribe_ms,
+        process_ms,
+    })
+}
+
 async fn finish_recording_and_inject(
     app: &AppHandle,
     ctx: &Arc<AppContext>,
@@ -522,6 +710,9 @@ async fn finish_recording_and_inject(
     // before each stage so felt paste latency can be attributed to
     // finalize vs. STT vs. LLM vs. inject on real dictations. Logged once
     // at the end at info level (Logs tab). No transcript text is logged.
+    // The transcribe/process marks live inside `run_stages` and come back
+    // as `transcribe_ms`/`process_ms`, so the logged numbers are
+    // unchanged by the extraction.
     let t_finalize_start = std::time::Instant::now();
     // 16 kHz mono f32 — the local path feeds these straight to whisper;
     // only the cloud path lazily wraps them in a WAV (issue #46).
@@ -529,6 +720,12 @@ async fn finish_recording_and_inject(
         let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
     })?;
     let finalize_ms = t_finalize_start.elapsed().as_millis() as u64;
+
+    // --- Resolve the deps for the pure stage core (issue #34). ---
+    // The model/provider caches, the beam/thread settings, the WAV branch
+    // choice, the processor + its system prompt, and the inject options
+    // are all resolved here so `run_stages` carries no AppHandle/AppContext
+    // and no mode/settings lookups.
 
     // Settings read here before the await — the parking_lot
     // RwLockReadGuard is not Send and must not live across await points.
@@ -541,95 +738,89 @@ async fn finish_recording_and_inject(
             mode.whisper_beam_size.unwrap_or(s.whisper_beam_size),
         )
     };
-    let opts = TranscribeOpts {
+    let transcribe_opts = TranscribeOpts {
         language: mode.language.clone(),
         initial_prompt: mode.initial_prompt.clone(),
         n_threads,
         beam_size: Some(beam_size),
     };
 
-    // STT — local (with optional mode-override slot) or cloud, depending
-    // on the mode. The #43 timing mark wraps the whole step including the
-    // cloud-only WAV encode, so the cost lands in `transcribe_ms`.
-    // - Local: f32 straight to whisper-rs (`transcribe_samples`), no WAV.
-    // - Cloud: `encode_wav_16k_mono` then the WAV-based trait entry.
-    let t_transcribe_start = std::time::Instant::now();
-    let transcript = match mode.transcription {
+    // STT instance: local (with optional mode-override slot) or cloud.
+    // A cloud-resolve failure stays a stage error parked in `Error`, as
+    // before; previously it surfaced inside the STT match arm, now it
+    // surfaces here at resolve time — same `Error(state)` recovery, same
+    // propagated error.
+    let local_transcriber;
+    let cloud_transcriber;
+    let stage_transcriber = match mode.transcription {
         TranscriptionTarget::Local => {
-            let local = resolve_local_transcriber(ctx, mode);
-            local.transcribe_samples(&samples, opts).await
+            local_transcriber = resolve_local_transcriber(ctx, mode);
+            StageTranscriber::Local(local_transcriber.as_ref())
         }
         TranscriptionTarget::Cloud => {
             let provider = mode.cloud_stt_provider.as_deref().unwrap_or("xai");
-            match resolve_cloud_transcriber(ctx, provider) {
-                Ok(transcriber) => match encode_wav_16k_mono(&samples) {
-                    Ok(wav) => transcriber.transcribe_oneshot(&wav, opts).await,
-                    Err(e) => Err(e),
-                },
-                Err(e) => Err(e),
-            }
-        }
-    }
-    .inspect_err(|e| {
-        let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
-    })?;
-    let transcribe_ms = t_transcribe_start.elapsed().as_millis() as u64;
-
-    // For edit modes ("Bearbeiten") the LLM input is the captured
-    // selection plus the spoken instruction; for voice modes it is just
-    // the transcript. The Processor trait is unchanged — it receives the
-    // composed string as its "transcript". The selection is consumed
-    // (`take`) so a later invocation cannot reuse a stale one.
-    let processing_input = match mode.input {
-        InputSource::Voice => transcript,
-        InputSource::Selection => {
-            let selection = ctx.selection_buffer.lock().take().unwrap_or_default();
-            if selection.is_empty() {
-                tracing::warn!(
-                    mode = %mode.id,
-                    "Edit mode without a captured selection — applying the instruction to an empty selection"
-                );
-            }
-            compose_edit_input(&selection, &transcript)
+            cloud_transcriber = resolve_cloud_transcriber(ctx, provider).inspect_err(|e| {
+                let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
+            })?;
+            StageTranscriber::Cloud(cloud_transcriber.as_ref())
         }
     };
 
-    // Postprocessing — none / local (Ollama) / cloud LLM. The `None` arm
-    // is a pass-through and reads ~0 ms, which is the correct attribution.
-    let t_process_start = std::time::Instant::now();
-    let llm_output = match mode.processing {
-        ProcessingTarget::None => processing_input,
-        ProcessingTarget::Local => {
-            ctx.state_bus.transition(AppState::Postprocessing)?;
-            run_local_processing(ctx, mode, &processing_input)
-                .await
-                .inspect_err(|e| {
-                    let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
-                })?
-        }
-        ProcessingTarget::Cloud => {
-            ctx.state_bus.transition(AppState::Postprocessing)?;
-            run_cloud_processing(ctx, mode, &processing_input)
-                .await
-                .inspect_err(|e| {
-                    let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
-                })?
-        }
+    // Processor `system_prompt` + opts. The processor *instance* is not
+    // resolved here: `run_stages` invokes the `resolve_processor` closure
+    // below only after the `Postprocessing` transition, so a resolve
+    // failure (cloud keychain, Windows-embedded steering error, missing
+    // ollama tag) parks from `Postprocessing` and never skips STT — the
+    // original inline ordering of `run_local_processing` /
+    // `run_cloud_processing`.
+    let system_prompt = mode.system_prompt.as_deref().unwrap_or("");
+    let process_opts = StageProcessOpts {
+        system_prompt,
+        opts: ProcessOpts {
+            // Cloud uses the mode's cloud model; embedded/Ollama ignore it.
+            model: if matches!(mode.processing, ProcessingTarget::Cloud) {
+                mode.cloud_llm_model.clone()
+            } else {
+                None
+            },
+            temperature: mode.temperature,
+            top_p: mode.top_p,
+            repeat_penalty: mode.repeat_penalty,
+            max_tokens: mode.max_tokens,
+            ..Default::default()
+        },
     };
-    let process_ms = t_process_start.elapsed().as_millis() as u64;
 
-    // For edit modes, resolve the effective injection action and strip
-    // the auto-mode sentinel; voice modes inject at the cursor as
-    // before. NOTE: the injectors do not yet honour append/prepend
-    // (collapse-then-paste lands in a follow-up step) — the action is
-    // logged here and threaded into injection next.
-    let (output_action, final_text) = match mode.input {
-        InputSource::Selection => {
-            resolve_output_action(mode.output, mode.output_fallback, &llm_output)
-        }
-        InputSource::Voice => (OutputAction::Insert, llm_output),
+    // The selection is consumed (`take`) so a later invocation cannot
+    // reuse a stale one. Only meaningful for edit modes; voice modes
+    // ignore it inside `run_stages`.
+    let selection = ctx.selection_buffer.lock().take();
+
+    let deps = PipelineDeps {
+        state_bus: &ctx.state_bus,
+        transcriber: stage_transcriber,
+        transcribe_opts,
+        process_opts,
     };
-    tracing::debug!(input = ?mode.input, action = ?output_action, "Injection action resolved");
+
+    // `None` = pass-through (processing == none); otherwise the closure
+    // resolves the cloud/local processor on demand inside `run_stages`,
+    // after the `Postprocessing` transition. It captures `ctx`/`mode`, so
+    // the only `AppContext` dependency of the processing step lives in the
+    // closure, not in `run_stages`.
+    let resolve_processor = match mode.processing {
+        ProcessingTarget::None => None,
+        ProcessingTarget::Local | ProcessingTarget::Cloud => {
+            Some(|| resolve_processor_for_mode(ctx, mode))
+        }
+    };
+
+    let StageOutput {
+        final_text,
+        output_action,
+        transcribe_ms,
+        process_ms,
+    } = run_stages(&deps, &samples, mode, selection, resolve_processor).await?;
 
     ctx.state_bus.transition(AppState::Injecting)?;
 
@@ -718,20 +909,32 @@ async fn finish_recording_and_inject(
     Ok(())
 }
 
-async fn run_local_processing(
+/// Resolve the `Processor` instance a mode should use, dispatching on
+/// `mode.processing` (issue #34/#35). Pure resolution: it builds (or
+/// fetches from cache) the cloud / embedded / Ollama processor and
+/// returns the `Arc<dyn Processor>`; the `.process()` call and the
+/// `ProcessOpts`/`system_prompt` construction now live in `run_stages` /
+/// the caller. Synchronous — every backend's resolution (keychain read,
+/// cache lookup, model-path build) is sync; only `.process()` was async.
+///
+/// `run_stages` invokes this only after the `Postprocessing` transition,
+/// so a resolution error (cloud keychain, Windows-embedded steering,
+/// missing ollama tag) parks from `Postprocessing` exactly as the inline
+/// `run_local_processing`/`run_cloud_processing` did.
+fn resolve_processor_for_mode(ctx: &Arc<AppContext>, mode: &Mode) -> Result<Arc<dyn Processor>> {
+    match mode.processing {
+        ProcessingTarget::None => {
+            unreachable!("pass-through is handled by run_stages, not resolved")
+        }
+        ProcessingTarget::Cloud => resolve_cloud_processor_for_mode(ctx, mode),
+        ProcessingTarget::Local => resolve_local_processor_for_mode(ctx, mode),
+    }
+}
+
+fn resolve_local_processor_for_mode(
     ctx: &Arc<AppContext>,
     mode: &Mode,
-    transcript: &str,
-) -> Result<String> {
-    let system_prompt = mode.system_prompt.as_deref().unwrap_or("");
-    let opts = ProcessOpts {
-        temperature: mode.temperature,
-        top_p: mode.top_p,
-        repeat_penalty: mode.repeat_penalty,
-        max_tokens: mode.max_tokens,
-        ..Default::default()
-    };
-
+) -> Result<Arc<dyn Processor>> {
     // Engine choice per mode. `None` now falls back to `"embedded"` —
     // the built-in llama-cpp-2 path needs no external daemon and has
     // been the production default variant since phase 3b. Existing
@@ -752,10 +955,7 @@ async fn run_local_processing(
         });
     match engine {
         #[cfg(not(target_os = "windows"))]
-        "embedded" => {
-            let processor: Arc<dyn Processor> = resolve_embedded_llm(ctx, mode);
-            processor.process(transcript, system_prompt, opts).await
-        }
+        "embedded" => Ok(resolve_embedded_llm(ctx, mode)),
         // The embedded engine is gated off on Windows; steer the user to
         // an alternative instead of failing with an opaque error.
         #[cfg(target_os = "windows")]
@@ -765,7 +965,7 @@ async fn run_local_processing(
              switch this mode's processing to a cloud provider.",
             mode.id
         ))),
-        "ollama" => run_local_processing_ollama(ctx, mode, transcript, system_prompt, opts).await,
+        "ollama" => resolve_ollama_processor(ctx, mode),
         other => Err(VoiceTypeError::Mode(format!(
             "Mode '{}': unknown local_engine '{other}' (allowed: \"embedded\" | \"ollama\")",
             mode.id
@@ -773,13 +973,7 @@ async fn run_local_processing(
     }
 }
 
-async fn run_local_processing_ollama(
-    ctx: &Arc<AppContext>,
-    mode: &Mode,
-    transcript: &str,
-    system_prompt: &str,
-    opts: ProcessOpts,
-) -> Result<String> {
+fn resolve_ollama_processor(ctx: &Arc<AppContext>, mode: &Mode) -> Result<Arc<dyn Processor>> {
     // `ollama_model_tag` is the new required key. `local_llm_model`
     // remains as a deprecated fallback for not-yet-migrated TOMLs (the
     // migration in `load_mode_from_path` already copies the field, but
@@ -798,8 +992,7 @@ async fn run_local_processing_ollama(
         let s = ctx.settings.read();
         (s.ollama_url.clone(), s.ollama_keep_alive.clone())
     };
-    let processor = make_local_processor(ollama_url, model, keep_alive);
-    processor.process(transcript, system_prompt, opts).await
+    Ok(make_local_processor(ollama_url, model, keep_alive))
 }
 
 /// The Whisper model path the app-default transcriber should currently
@@ -964,7 +1157,7 @@ fn resolve_cloud_processor(ctx: &Arc<AppContext>, provider: &str) -> Result<Arc<
 
 /// Analogous resolver for the embedded LLM processor
 /// (`mode.embedded_llm_slot`). Linux/macOS-only — the embedded engine is
-/// not compiled on Windows (issue #1), where `run_local_processing`
+/// not compiled on Windows (issue #1), where `resolve_local_processor_for_mode`
 /// returns a steering error instead of calling this.
 #[cfg(not(target_os = "windows"))]
 fn resolve_embedded_llm(ctx: &Arc<AppContext>, mode: &Mode) -> Arc<LlamaEmbeddedProcessor> {
@@ -1002,28 +1195,17 @@ fn resolve_embedded_llm(ctx: &Arc<AppContext>, mode: &Mode) -> Arc<LlamaEmbedded
     new_processor
 }
 
-async fn run_cloud_processing(
+fn resolve_cloud_processor_for_mode(
     ctx: &Arc<AppContext>,
     mode: &Mode,
-    transcript: &str,
-) -> Result<String> {
+) -> Result<Arc<dyn Processor>> {
     let provider = mode.cloud_llm_provider.as_deref().ok_or_else(|| {
         VoiceTypeError::Mode(format!(
             "Mode '{}': processing=cloud, but no cloud_llm_provider set",
             mode.id
         ))
     })?;
-    let processor: Arc<dyn Processor> = resolve_cloud_processor(ctx, provider)?;
-    let system_prompt = mode.system_prompt.as_deref().unwrap_or("");
-    let opts = ProcessOpts {
-        model: mode.cloud_llm_model.clone(),
-        temperature: mode.temperature,
-        top_p: mode.top_p,
-        repeat_penalty: mode.repeat_penalty,
-        max_tokens: mode.max_tokens,
-        ..Default::default()
-    };
-    processor.process(transcript, system_prompt, opts).await
+    resolve_cloud_processor(ctx, provider)
 }
 
 /// Register the single global menu hotkey (X11/Windows path).
