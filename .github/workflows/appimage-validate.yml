@@ -37,7 +37,7 @@ jobs:
       # .relr.dyn sections of modern system libs -> skip the strip pass.
       NO_STRIP: "true"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       # Identical system deps as in the release build (Tauri + Vulkan GPU build).
       - name: Install Linux system dependencies
@@ -51,17 +51,17 @@ jobs:
             libxcb1-dev libxcb-xtest0-dev libxcb-xfixes0-dev \
             libdbus-1-dev libclang-dev patchelf
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
         with:
           version: 9.15.0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           workspaces: "./src-tauri -> target"
 
@@ -83,7 +83,7 @@ jobs:
         run: pnpm tauri build --bundles appimage --verbose
 
       - name: Upload AppImage + updater artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: voicetypex-appimage
           if-no-files-found: error
