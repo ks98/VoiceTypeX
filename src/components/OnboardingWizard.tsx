@@ -342,227 +342,227 @@ export default function OnboardingWizard({
       </div>
     </div>
   );
+}
 
-  function StepDownload({
-    onDownload,
-    downloadStarted,
-    modelPath,
-  }: {
-    onDownload: () => void;
-    downloadStarted: boolean;
-    modelPath: string | null;
-  }): JSX.Element {
-    return (
-      <div className="flex flex-col gap-4">
-        <Hero icon={<CloudDownloadIcon />} />
-        <div>
-          <h3 className="text-lg font-semibold text-fg">
-            {t("wizard.download.title")}
-          </h3>
-          <p className="text-sm text-fg-muted mt-1">
-            {t("wizard.download.intro_prefix")}{" "}
-            <code className="text-brand font-mono">
-              ggml-large-v3-turbo-q8_0.bin
-            </code>{" "}
-            {t("wizard.download.intro_middle")}{" "}
-            <code className="text-brand font-mono">app_config_dir/models/</code>
-            {t("wizard.download.intro_suffix")}
-          </p>
-          <p className="text-xs text-fg-faint mt-2">
-            {t("wizard.download.hint_background")}
-          </p>
-        </div>
-        <Button
-          onClick={() => onDownload()}
-          disabled={downloadStarted}
-          className="self-start"
-        >
-          {modelPath
-            ? t("wizard.download.btn.done")
-            : downloadStarted
-              ? t("wizard.download.btn.running")
-              : t("wizard.download.btn.idle")}
-        </Button>
-        {modelPath ? (
-          <div className="text-xs text-status-done">
-            {t("wizard.download.configured", { path: modelPath })}
-          </div>
-        ) : null}
-      </div>
-    );
-  }
-
-  function StepLlmDownload({
-    hardware,
-    currentSlot,
-    onPickSlot,
-    onDownload,
-    downloadStarted,
-    modelPath,
-  }: {
-    hardware: HardwareReport | null;
-    currentSlot: string;
-    onPickSlot: (slot: string) => void;
-    onDownload: () => void;
-    downloadStarted: boolean;
-    modelPath: string | null;
-  }): JSX.Element {
-    const rec = hardware ? recommendLlmSlot(hardware.total_ram_gb) : null;
-    const mismatch = rec !== null && rec.slot !== currentSlot;
-
-    const ramLabel =
-      hardware && hardware.total_ram_gb > 0
-        ? t("wizard.llm.recommendation_ram", {
-            ram: hardware.total_ram_gb.toFixed(1),
-          })
-        : t("wizard.llm.recommendation_system");
-
-    return (
-      <div className="flex flex-col gap-4">
-        <Hero icon={<CloudDownloadIcon />} />
-        <div>
-          <h3 className="text-lg font-semibold text-fg">
-            {t("wizard.llm.title")}
-          </h3>
-          <p className="text-sm text-fg-muted mt-1">
-            {t("wizard.llm.intro_prefix")}{" "}
-            <code className="text-brand font-mono">llama-cpp-2</code>{" "}
-            {t("wizard.llm.intro_middle")}{" "}
-            <code className="text-brand font-mono">
-              local_engine = &quot;embedded&quot;
-            </code>{" "}
-            {t("wizard.llm.intro_suffix")}
-          </p>
-          <p className="text-xs text-fg-faint mt-2">
-            {t("wizard.llm.hint_background")}
-          </p>
-        </div>
-
-        {rec && hardware ? (
-          <div className="rounded-md bg-brand/10 border border-brand/30 px-3 py-2.5 text-sm">
-            <div className="text-fg">
-              <span className="text-fg-faint">
-                {t("wizard.llm.recommendation_prefix")}{" "}
-              </span>
-              <span className="font-medium">{ramLabel}</span>:{" "}
-              <span className="font-medium text-brand">{rec.label}</span>
-            </div>
-            {mismatch ? (
-              <button
-                type="button"
-                onClick={() => onPickSlot(rec.slot)}
-                className="mt-1.5 text-xs underline text-brand hover:text-brand-hover"
-              >
-                {t("wizard.llm.adopt")}
-              </button>
-            ) : (
-              <div className="mt-1 text-xs text-status-recording">
-                {t("wizard.llm.active")}
-              </div>
-            )}
-          </div>
-        ) : null}
-
-        <Button
-          onClick={() => onDownload()}
-          disabled={downloadStarted}
-          className="self-start"
-        >
-          {modelPath
-            ? t("wizard.llm.btn.done")
-            : downloadStarted
-              ? t("wizard.llm.btn.running")
-              : t("wizard.llm.btn.idle")}
-        </Button>
-
-        {modelPath ? (
-          <div className="text-xs text-status-done">
-            {t("wizard.llm.configured", { path: modelPath })}
-          </div>
-        ) : null}
-      </div>
-    );
-  }
-
-  function StepFinish({
-    backend,
-    hardware,
-    anyDownloadRunning,
-  }: {
-    backend: WhisperBackendInfo | null;
-    hardware: HardwareReport | null;
-    anyDownloadRunning: boolean;
-  }): JSX.Element {
-    return (
-      <div className="flex flex-col gap-4">
-        <Hero icon={<CheckIcon />} accent="done" />
-        {anyDownloadRunning ? (
-          <Banner tone="warning">
-            {t("wizard.finish.warning_downloads_running")}
-          </Banner>
-        ) : null}
-        <div>
-          <h3 className="text-lg font-semibold text-fg">
-            {t("wizard.finish.title")}
-          </h3>
-          {backend ? (
-            <div className="mt-3 rounded-md bg-elevated border border-outline p-3 text-sm">
-              <div className="text-fg-muted text-xs mb-1">
-                {t("wizard.finish.backend_label")}
-              </div>
-              <div className="text-status-done font-mono text-base">
-                {t("wizard.finish.backend_value", {
-                  backend: backend.backend,
-                  factor: backend.expected_speedup.toFixed(1),
-                })}
-              </div>
-              <div className="text-xs text-fg-faint mt-1">
-                {backend.description}
-              </div>
-            </div>
-          ) : null}
-          {hardware && backend ? (
-            <HardwareRecommendation
-              hardware={hardware}
-              active={backend.backend}
-            />
-          ) : null}
-        </div>
-        <p className="text-sm text-fg-muted">
-          {t("wizard.finish.intro")}{" "}
-          <kbd className="px-2 py-0.5 rounded-md bg-elevated border border-outline font-mono text-xs text-fg">
-            {t("wizard.finish.kbd.hotkey")}
-          </kbd>
-          {t("wizard.finish.choose_mode")}{" "}
-          <kbd className="px-2 py-0.5 rounded-md bg-elevated border border-outline font-mono text-xs text-fg">
-            {t("wizard.finish.kbd.enter")}
-          </kbd>
-          {t("wizard.finish.same_stops")}
+function StepDownload({
+  onDownload,
+  downloadStarted,
+  modelPath,
+}: {
+  onDownload: () => void;
+  downloadStarted: boolean;
+  modelPath: string | null;
+}): JSX.Element {
+  const t = useT();
+  return (
+    <div className="flex flex-col gap-4">
+      <Hero icon={<CloudDownloadIcon />} />
+      <div>
+        <h3 className="text-lg font-semibold text-fg">
+          {t("wizard.download.title")}
+        </h3>
+        <p className="text-sm text-fg-muted mt-1">
+          {t("wizard.download.intro_prefix")}{" "}
+          <code className="text-brand font-mono">
+            ggml-large-v3-turbo-q8_0.bin
+          </code>{" "}
+          {t("wizard.download.intro_middle")}{" "}
+          <code className="text-brand font-mono">app_config_dir/models/</code>
+          {t("wizard.download.intro_suffix")}
         </p>
-        <ul className="text-sm text-fg-muted list-disc pl-5 flex flex-col gap-1">
-          <li>
-            {t("wizard.finish.bullet_modes_prefix")}{" "}
-            <strong className="text-fg">
-              {t("wizard.finish.bullet_modes_link")}
-            </strong>
-            {t("wizard.finish.bullet_modes_suffix")}
-          </li>
-          <li>
-            {t("wizard.finish.bullet_custom_prefix")}{" "}
-            <code className="text-brand font-mono">app_config_dir/modes/</code>
-            {t("wizard.finish.bullet_custom_suffix")}
-          </li>
-          <li>
-            {t("wizard.finish.bullet_logs_prefix")}{" "}
-            <strong className="text-fg">
-              {t("wizard.finish.bullet_logs_link")}
-            </strong>
-            {t("wizard.finish.bullet_logs_suffix")}
-          </li>
-        </ul>
+        <p className="text-xs text-fg-faint mt-2">
+          {t("wizard.download.hint_background")}
+        </p>
       </div>
-    );
-  }
+      <Button
+        onClick={() => onDownload()}
+        disabled={downloadStarted}
+        className="self-start"
+      >
+        {modelPath
+          ? t("wizard.download.btn.done")
+          : downloadStarted
+            ? t("wizard.download.btn.running")
+            : t("wizard.download.btn.idle")}
+      </Button>
+      {modelPath ? (
+        <div className="text-xs text-status-done">
+          {t("wizard.download.configured", { path: modelPath })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function StepLlmDownload({
+  hardware,
+  currentSlot,
+  onPickSlot,
+  onDownload,
+  downloadStarted,
+  modelPath,
+}: {
+  hardware: HardwareReport | null;
+  currentSlot: string;
+  onPickSlot: (slot: string) => void;
+  onDownload: () => void;
+  downloadStarted: boolean;
+  modelPath: string | null;
+}): JSX.Element {
+  const t = useT();
+  const rec = hardware ? recommendLlmSlot(hardware.total_ram_gb) : null;
+  const mismatch = rec !== null && rec.slot !== currentSlot;
+
+  const ramLabel =
+    hardware && hardware.total_ram_gb > 0
+      ? t("wizard.llm.recommendation_ram", {
+          ram: hardware.total_ram_gb.toFixed(1),
+        })
+      : t("wizard.llm.recommendation_system");
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Hero icon={<CloudDownloadIcon />} />
+      <div>
+        <h3 className="text-lg font-semibold text-fg">
+          {t("wizard.llm.title")}
+        </h3>
+        <p className="text-sm text-fg-muted mt-1">
+          {t("wizard.llm.intro_prefix")}{" "}
+          <code className="text-brand font-mono">llama-cpp-2</code>{" "}
+          {t("wizard.llm.intro_middle")}{" "}
+          <code className="text-brand font-mono">
+            local_engine = &quot;embedded&quot;
+          </code>{" "}
+          {t("wizard.llm.intro_suffix")}
+        </p>
+        <p className="text-xs text-fg-faint mt-2">
+          {t("wizard.llm.hint_background")}
+        </p>
+      </div>
+
+      {rec && hardware ? (
+        <div className="rounded-md bg-brand/10 border border-brand/30 px-3 py-2.5 text-sm">
+          <div className="text-fg">
+            <span className="text-fg-faint">
+              {t("wizard.llm.recommendation_prefix")}{" "}
+            </span>
+            <span className="font-medium">{ramLabel}</span>:{" "}
+            <span className="font-medium text-brand">{rec.label}</span>
+          </div>
+          {mismatch ? (
+            <button
+              type="button"
+              onClick={() => onPickSlot(rec.slot)}
+              className="mt-1.5 text-xs underline text-brand hover:text-brand-hover"
+            >
+              {t("wizard.llm.adopt")}
+            </button>
+          ) : (
+            <div className="mt-1 text-xs text-status-recording">
+              {t("wizard.llm.active")}
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      <Button
+        onClick={() => onDownload()}
+        disabled={downloadStarted}
+        className="self-start"
+      >
+        {modelPath
+          ? t("wizard.llm.btn.done")
+          : downloadStarted
+            ? t("wizard.llm.btn.running")
+            : t("wizard.llm.btn.idle")}
+      </Button>
+
+      {modelPath ? (
+        <div className="text-xs text-status-done">
+          {t("wizard.llm.configured", { path: modelPath })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function StepFinish({
+  backend,
+  hardware,
+  anyDownloadRunning,
+}: {
+  backend: WhisperBackendInfo | null;
+  hardware: HardwareReport | null;
+  anyDownloadRunning: boolean;
+}): JSX.Element {
+  const t = useT();
+  return (
+    <div className="flex flex-col gap-4">
+      <Hero icon={<CheckIcon />} accent="done" />
+      {anyDownloadRunning ? (
+        <Banner tone="warning">
+          {t("wizard.finish.warning_downloads_running")}
+        </Banner>
+      ) : null}
+      <div>
+        <h3 className="text-lg font-semibold text-fg">
+          {t("wizard.finish.title")}
+        </h3>
+        {backend ? (
+          <div className="mt-3 rounded-md bg-elevated border border-outline p-3 text-sm">
+            <div className="text-fg-muted text-xs mb-1">
+              {t("wizard.finish.backend_label")}
+            </div>
+            <div className="text-status-done font-mono text-base">
+              {t("wizard.finish.backend_value", {
+                backend: backend.backend,
+                factor: backend.expected_speedup.toFixed(1),
+              })}
+            </div>
+            <div className="text-xs text-fg-faint mt-1">
+              {backend.description}
+            </div>
+          </div>
+        ) : null}
+        {hardware && backend ? (
+          <HardwareRecommendation hardware={hardware} active={backend.backend} />
+        ) : null}
+      </div>
+      <p className="text-sm text-fg-muted">
+        {t("wizard.finish.intro")}{" "}
+        <kbd className="px-2 py-0.5 rounded-md bg-elevated border border-outline font-mono text-xs text-fg">
+          {t("wizard.finish.kbd.hotkey")}
+        </kbd>
+        {t("wizard.finish.choose_mode")}{" "}
+        <kbd className="px-2 py-0.5 rounded-md bg-elevated border border-outline font-mono text-xs text-fg">
+          {t("wizard.finish.kbd.enter")}
+        </kbd>
+        {t("wizard.finish.same_stops")}
+      </p>
+      <ul className="text-sm text-fg-muted list-disc pl-5 flex flex-col gap-1">
+        <li>
+          {t("wizard.finish.bullet_modes_prefix")}{" "}
+          <strong className="text-fg">
+            {t("wizard.finish.bullet_modes_link")}
+          </strong>
+          {t("wizard.finish.bullet_modes_suffix")}
+        </li>
+        <li>
+          {t("wizard.finish.bullet_custom_prefix")}{" "}
+          <code className="text-brand font-mono">app_config_dir/modes/</code>
+          {t("wizard.finish.bullet_custom_suffix")}
+        </li>
+        <li>
+          {t("wizard.finish.bullet_logs_prefix")}{" "}
+          <strong className="text-fg">
+            {t("wizard.finish.bullet_logs_link")}
+          </strong>
+          {t("wizard.finish.bullet_logs_suffix")}
+        </li>
+      </ul>
+    </div>
+  );
 }
 
 function StepApiKey({
