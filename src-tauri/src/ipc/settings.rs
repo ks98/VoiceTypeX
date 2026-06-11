@@ -8,6 +8,7 @@ use crate::transcription::model_downloader::{
     download_llm, download_model, download_vad, LlmModelSlot, ModelSlot, VadModel,
 };
 use serde::Serialize;
+use std::path::Path;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 
@@ -77,11 +78,31 @@ pub async fn get_effective_menu_hotkey(
     Ok(state.effective_menu_hotkey.read().clone())
 }
 
+/// Boundary-validation for a user-supplied model path. The value is
+/// later mmap/parsed as a GGML/GGUF model by native code, so reject
+/// anything that is not an existing file with a model extension before
+/// it ever reaches the loader. The dialog picker already restricts to
+/// `bin`/`gguf`, but the IPC is callable with any string.
+fn validate_model_path(path: &Path) -> IpcResult<()> {
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(str::to_ascii_lowercase);
+    if !matches!(ext.as_deref(), Some("bin" | "gguf")) {
+        return Err("Invalid model path: must end in .bin or .gguf".into());
+    }
+    if !path.is_file() {
+        return Err(format!("Invalid model path: no file at {}", path.display()));
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn set_whisper_model_path(
     state: tauri::State<'_, Arc<AppContext>>,
     path: String,
 ) -> IpcResult<()> {
+    validate_model_path(Path::new(&path))?;
     state.settings.write().whisper_model_path = Some(path);
     persist_settings(&state)
 }
@@ -176,4 +197,61 @@ fn persist_settings(state: &tauri::State<'_, Arc<AppContext>>) -> IpcResult<()> 
     snapshot
         .save(&state.settings_path)
         .map_err(|e| format!("Settings-Persist: {e}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn temp_path(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "voicetypex-model-path-test-{}-{name}",
+            std::process::id()
+        ))
+    }
+
+    #[test]
+    fn accepts_existing_bin_and_gguf() {
+        for name in ["model.bin", "model.gguf", "MODEL.GGUF"] {
+            let p = temp_path(name);
+            std::fs::write(&p, b"x").expect("write temp file");
+            let result = validate_model_path(&p);
+            let _ = std::fs::remove_file(&p);
+            assert!(result.is_ok(), "{name} should be accepted: {result:?}");
+        }
+    }
+
+    #[test]
+    fn rejects_wrong_extension() {
+        let p = temp_path("model.txt");
+        std::fs::write(&p, b"x").expect("write temp file");
+        let result = validate_model_path(&p);
+        let _ = std::fs::remove_file(&p);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn rejects_missing_extension() {
+        let p = temp_path("model");
+        std::fs::write(&p, b"x").expect("write temp file");
+        let result = validate_model_path(&p);
+        let _ = std::fs::remove_file(&p);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn rejects_nonexistent_path() {
+        let p = temp_path("does-not-exist.bin");
+        assert!(validate_model_path(&p).is_err());
+    }
+
+    #[test]
+    fn rejects_directory_with_model_extension() {
+        let p = temp_path("dir.gguf");
+        std::fs::create_dir_all(&p).expect("create temp dir");
+        let result = validate_model_path(&p);
+        let _ = std::fs::remove_dir_all(&p);
+        assert!(result.is_err());
+    }
 }
