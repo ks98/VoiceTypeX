@@ -2,6 +2,7 @@
 //! Core building blocks: state machine, configuration, mode model, error taxonomy.
 
 pub mod app_context;
+pub mod bounded_lru;
 pub mod config;
 pub mod default_modes;
 pub mod edit;

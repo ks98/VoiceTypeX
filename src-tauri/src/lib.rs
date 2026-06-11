@@ -15,6 +15,8 @@ pub mod secrets;
 pub mod transcription;
 pub mod tray;
 
+use crate::core::app_context::EXTRA_ENGINE_CACHE_CAP;
+use crate::core::bounded_lru::BoundedLru;
 use crate::core::config::Settings;
 use crate::core::default_modes::bootstrap_defaults_if_empty;
 use crate::core::log_buffer::LogRingBuffer;
@@ -287,9 +289,9 @@ pub fn run() {
                 local_transcriber,
                 #[cfg(not(target_os = "windows"))]
                 local_llm_processor,
-                extra_transcribers: Arc::new(Mutex::new(std::collections::HashMap::new())),
+                extra_transcribers: Arc::new(Mutex::new(BoundedLru::new(EXTRA_ENGINE_CACHE_CAP))),
                 #[cfg(not(target_os = "windows"))]
-                extra_llm_processors: Arc::new(Mutex::new(std::collections::HashMap::new())),
+                extra_llm_processors: Arc::new(Mutex::new(BoundedLru::new(EXTRA_ENGINE_CACHE_CAP))),
                 active_streaming_handle: Arc::new(Mutex::new(None)),
                 injector,
                 selection_buffer: Arc::new(Mutex::new(None)),
