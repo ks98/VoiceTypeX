@@ -11,7 +11,9 @@ hotkey stops it.
 GNOME 46+)**, **Linux/X11**, and **Windows**. Auto-paste on Wayland via
 `xdg-desktop-portal.RemoteDesktop` + libei. Settings and the Wayland
 permission token persist. Release bundles for Linux
-(`.deb` / `.rpm` / AppImage) with a signed auto-updater are available.
+(`.deb` / `.rpm` / AppImage) and Windows (NSIS) are available; the
+in-app auto-updater is **in preparation** (not yet active — see
+[Issue #2](https://github.com/ks98/VoiceTypeX/issues/2)).
 The **Windows release** includes speech recognition (whisper.cpp + Vulkan)
 and cloud LLM post-processing; the **embedded local LLM (llama-cpp-2) is
 Linux/macOS-only** — on Windows its ggml symbols collided with those of
@@ -234,14 +236,18 @@ WebView2 cache, …) are in
 
 ## Beta Status & Updates
 
-- **Auto-updater (Windows + AppImage).** On request, VoiceTypeX checks
-  for new versions (*Settings → Diagnostics → Updates*) and installs
-  them with one click. The update artifacts are signed with a
-  minisign/Ed25519 key; the updater refuses unsigned or tampered
-  packages. Self-update applies to the **Windows NSIS installer** and
-  the **Linux AppImage**; you update **`.deb`/`.rpm`** via your
-  **package manager** or by re-downloading. The download only starts on
-  click (the bundle is large).
+- **Auto-updater — in preparation (not yet active).** The in-app update
+  check (*Settings → Diagnostics → Updates*) and minisign/Ed25519 signing
+  of the artifacts are wired up, but the release pipeline does not yet
+  publish the `latest.json` manifest the check compares against
+  (`includeUpdaterJson: false`), so it currently offers no updates. This
+  is gated on [Issue #2](https://github.com/ks98/VoiceTypeX/issues/2):
+  the manifest is armed once the AppImage Validate workflow confirms a
+  launching AppImage. Until then, **update manually** — re-download from
+  the official GitHub releases, or for **`.deb`/`.rpm`** use your package
+  manager. When the updater goes live, self-update will target the
+  **Windows NSIS installer** and the **Linux AppImage** (`.deb`/`.rpm`
+  stay on the package-manager path).
 - **The Windows installer is not (yet) Authenticode-signed.** On first
   launch, SmartScreen shows "Unknown publisher" → *More info → Run
   anyway*. This is independent of the minisign updater signature.
