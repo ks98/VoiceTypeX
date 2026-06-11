@@ -50,6 +50,9 @@ interface SettingsState {
   update: (partial: Partial<Settings>) => Promise<void>;
 }
 
+// Tail of the update() serialization queue (see update() below).
+let updateQueue: Promise<void> = Promise.resolve();
+
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   settings: null,
   audioDevices: [],
@@ -72,16 +75,24 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       set({ error: `Audio devices: ${e}` });
     }
   },
-  update: async (partial) => {
-    const current = get().settings;
-    if (!current) return;
-    const next = { ...current, ...partial };
-    try {
-      await ipcSetSettings(next);
-      set({ settings: next });
-    } catch (e) {
-      set({ error: String(e) });
-    }
+  update: (partial) => {
+    // Serialize updates: each call reads get().settings only after the
+    // previous call's write has landed. Without this, two overlapping
+    // calls read the same base and the later write drops the earlier
+    // field (the IPC persist is a yield point).
+    const run = async () => {
+      const current = get().settings;
+      if (!current) return;
+      const next = { ...current, ...partial };
+      try {
+        await ipcSetSettings(next);
+        set({ settings: next });
+      } catch (e) {
+        set({ error: String(e) });
+      }
+    };
+    updateQueue = updateQueue.then(run, run);
+    return updateQueue;
   },
 }));
 
