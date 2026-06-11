@@ -76,6 +76,14 @@ pub trait TextInjector: Send + Sync {
     /// focus** — i.e. before the menu/overlay windows steal it (see
     /// `pipeline::handle_menu_hotkey`).
     async fn read_selection(&self) -> Result<Option<String>>;
+
+    /// Reset any cached, session-scoped injection state so the next
+    /// inject re-initializes from scratch. Used by `reset_wayland_token`
+    /// to recover from a terminal `SessionState::Failed` (e.g. a rejected
+    /// portal dialog) without an app restart.
+    ///
+    /// Default no-op: only the Wayland/libei injector holds such state.
+    async fn reset_session(&self) {}
 }
 
 /// Returns the default injector. Platform routing:
