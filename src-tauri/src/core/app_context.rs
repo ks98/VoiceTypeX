@@ -41,7 +41,13 @@ pub struct AppContext {
     /// (phase 2) calls its non-trait `transcribe_streaming_pass`; the
     /// final pass and the `run_test_transcription` diagnostic call
     /// `transcribe_samples` (f32 in, no WAV roundtrip — issue #46).
-    pub local_transcriber: Arc<LocalTranscriber>,
+    ///
+    /// Wrapped in an `RwLock` so the pipeline can swap in a fresh
+    /// transcriber when the settings Whisper slot/path changes, making the
+    /// change take effect on the next dictation without an app restart
+    /// (issue #30). `pipeline::app_default_transcriber` performs the
+    /// path-comparison and the swap.
+    pub local_transcriber: Arc<RwLock<Arc<LocalTranscriber>>>,
     /// **Phase 3b** — embedded LLM processor. Lazy model load on the
     /// first `process()` call; afterwards held for the app's lifetime.
     /// Only used when a mode sets `local_engine = "embedded"`;

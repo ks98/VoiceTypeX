@@ -89,6 +89,14 @@ impl LocalTranscriber {
         }
     }
 
+    /// The model file this transcriber was constructed for. The pipeline
+    /// resolver compares it against the current settings path to detect a
+    /// slot/path change and rebuild the app-default transcriber without an
+    /// app restart (issue #30).
+    pub fn model_path(&self) -> &Path {
+        &self.model_path
+    }
+
     /// Request cancellation of an in-flight streaming pass. The next
     /// whisper.cpp graph-compute callback returns `true` and the decode
     /// returns early. Idempotent; the next streaming pass arms itself

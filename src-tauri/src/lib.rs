@@ -33,7 +33,6 @@ use crate::processing::embedded::LlamaEmbeddedProcessor;
 use crate::transcription::local::LocalTranscriber;
 #[cfg(not(target_os = "windows"))]
 use crate::transcription::model_downloader::LlmModelSlot;
-use crate::transcription::model_downloader::ModelSlot;
 use parking_lot::{Mutex, RwLock};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -216,15 +215,11 @@ pub fn run() {
 
             // Model path: an explicitly set custom path takes
             // precedence (`settings.whisper_model_path`). Otherwise
-            // the slot-based default name inside `model_dir`.
-            let model_path: PathBuf = initial_settings
-                .whisper_model_path
-                .as_ref()
-                .map(PathBuf::from)
-                .unwrap_or_else(|| {
-                    let slot = ModelSlot::from_setting(&initial_settings.whisper_default_slot);
-                    model_dir.join(slot.filename())
-                });
+            // the slot-based default name inside `model_dir`. Shared with
+            // the runtime rebuild path so startup and a later slot change
+            // agree on the resolution (issue #30).
+            let model_path: PathBuf =
+                crate::pipeline::resolve_default_model_path(&initial_settings, &model_dir);
 
             // The VAD path points to the standard Silero file.
             // `LocalTranscriber` itself checks whether it exists — if
@@ -236,9 +231,13 @@ pub fn run() {
             // worker calls `transcribe_streaming_pass`, the final pass
             // and the diagnostic call `transcribe_samples` (f32, no WAV
             // roundtrip — issue #46). Cloud modes build their own
-            // transcriber per pass via `make_cloud_transcriber`.
-            let local_transcriber =
-                Arc::new(LocalTranscriber::new(model_path.clone(), vad_model_path));
+            // transcriber per pass via `make_cloud_transcriber`. Behind an
+            // `RwLock` so a later slot/path change can swap it in without a
+            // restart (issue #30).
+            let local_transcriber = Arc::new(RwLock::new(Arc::new(LocalTranscriber::new(
+                model_path,
+                vad_model_path,
+            ))));
 
             // Phase 3b: embedded LLM processor. Path: user override
             // takes precedence, otherwise the slot-based default. The
