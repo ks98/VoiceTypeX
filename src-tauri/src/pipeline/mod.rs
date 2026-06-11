@@ -802,11 +802,71 @@ async fn run_local_processing_ollama(
     processor.process(transcript, system_prompt, opts).await
 }
 
+/// The Whisper model path the app-default transcriber should currently
+/// use, derived from the settings: an explicit `whisper_model_path`
+/// override wins, otherwise the slot-based default file in `model_dir`.
+///
+/// Single source of truth shared by startup (`lib.rs`) and the runtime
+/// rebuild in `app_default_transcriber`, so both agree on what "the
+/// current default model" means (issue #30).
+pub fn resolve_default_model_path(
+    settings: &crate::core::config::Settings,
+    model_dir: &std::path::Path,
+) -> std::path::PathBuf {
+    settings
+        .whisper_model_path
+        .as_ref()
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            let slot = ModelSlot::from_setting(&settings.whisper_default_slot);
+            model_dir.join(slot.filename())
+        })
+}
+
+/// Returns the app-default `LocalTranscriber`, rebuilding it first if the
+/// settings Whisper slot/path no longer matches the model the stored
+/// transcriber was built for.
+///
+/// This is what makes a slot change (or `download_default_model`, which
+/// writes a new `whisper_model_path`) take effect on the next dictation
+/// without an app restart (issue #30). The startup instance in
+/// `ctx.local_transcriber` is no longer authoritative on its own; the
+/// settings path is, and a mismatch swaps in a fresh transcriber (whose
+/// Whisper context loads lazily on the first `transcribe` call).
+pub(crate) fn app_default_transcriber(ctx: &Arc<AppContext>) -> Arc<LocalTranscriber> {
+    let wanted_path = {
+        let settings = ctx.settings.read();
+        resolve_default_model_path(&settings, &ctx.model_dir)
+    };
+
+    {
+        let current = ctx.local_transcriber.read();
+        if current.model_path() == wanted_path {
+            return current.clone();
+        }
+    }
+
+    // Path changed since the stored transcriber was built: rebuild and
+    // swap so all subsequent passes use the new model. The double-check
+    // under the write lock guards against a racing concurrent rebuild.
+    let vad_model_path = Some(ctx.model_dir.join("ggml-silero-v6.2.0.bin"));
+    let mut current = ctx.local_transcriber.write();
+    if current.model_path() != wanted_path {
+        tracing::info!(
+            model_path = %wanted_path.display(),
+            "App-default LocalTranscriber rebuilt for changed Whisper slot/path"
+        );
+        *current = Arc::new(LocalTranscriber::new(wanted_path, vad_model_path));
+    }
+    current.clone()
+}
+
 /// Resolver for the `LocalTranscriber` that a mode should use.
 ///
-/// - No `mode.whisper_model_slot` set → global `ctx.local_transcriber`
-///   (Whisper model from the settings).
-/// - Slot identical to the global default slot → also the global
+/// - No `mode.whisper_model_slot` set → app-default transcriber via
+///   `app_default_transcriber` (Whisper model from the settings; rebuilt
+///   on a slot/path change without a restart, issue #30).
+/// - Slot identical to the global default slot → also the app-default
 ///   transcriber, so we don't hold a second model in RAM in parallel.
 /// - Otherwise: cache lookup in `ctx.extra_transcribers`; on a cache
 ///   miss a new `LocalTranscriber` is constructed for the slot (the
@@ -814,11 +874,11 @@ async fn run_local_processing_ollama(
 ///   `transcribe` call — the resolver only allocates metadata).
 fn resolve_local_transcriber(ctx: &Arc<AppContext>, mode: &Mode) -> Arc<LocalTranscriber> {
     let Some(slot_slug) = mode.whisper_model_slot.as_ref() else {
-        return ctx.local_transcriber.clone();
+        return app_default_transcriber(ctx);
     };
     let default_slot = ctx.settings.read().whisper_default_slot.clone();
     if slot_slug == &default_slot {
-        return ctx.local_transcriber.clone();
+        return app_default_transcriber(ctx);
     }
 
     {
@@ -1399,5 +1459,67 @@ mod tests {
         // And a fresh recording can start again afterwards.
         bus.transition(AppState::Recording).unwrap();
         assert_eq!(bus.current(), AppState::Recording);
+    }
+
+    // --- Issue #30: app-default transcriber staleness trigger ---
+    //
+    // `app_default_transcriber` rebuilds the global transcriber when the
+    // settings-resolved model path no longer matches the stored one.
+    // `resolve_default_model_path` is the function that decides that path,
+    // so it is the load-bearing comparison: if a slot change here did not
+    // change the path, no rebuild would ever fire (the original bug).
+
+    use crate::core::config::Settings;
+
+    #[test]
+    fn slot_change_changes_resolved_default_model_path() {
+        let model_dir = std::path::Path::new("/models");
+        let before = Settings {
+            whisper_model_path: None,
+            whisper_default_slot: "large-v3-turbo-q5_0".into(),
+            ..Settings::default()
+        };
+        let after = Settings {
+            whisper_default_slot: "small-q5_1".into(),
+            ..before.clone()
+        };
+
+        let path_before = resolve_default_model_path(&before, model_dir);
+        let path_after = resolve_default_model_path(&after, model_dir);
+
+        assert_ne!(
+            path_before, path_after,
+            "a whisper_default_slot change must change the resolved path so the rebuild fires"
+        );
+        assert_eq!(
+            path_after,
+            model_dir.join(ModelSlot::from_setting("small-q5_1").filename())
+        );
+    }
+
+    #[test]
+    fn explicit_model_path_override_wins_and_is_stable_across_slots() {
+        let model_dir = std::path::Path::new("/models");
+        let s = Settings {
+            whisper_model_path: Some("/custom/my-model.bin".into()),
+            whisper_default_slot: "large-v3-turbo-q5_0".into(),
+            ..Settings::default()
+        };
+        assert_eq!(
+            resolve_default_model_path(&s, model_dir),
+            std::path::PathBuf::from("/custom/my-model.bin"),
+            "an explicit whisper_model_path must win over the slot default"
+        );
+
+        // Same override, different slot → still the override (no spurious
+        // rebuild just because the slot string moved).
+        let s2 = Settings {
+            whisper_default_slot: "small-q5_1".into(),
+            ..s.clone()
+        };
+        assert_eq!(
+            resolve_default_model_path(&s, model_dir),
+            resolve_default_model_path(&s2, model_dir)
+        );
     }
 }

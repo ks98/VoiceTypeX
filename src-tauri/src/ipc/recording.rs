@@ -142,8 +142,10 @@ pub async fn run_test_transcription(
     // auto-detect. Previously hardcoded "de", which broke English
     // testers. Anyone who wants to test a specific language uses a
     // mode with the `language` field set.
-    let result = state
-        .local_transcriber
+    // Route through the same resolver the dictation path uses so the
+    // diagnostic reflects a slot/path change without an app restart
+    // (issue #30).
+    let result = crate::pipeline::app_default_transcriber(state.inner())
         .transcribe_samples(
             &samples,
             TranscribeOpts {
