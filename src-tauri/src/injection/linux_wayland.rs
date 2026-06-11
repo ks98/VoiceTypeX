@@ -249,6 +249,16 @@ impl TextInjector for WaylandLibeiInjector {
         // arboard reads PRIMARY unfocused on KWin).
         Ok(crate::injection::read_primary_selection_linux().await)
     }
+
+    async fn reset_session(&self) {
+        // Drop back to Uninitialized so the next inject re-runs the
+        // portal setup. Recovers from a terminal `Failed` state (e.g. a
+        // rejected dialog) without an app restart. An `Active` worker, if
+        // any, is detached here: its `cmd_tx` is dropped, the worker
+        // thread sees the closed channel and exits on its own.
+        *self.session.lock().await = SessionState::Uninitialized;
+        tracing::info!("libei session reset to Uninitialized");
+    }
 }
 
 impl WaylandLibeiInjector {

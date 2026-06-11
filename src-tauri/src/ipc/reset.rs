@@ -48,18 +48,28 @@ pub async fn reset_api_keys() -> IpcResult<()> {
     }
 }
 
-/// Deletes the Wayland permission token file. Effect: the next
-/// auto-paste inject again shows the portal permission dialog. On
-/// X11/Windows this is a no-op (the file never exists).
+/// Deletes the Wayland permission token file **and** resets the
+/// in-memory injection session, so the next auto-paste inject shows the
+/// portal permission dialog again and re-initializes libei from scratch.
+/// Without the in-memory reset a terminal `SessionState::Failed` (e.g. a
+/// rejected dialog) would keep falling back to clipboard-only until an
+/// app restart. On X11/Windows both steps are no-ops (the file never
+/// exists; `reset_session` defaults to nothing).
 #[tauri::command]
 pub async fn reset_wayland_token(state: tauri::State<'_, Arc<AppContext>>) -> IpcResult<()> {
     let path = config_dir(&state)?.join("wayland_session.json");
-    if !path.exists() {
-        tracing::info!(path = %path.display(), "Wayland token does not exist — no-op");
-        return Ok(());
+    if path.exists() {
+        std::fs::remove_file(&path).map_err(|e| format!("remove {path:?}: {e}"))?;
+        tracing::info!(path = %path.display(), "Wayland token deleted");
+    } else {
+        tracing::info!(path = %path.display(), "Wayland token does not exist");
     }
-    std::fs::remove_file(&path).map_err(|e| format!("remove {path:?}: {e}"))?;
-    tracing::info!(path = %path.display(), "Wayland token deleted");
+
+    // Reset the in-memory session even when no token file existed: a
+    // rejected dialog never persists a token, yet still drives the
+    // injector into a terminal `Failed` state that only this reset can
+    // recover from.
+    state.injector.reset_session().await;
     Ok(())
 }
 
