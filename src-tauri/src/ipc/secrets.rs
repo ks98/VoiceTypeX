@@ -5,6 +5,7 @@
 //! booleans. Write operations send the key from the UI directly into
 //! the OS keychain.
 
+use crate::core::error::ProviderId;
 use crate::processing::cloud::anthropic::AnthropicProcessor;
 use crate::processing::cloud::openai_compatible::OpenAICompatibleClient;
 use crate::secrets::SecretStore;
@@ -86,17 +87,26 @@ pub async fn test_provider_connection(provider: String) -> IpcResult<()> {
         .ok_or_else(|| format!("No API key set for '{provider}'"))?;
 
     match provider.as_str() {
-        "xai" => {
-            OpenAICompatibleClient::new("https://api.x.ai/v1", "grok-4-fast-non-reasoning", key)
-                .test_connection()
-                .await
-                .map_err(|e| e.to_string())
-        }
-        "openai" => OpenAICompatibleClient::new("https://api.openai.com/v1", "gpt-4o-mini", key)
-            .test_connection()
-            .await
-            .map_err(|e| e.to_string()),
+        "xai" => OpenAICompatibleClient::new(
+            ProviderId::Xai,
+            "https://api.x.ai/v1",
+            "grok-4-fast-non-reasoning",
+            key,
+        )
+        .test_connection()
+        .await
+        .map_err(|e| e.to_string()),
+        "openai" => OpenAICompatibleClient::new(
+            ProviderId::OpenAi,
+            "https://api.openai.com/v1",
+            "gpt-4o-mini",
+            key,
+        )
+        .test_connection()
+        .await
+        .map_err(|e| e.to_string()),
         "groq" => OpenAICompatibleClient::new(
+            ProviderId::Groq,
             "https://api.groq.com/openai/v1",
             "whisper-large-v3-turbo",
             key,

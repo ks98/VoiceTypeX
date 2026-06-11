@@ -6,7 +6,7 @@
 //! than grok-4 — see https://x.ai/news/grok-4-fast). Modes can
 //! override this via `cloud_llm_model = "..."` in their TOML.
 
-use crate::core::error::Result;
+use crate::core::error::{ProviderId, Result};
 use crate::processing::cloud::openai_compatible::OpenAICompatibleClient;
 use crate::processing::{ProcessOpts, Processor};
 use async_trait::async_trait;
@@ -20,7 +20,12 @@ pub struct XaiProcessor {
 impl XaiProcessor {
     pub fn new(api_key: String) -> Self {
         Self {
-            inner: OpenAICompatibleClient::new("https://api.x.ai/v1", DEFAULT_MODEL, api_key),
+            inner: OpenAICompatibleClient::new(
+                ProviderId::Xai,
+                "https://api.x.ai/v1",
+                DEFAULT_MODEL,
+                api_key,
+            ),
         }
     }
 }

@@ -9,7 +9,7 @@
 //!   Body: { model, messages: [system, user], temperature?, max_tokens? }
 //!   Response: { choices: [{ message: { content } }] }
 
-use crate::core::error::{Result, VoiceTypeError};
+use crate::core::error::{ProviderId, Result, VoiceTypeError};
 use crate::core::retry::with_retry;
 use crate::processing::ProcessOpts;
 use serde::{Deserialize, Serialize};
@@ -19,11 +19,13 @@ pub struct OpenAICompatibleClient {
     pub base_url: String,
     pub default_model: String,
     pub api_key: String,
+    provider: ProviderId,
     client: reqwest::Client,
 }
 
 impl OpenAICompatibleClient {
     pub fn new(
+        provider: ProviderId,
         base_url: impl Into<String>,
         default_model: impl Into<String>,
         api_key: String,
@@ -32,6 +34,7 @@ impl OpenAICompatibleClient {
             base_url: base_url.into(),
             default_model: default_model.into(),
             api_key,
+            provider,
             // A 60 s timeout covers almost all chat-completion calls.
             client: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(60))
@@ -76,12 +79,18 @@ impl OpenAICompatibleClient {
                 .json(&req)
                 .send()
                 .await
-                .map_err(|e| VoiceTypeError::processing(format!("HTTP {url}: {e}")))?;
+                .map_err(|e| {
+                    VoiceTypeError::processing_network(self.provider, format!("HTTP {url}: {e}"))
+                })?;
 
             let status = response.status();
             if !status.is_success() {
                 tracing::warn!(provider = "openai_compatible", %status, "process call failed");
-                return Err(VoiceTypeError::processing(format!("HTTP {status}")));
+                return Err(VoiceTypeError::processing_http(
+                    status.as_u16(),
+                    self.provider,
+                    format!("HTTP {status}"),
+                ));
             }
 
             let parsed: ChatCompletionResponse = response
@@ -109,11 +118,17 @@ impl OpenAICompatibleClient {
             .bearer_auth(&self.api_key)
             .send()
             .await
-            .map_err(|e| VoiceTypeError::processing(format!("HTTP {url}: {e}")))?;
+            .map_err(|e| {
+                VoiceTypeError::processing_network(self.provider, format!("HTTP {url}: {e}"))
+            })?;
         let status = response.status();
         if !status.is_success() {
             tracing::warn!(provider = "openai_compatible", %status, "test_connection failed");
-            return Err(VoiceTypeError::processing(format!("HTTP {status}")));
+            return Err(VoiceTypeError::processing_http(
+                status.as_u16(),
+                self.provider,
+                format!("HTTP {status}"),
+            ));
         }
         Ok(())
     }

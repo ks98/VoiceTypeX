@@ -25,7 +25,10 @@ use std::sync::Arc;
 /// if the key is not set.
 pub fn make_cloud_transcriber(provider: &str) -> Result<Arc<dyn Transcriber>> {
     let key = SecretStore::get(provider)?.ok_or_else(|| {
-        VoiceTypeError::transcription(format!(
+        // A missing key is an auth problem, not a transcription transport
+        // failure — route it through `Secrets` so `kind()` reports
+        // `Authentication` without inspecting the message.
+        VoiceTypeError::Secrets(format!(
             "No API key set for provider '{provider}' — add it under Settings"
         ))
     })?;

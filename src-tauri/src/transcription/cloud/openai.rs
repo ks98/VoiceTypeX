@@ -2,7 +2,7 @@
 //! OpenAI Whisper API — `POST https://api.openai.com/v1/audio/transcriptions`.
 //! Whisper API standard, multipart/form-data. Default model `whisper-1`.
 
-use crate::core::error::Result;
+use crate::core::error::{ProviderId, Result};
 use crate::transcription::cloud::whisper_compatible::WhisperCompatibleClient;
 use crate::transcription::{TranscribeOpts, Transcriber};
 use async_trait::async_trait;
@@ -14,7 +14,12 @@ pub struct OpenAITranscriber {
 impl OpenAITranscriber {
     pub fn new(api_key: String) -> Self {
         Self {
-            inner: WhisperCompatibleClient::new("https://api.openai.com/v1", "whisper-1", api_key),
+            inner: WhisperCompatibleClient::new(
+                ProviderId::OpenAi,
+                "https://api.openai.com/v1",
+                "whisper-1",
+                api_key,
+            ),
         }
     }
 }

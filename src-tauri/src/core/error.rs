@@ -16,13 +16,15 @@ use thiserror::Error;
 
 /// Structured provider-failure discriminant for the cloud-backed stages.
 ///
-/// `#40` will populate `status` and `provider` at the client call sites
-/// (e.g. from the real HTTP response) and then `kind()`/`is_retryable()`
-/// will read these exclusively, dropping the substring fallback. Until
-/// then every construction site passes `ProviderFault::unknown()`, so the
-/// fields stay `None` and the legacy substring classification still runs.
+/// The client call sites populate this at the point the failure is known
+/// (HTTP status from the response, or the connect-before-response case),
+/// and `kind()`/`is_retryable()` read it exclusively — there is no
+/// substring fallback on the message. The `message` field is for display
+/// only.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ProviderFault {
+    /// What kind of failure this is, independent of the wording.
+    pub class: FaultClass,
     /// HTTP status from the provider response, when the failure came from
     /// an HTTP exchange. `None` for non-HTTP failures (parse, IO, …).
     pub status: Option<u16>,
@@ -31,15 +33,50 @@ pub struct ProviderFault {
 }
 
 impl ProviderFault {
-    /// A fault with no structured information yet — classification falls
-    /// back to substring matching on the message. Removed in `#40`.
-    pub fn unknown() -> Self {
-        Self::default()
+    /// Failure from a completed HTTP exchange with a non-success status.
+    pub fn http(status: u16, provider: ProviderId) -> Self {
+        Self {
+            class: FaultClass::Http,
+            status: Some(status),
+            provider: Some(provider),
+        }
+    }
+
+    /// The request never produced an HTTP response (timeout, DNS,
+    /// connection refused). Transient — retryable.
+    pub fn network(provider: ProviderId) -> Self {
+        Self {
+            class: FaultClass::Network,
+            status: None,
+            provider: Some(provider),
+        }
+    }
+
+    /// Opaque/internal failure with no transport signal (response parse,
+    /// empty body, unknown-provider factory miss). Not retryable.
+    pub fn other() -> Self {
+        Self {
+            class: FaultClass::Other,
+            status: None,
+            provider: None,
+        }
     }
 }
 
+/// What a [`ProviderFault`] represents, decoupled from the display
+/// message. Drives `kind()`/`is_retryable()` without any string matching.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum FaultClass {
+    /// HTTP exchange completed with a non-success status (`status` set).
+    Http,
+    /// No HTTP response was produced (timeout/DNS/connection refused).
+    Network,
+    /// Anything else (parse error, empty response, factory miss).
+    #[default]
+    Other,
+}
+
 /// Cloud provider a transcription/processing failure originated from.
-/// Populated by `#40`; today every construction site leaves it `None`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProviderId {
     Xai,
@@ -118,35 +155,75 @@ pub enum ErrorKind {
 }
 
 impl VoiceTypeError {
-    /// Construct a `Transcription` error with no structured fault yet.
-    /// `#40` adds variants/overloads that pass a populated `ProviderFault`.
+    /// Construct a `Transcription` error for a non-transport failure
+    /// (parse error, missing model, factory miss). Classifies as `Other`.
     pub fn transcription(message: impl Into<String>) -> Self {
         Self::Transcription {
             message: message.into(),
-            fault: ProviderFault::unknown(),
+            fault: ProviderFault::other(),
         }
     }
 
-    /// Construct a `Processing` error with no structured fault yet.
-    /// `#40` adds variants/overloads that pass a populated `ProviderFault`.
+    /// Construct a `Transcription` error from a completed HTTP exchange
+    /// with a non-success status.
+    pub fn transcription_http(
+        status: u16,
+        provider: ProviderId,
+        message: impl Into<String>,
+    ) -> Self {
+        Self::Transcription {
+            message: message.into(),
+            fault: ProviderFault::http(status, provider),
+        }
+    }
+
+    /// Construct a `Transcription` error for a request that never
+    /// produced an HTTP response (timeout/DNS/connection refused).
+    pub fn transcription_network(provider: ProviderId, message: impl Into<String>) -> Self {
+        Self::Transcription {
+            message: message.into(),
+            fault: ProviderFault::network(provider),
+        }
+    }
+
+    /// Construct a `Processing` error for a non-transport failure
+    /// (parse error, empty response, factory miss). Classifies as `Other`.
     pub fn processing(message: impl Into<String>) -> Self {
         Self::Processing {
             message: message.into(),
-            fault: ProviderFault::unknown(),
+            fault: ProviderFault::other(),
+        }
+    }
+
+    /// Construct a `Processing` error from a completed HTTP exchange
+    /// with a non-success status.
+    pub fn processing_http(status: u16, provider: ProviderId, message: impl Into<String>) -> Self {
+        Self::Processing {
+            message: message.into(),
+            fault: ProviderFault::http(status, provider),
+        }
+    }
+
+    /// Construct a `Processing` error for a request that never produced
+    /// an HTTP response (timeout/DNS/connection refused).
+    pub fn processing_network(provider: ProviderId, message: impl Into<String>) -> Self {
+        Self::Processing {
+            message: message.into(),
+            fault: ProviderFault::network(provider),
         }
     }
 
     /// Classify the error into a machine-readable category.
     ///
-    /// For the cloud stages this reads the structured `ProviderFault`
-    /// first and only falls back to substring matching on the message
-    /// when no status is set. `#40` populates `fault` at every client and
-    /// then removes the substring fallback entirely.
+    /// The cloud stages read the structured `ProviderFault` exclusively —
+    /// no substring matching on the message. Audio/Injection/Hotkey keep
+    /// their string heuristics because those sources are not yet
+    /// structured (tracked separately).
     pub fn kind(&self) -> ErrorKind {
         match self {
             Self::Audio(msg) => classify_audio(msg),
-            Self::Transcription { message, fault } => classify_provider(message, fault),
-            Self::Processing { message, fault } => classify_provider(message, fault),
+            Self::Transcription { fault, .. } => classify_provider(fault),
+            Self::Processing { fault, .. } => classify_provider(fault),
             Self::Injection(msg) => classify_injection(msg),
             Self::Hotkey(msg) => {
                 if msg.to_ascii_lowercase().contains("wayland") {
@@ -164,27 +241,22 @@ impl VoiceTypeError {
         }
     }
 
-    /// Worth retrying? Transient errors (network, 5xx) yes,
+    /// Worth retrying? Transient errors (network, 5xx, 429) yes,
     /// everything else no.
     pub fn is_retryable(&self) -> bool {
         match self.kind() {
             ErrorKind::Network => true,
             ErrorKind::HttpStatus => {
-                // Prefer the structured status; 5xx and 429 are retryable.
-                // `#40` removes the substring fallback once every client
-                // populates `fault.status`.
-                if let Some(status) = self.fault_status() {
-                    return status >= 500 || status == 429;
-                }
-                let msg = self.to_string();
-                msg.contains("HTTP 5") || msg.contains("HTTP 429")
+                // Only the structured status decides; 5xx and 429 are
+                // transient. A `HttpStatus` error without a status cannot
+                // occur — it always comes from `ProviderFault::http`.
+                matches!(self.fault_status(), Some(s) if s >= 500 || s == 429)
             }
             _ => false,
         }
     }
 
     /// The structured HTTP status carried by a cloud-stage error, if any.
-    /// `None` until `#40` populates `ProviderFault` at the call sites.
     fn fault_status(&self) -> Option<u16> {
         match self {
             Self::Transcription { fault, .. } | Self::Processing { fault, .. } => fault.status,
@@ -240,46 +312,16 @@ fn classify_audio(msg: &str) -> ErrorKind {
     }
 }
 
-/// Classify a cloud-stage (Transcription/Processing) failure.
-///
-/// Reads the structured `ProviderFault` first; only when it carries no
-/// status do we fall back to substring matching on the message. `#40`
-/// populates `fault` at every client and drops the substring branch.
-fn classify_provider(msg: &str, fault: &ProviderFault) -> ErrorKind {
-    if let Some(status) = fault.status {
-        return if status == 401 || status == 403 {
-            ErrorKind::Authentication
-        } else {
-            ErrorKind::HttpStatus
-        };
-    }
-    classify_network_or_other(msg)
-}
-
-fn classify_network_or_other(msg: &str) -> ErrorKind {
-    let m = msg.to_ascii_lowercase();
-    if m.contains("http 4") || m.contains("http 5") {
-        // From the http {status}-format strings in our clients.
-        if m.contains("http 401") || m.contains("http 403") {
-            ErrorKind::Authentication
-        } else {
-            ErrorKind::HttpStatus
-        }
-    } else if m.contains("http") || m.contains("timeout") || m.contains("connection") {
-        ErrorKind::Network
-    } else if m.contains("api key")
-        || m.contains("api-key")
-        || m.contains("nicht gesetzt")
-        || m.contains("not set")
-    {
-        ErrorKind::Authentication
-    } else if m.contains("not implemented")
-        || m.contains("nicht implementiert")
-        || m.contains("phase ")
-    {
-        ErrorKind::Unsupported
-    } else {
-        ErrorKind::Other
+/// Classify a cloud-stage (Transcription/Processing) failure purely from
+/// its structured `ProviderFault` — no substring matching on the message.
+fn classify_provider(fault: &ProviderFault) -> ErrorKind {
+    match fault.class {
+        FaultClass::Http => match fault.status {
+            Some(401) | Some(403) => ErrorKind::Authentication,
+            _ => ErrorKind::HttpStatus,
+        },
+        FaultClass::Network => ErrorKind::Network,
+        FaultClass::Other => ErrorKind::Other,
     }
 }
 
@@ -321,57 +363,81 @@ mod tests {
     }
 
     #[test]
-    fn http_500_is_retryable() {
-        let e = VoiceTypeError::processing("HTTP 502: Bad Gateway");
+    fn http_5xx_is_retryable() {
+        let e = VoiceTypeError::processing_http(502, ProviderId::Anthropic, "Anthropic HTTP 502");
         assert_eq!(e.kind(), ErrorKind::HttpStatus);
         assert!(e.is_retryable());
     }
 
     #[test]
     fn http_401_is_authentication_not_retryable() {
-        let e = VoiceTypeError::processing("HTTP 401: Unauthorized");
+        let e = VoiceTypeError::processing_http(401, ProviderId::OpenAi, "HTTP 401");
+        assert_eq!(e.kind(), ErrorKind::Authentication);
+        assert!(!e.is_retryable());
+    }
+
+    #[test]
+    fn http_403_is_authentication_not_retryable() {
+        let e = VoiceTypeError::transcription_http(403, ProviderId::Xai, "xAI STT HTTP 403");
         assert_eq!(e.kind(), ErrorKind::Authentication);
         assert!(!e.is_retryable());
     }
 
     #[test]
     fn http_429_rate_limit_is_retryable() {
-        let e = VoiceTypeError::transcription("HTTP 429: Too Many Requests");
+        let e = VoiceTypeError::transcription_http(429, ProviderId::Groq, "Whisper-API HTTP 429");
+        assert_eq!(e.kind(), ErrorKind::HttpStatus);
         assert!(e.is_retryable());
     }
 
     #[test]
-    fn missing_api_key_classifies_as_authentication_en() {
-        let e = VoiceTypeError::transcription("No API key set for 'xai'");
-        assert_eq!(e.kind(), ErrorKind::Authentication);
+    fn http_400_is_http_status_not_retryable() {
+        let e = VoiceTypeError::processing_http(400, ProviderId::OpenAi, "HTTP 400");
+        assert_eq!(e.kind(), ErrorKind::HttpStatus);
+        assert!(!e.is_retryable());
     }
 
     #[test]
-    fn missing_api_key_classifies_as_authentication_de_legacy() {
-        let e = VoiceTypeError::transcription("API-Key fuer Provider 'xai' nicht gesetzt");
+    fn network_fault_is_retryable() {
+        // Connect-before-response: no HTTP status, transient.
+        let e =
+            VoiceTypeError::transcription_network(ProviderId::Deepgram, "HTTP <url>: timed out");
+        assert_eq!(e.kind(), ErrorKind::Network);
+        assert!(e.is_retryable());
+    }
+
+    #[test]
+    fn missing_api_key_classifies_as_authentication() {
+        // Factory routes the missing-key case through `Secrets`.
+        let e = VoiceTypeError::Secrets("No API key set for provider 'xai'".into());
         assert_eq!(e.kind(), ErrorKind::Authentication);
+        assert!(!e.is_retryable());
+    }
+
+    #[test]
+    fn opaque_provider_error_classifies_as_other() {
+        // Non-transport failures (parse, empty response, factory miss)
+        // carry `FaultClass::Other` and classify as `Other` — no
+        // substring inspection of the message.
+        let e = VoiceTypeError::transcription("xAI-STT-JSON-Parse: trailing data");
+        assert_eq!(e.kind(), ErrorKind::Other);
+        assert!(!e.is_retryable());
     }
 
     #[test]
     fn structured_status_classifies_without_substring_match() {
-        // `#40` will populate `fault`; verify the structured path works
-        // and takes precedence over the (here absent) substring signal.
+        // The message is opaque on purpose: classification is purely
+        // structural.
         let e = VoiceTypeError::Transcription {
             message: "opaque provider error".into(),
-            fault: ProviderFault {
-                status: Some(503),
-                provider: Some(ProviderId::Groq),
-            },
+            fault: ProviderFault::http(503, ProviderId::Groq),
         };
         assert_eq!(e.kind(), ErrorKind::HttpStatus);
         assert!(e.is_retryable());
 
         let e = VoiceTypeError::Processing {
             message: "opaque provider error".into(),
-            fault: ProviderFault {
-                status: Some(401),
-                provider: Some(ProviderId::Anthropic),
-            },
+            fault: ProviderFault::http(401, ProviderId::Anthropic),
         };
         assert_eq!(e.kind(), ErrorKind::Authentication);
         assert!(!e.is_retryable());
@@ -413,7 +479,9 @@ mod tests {
                 let dummy = match k {
                     ErrorKind::Configuration => VoiceTypeError::Config("x".into()),
                     ErrorKind::Authentication => VoiceTypeError::Secrets("x".into()),
-                    ErrorKind::Network => VoiceTypeError::processing("HTTP timeout"),
+                    ErrorKind::Network => {
+                        VoiceTypeError::processing_network(ProviderId::OpenAi, "HTTP timeout")
+                    }
                     ErrorKind::Hardware => VoiceTypeError::Audio("x".into()),
                     _ => unreachable!(),
                 };

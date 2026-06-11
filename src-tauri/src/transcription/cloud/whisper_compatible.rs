@@ -12,7 +12,7 @@
 //!     - response_format: "json" (default)
 //!   Response: { "text": "..." }
 
-use crate::core::error::{Result, VoiceTypeError};
+use crate::core::error::{ProviderId, Result, VoiceTypeError};
 use crate::core::retry::with_retry;
 use crate::transcription::TranscribeOpts;
 use serde::Deserialize;
@@ -22,11 +22,13 @@ pub struct WhisperCompatibleClient {
     pub base_url: String,
     pub default_model: String,
     pub api_key: String,
+    provider: ProviderId,
     client: reqwest::Client,
 }
 
 impl WhisperCompatibleClient {
     pub fn new(
+        provider: ProviderId,
         base_url: impl Into<String>,
         default_model: impl Into<String>,
         api_key: String,
@@ -35,6 +37,7 @@ impl WhisperCompatibleClient {
             base_url: base_url.into(),
             default_model: default_model.into(),
             api_key,
+            provider,
             client: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(120))
                 .build()
@@ -71,14 +74,18 @@ impl WhisperCompatibleClient {
                 .multipart(form)
                 .send()
                 .await
-                .map_err(|e| VoiceTypeError::transcription(format!("HTTP {url}: {e}")))?;
+                .map_err(|e| {
+                    VoiceTypeError::transcription_network(self.provider, format!("HTTP {url}: {e}"))
+                })?;
 
             let status = response.status();
             if !status.is_success() {
                 tracing::warn!(provider = "whisper_compatible", %status, "transcribe call failed");
-                return Err(VoiceTypeError::transcription(format!(
-                    "Whisper-API HTTP {status}"
-                )));
+                return Err(VoiceTypeError::transcription_http(
+                    status.as_u16(),
+                    self.provider,
+                    format!("Whisper-API HTTP {status}"),
+                ));
             }
 
             let parsed: WhisperResponse = response

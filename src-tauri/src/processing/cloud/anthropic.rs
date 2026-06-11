@@ -5,7 +5,7 @@
 //! - The system prompt is its own top-level field (NOT in messages)
 //! - The response is a `content: [{type: "text", text: ...}]` array
 
-use crate::core::error::{Result, VoiceTypeError};
+use crate::core::error::{ProviderId, Result, VoiceTypeError};
 use crate::core::retry::with_retry;
 use crate::processing::{ProcessOpts, Processor};
 use async_trait::async_trait;
@@ -52,16 +52,23 @@ impl AnthropicProcessor {
             .json(&body)
             .send()
             .await
-            .map_err(|e| VoiceTypeError::processing(format!("HTTP {url}: {e}")))?;
+            .map_err(|e| {
+                VoiceTypeError::processing_network(
+                    ProviderId::Anthropic,
+                    format!("HTTP {url}: {e}"),
+                )
+            })?;
         let status = response.status();
         if !status.is_success() {
             // Body intentionally dropped: it may reflect sensitive headers
             // (e.g. an auth token echoed by a MITM proxy or misconfigured
             // gateway) and would otherwise land in the user-visible logs tab.
             tracing::warn!(provider = "anthropic", %status, "test_connection failed");
-            return Err(VoiceTypeError::processing(format!(
-                "Anthropic HTTP {status}"
-            )));
+            return Err(VoiceTypeError::processing_http(
+                status.as_u16(),
+                ProviderId::Anthropic,
+                format!("Anthropic HTTP {status}"),
+            ));
         }
         Ok(())
     }
@@ -102,14 +109,21 @@ impl Processor for AnthropicProcessor {
                 .json(&req)
                 .send()
                 .await
-                .map_err(|e| VoiceTypeError::processing(format!("HTTP {url}: {e}")))?;
+                .map_err(|e| {
+                    VoiceTypeError::processing_network(
+                        ProviderId::Anthropic,
+                        format!("HTTP {url}: {e}"),
+                    )
+                })?;
 
             let status = response.status();
             if !status.is_success() {
                 tracing::warn!(provider = "anthropic", %status, "process call failed");
-                return Err(VoiceTypeError::processing(format!(
-                    "Anthropic HTTP {status}"
-                )));
+                return Err(VoiceTypeError::processing_http(
+                    status.as_u16(),
+                    ProviderId::Anthropic,
+                    format!("Anthropic HTTP {status}"),
+                ));
             }
 
             let parsed: MessagesResponse = response
