@@ -7,7 +7,7 @@
 //!   Body: RAW audio bytes (no multipart!)
 //! Response (json): results.channels[0].alternatives[0].transcript
 
-use crate::core::error::{Result, VoiceTypeError};
+use crate::core::error::{ProviderId, Result, VoiceTypeError};
 use crate::core::retry::with_retry;
 use crate::transcription::{TranscribeOpts, Transcriber};
 use async_trait::async_trait;
@@ -39,13 +39,20 @@ impl DeepgramTranscriber {
             .header("Authorization", format!("Token {}", self.api_key))
             .send()
             .await
-            .map_err(|e| VoiceTypeError::transcription(format!("HTTP {url}: {e}")))?;
+            .map_err(|e| {
+                VoiceTypeError::transcription_network(
+                    ProviderId::Deepgram,
+                    format!("HTTP {url}: {e}"),
+                )
+            })?;
         let status = response.status();
         if !status.is_success() {
             tracing::warn!(provider = "deepgram", %status, "test_connection failed");
-            return Err(VoiceTypeError::transcription(format!(
-                "Deepgram HTTP {status}"
-            )));
+            return Err(VoiceTypeError::transcription_http(
+                status.as_u16(),
+                ProviderId::Deepgram,
+                format!("Deepgram HTTP {status}"),
+            ));
         }
         Ok(())
     }
@@ -77,14 +84,21 @@ impl Transcriber for DeepgramTranscriber {
                 .body(audio.to_vec())
                 .send()
                 .await
-                .map_err(|e| VoiceTypeError::transcription(format!("HTTP {url}: {e}")))?;
+                .map_err(|e| {
+                    VoiceTypeError::transcription_network(
+                        ProviderId::Deepgram,
+                        format!("HTTP {url}: {e}"),
+                    )
+                })?;
 
             let status = response.status();
             if !status.is_success() {
                 tracing::warn!(provider = "deepgram", %status, "transcribe call failed");
-                return Err(VoiceTypeError::transcription(format!(
-                    "Deepgram HTTP {status}"
-                )));
+                return Err(VoiceTypeError::transcription_http(
+                    status.as_u16(),
+                    ProviderId::Deepgram,
+                    format!("Deepgram HTTP {status}"),
+                ));
             }
 
             let parsed: DeepgramResponse = response

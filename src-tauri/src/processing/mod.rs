@@ -20,7 +20,10 @@ use std::sync::Arc;
 /// uses the same keychain entry for STT and LLM (CLAUDE.md §4.4).
 pub fn make_cloud_processor(provider: &str) -> Result<Arc<dyn Processor>> {
     let key = SecretStore::get(provider)?.ok_or_else(|| {
-        VoiceTypeError::processing(format!(
+        // A missing key is an auth problem, not a processing transport
+        // failure — route it through `Secrets` so `kind()` reports
+        // `Authentication` without inspecting the message.
+        VoiceTypeError::Secrets(format!(
             "No API key set for provider '{provider}' — add it under Settings"
         ))
     })?;

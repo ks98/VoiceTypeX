@@ -4,7 +4,7 @@
 //! `text`, `language`, `duration`, `words[]` with word-level
 //! timestamps. We only use `text`.
 
-use crate::core::error::{Result, VoiceTypeError};
+use crate::core::error::{ProviderId, Result, VoiceTypeError};
 use crate::core::retry::with_retry;
 use crate::transcription::{TranscribeOpts, Transcriber};
 use async_trait::async_trait;
@@ -64,14 +64,21 @@ impl Transcriber for XaiTranscriber {
                 .multipart(form)
                 .send()
                 .await
-                .map_err(|e| VoiceTypeError::transcription(format!("HTTP {url}: {e}")))?;
+                .map_err(|e| {
+                    VoiceTypeError::transcription_network(
+                        ProviderId::Xai,
+                        format!("HTTP {url}: {e}"),
+                    )
+                })?;
 
             let status = response.status();
             if !status.is_success() {
                 tracing::warn!(provider = "xai", %status, "transcribe call failed");
-                return Err(VoiceTypeError::transcription(format!(
-                    "xAI STT HTTP {status}"
-                )));
+                return Err(VoiceTypeError::transcription_http(
+                    status.as_u16(),
+                    ProviderId::Xai,
+                    format!("xAI STT HTTP {status}"),
+                ));
             }
 
             let parsed: SttResponse = response

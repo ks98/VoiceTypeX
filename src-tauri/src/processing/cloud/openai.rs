@@ -2,7 +2,7 @@
 //! OpenAI GPT via Chat-Completions-API.
 //! Base-URL `https://api.openai.com/v1`, Default-Model `gpt-4o-mini`.
 
-use crate::core::error::Result;
+use crate::core::error::{ProviderId, Result};
 use crate::processing::cloud::openai_compatible::OpenAICompatibleClient;
 use crate::processing::{ProcessOpts, Processor};
 use async_trait::async_trait;
@@ -14,7 +14,12 @@ pub struct OpenAIProcessor {
 impl OpenAIProcessor {
     pub fn new(api_key: String) -> Self {
         Self {
-            inner: OpenAICompatibleClient::new("https://api.openai.com/v1", "gpt-4o-mini", api_key),
+            inner: OpenAICompatibleClient::new(
+                ProviderId::OpenAi,
+                "https://api.openai.com/v1",
+                "gpt-4o-mini",
+                api_key,
+            ),
         }
     }
 }
