@@ -31,13 +31,16 @@ type IpcResult<T> = std::result::Result<T, String>;
 /// keychain. Errors from individual providers are not fatal — we delete
 /// as much as we can and only collect errors for the final result.
 #[tauri::command]
-pub async fn reset_api_keys() -> IpcResult<()> {
+pub async fn reset_api_keys(state: tauri::State<'_, Arc<AppContext>>) -> IpcResult<()> {
     let mut errors: Vec<String> = Vec::new();
     for &provider in PROVIDERS {
         if let Err(e) = SecretStore::delete(provider) {
             errors.push(format!("{provider}: {e}"));
         }
     }
+    // All keys gone — drop every cached cloud client so no stale wrapper
+    // survives the reset (issue #42).
+    state.clear_cloud_caches();
     if errors.is_empty() {
         tracing::info!("All provider API keys deleted");
         Ok(())
@@ -90,6 +93,8 @@ pub async fn reset_app_factory(state: tauri::State<'_, Arc<AppContext>>) -> IpcR
             accumulated_errors.push(format!("secrets.{provider}: {e}"));
         }
     }
+    // Drop every cached cloud client now that all keys are gone (issue #42).
+    state.clear_cloud_caches();
 
     let cfg_dir = config_dir(&state)?;
 

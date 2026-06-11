@@ -14,8 +14,11 @@ use crate::core::state::StateBus;
 use crate::injection::TextInjector;
 #[cfg(not(target_os = "windows"))]
 use crate::processing::embedded::LlamaEmbeddedProcessor;
+use crate::processing::Processor;
 use crate::transcription::local::LocalTranscriber;
+use crate::transcription::Transcriber;
 use parking_lot::{Mutex, RwLock};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -85,6 +88,26 @@ pub struct AppContext {
     /// `local_llm_processor`).
     #[cfg(not(target_os = "windows"))]
     pub extra_llm_processors: Arc<Mutex<BoundedLru<String, Arc<LlamaEmbeddedProcessor>>>>,
+    /// Cache of cloud STT transcribers keyed by provider id (e.g.
+    /// `"xai"`, `"openai"`). Built lazily on the first dictation that
+    /// uses a given provider and reused afterwards, so a fresh wrapper +
+    /// keychain read no longer happens per run (issue #42). The wrapper
+    /// is a thin `Arc<dyn Transcriber>` holding the provider key and a
+    /// clone of the shared `http_client` — cheap to keep resident, and
+    /// bounded by the (tiny) number of providers, so no LRU is needed
+    /// unlike the multi-GB local-model caches (issue #31).
+    ///
+    /// **Invalidated** when the provider's API key changes
+    /// (`set_provider_key` / `delete_provider_key` /
+    /// `reset_api_keys` / `reset_app_factory`) via
+    /// `invalidate_cloud_provider` / `clear_cloud_caches`, so a stale
+    /// key can never be served after the user updates it.
+    pub cloud_transcribers: Mutex<HashMap<String, Arc<dyn Transcriber>>>,
+    /// Cache of cloud LLM processors keyed by provider id, analogous to
+    /// `cloud_transcribers` (issue #42). xAI shares one keychain entry
+    /// for STT and LLM (CLAUDE.md §4.4), so invalidating provider
+    /// `"xai"` drops the entry from both caches.
+    pub cloud_processors: Mutex<HashMap<String, Arc<dyn Processor>>>,
     /// Handle of the currently running streaming decode worker
     /// (phase 2, only when `transcription = "local"`). Spawned in
     /// `start_recording`, aborted in `finish_recording_and_inject`
@@ -124,4 +147,25 @@ pub struct AppContext {
     /// which case the paste path uses Ctrl+V.
     #[cfg(target_os = "linux")]
     pub kde_focus: Arc<RwLock<Option<Arc<crate::injection::focus_tracker::KdeFocusTracker>>>>,
+}
+
+impl AppContext {
+    /// Drop the cached cloud transcriber and processor for one provider
+    /// so the next dictation rebuilds them with the current keychain
+    /// entry. Called when a single provider's API key is set or deleted
+    /// (issue #42). A removed entry that an in-flight pipeline run
+    /// already cloned keeps working until that run finishes; only the
+    /// cache's `Arc` is dropped here.
+    pub fn invalidate_cloud_provider(&self, provider: &str) {
+        self.cloud_transcribers.lock().remove(provider);
+        self.cloud_processors.lock().remove(provider);
+    }
+
+    /// Drop every cached cloud transcriber and processor. Called when
+    /// all provider keys are removed at once (`reset_api_keys`,
+    /// `reset_app_factory`) — issue #42.
+    pub fn clear_cloud_caches(&self) {
+        self.cloud_transcribers.lock().clear();
+        self.cloud_processors.lock().clear();
+    }
 }
