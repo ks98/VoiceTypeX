@@ -396,14 +396,15 @@ async fn streaming_worker(
     }
 }
 
-/// Spawns a pulsing animation: every 600 ms the tray icon alternates
-/// between `recording` and `recording_pulse` as long as the `StateBus`
-/// reports `Recording`. The loop terminates itself — no stop signal
-/// needed.
+/// Spawns a pulsing animation: while the `StateBus` reports `Recording`,
+/// the tray icon alternates between `recording` and `recording_pulse`
+/// every 600 ms. Outside `Recording` the task sleeps on the state watch
+/// channel and produces no periodic wakeups. The loop exits when the
+/// `StateBus` sender is dropped (app shutdown).
 pub fn spawn_tray_recording_pulse(app: AppHandle) {
     use std::time::Duration;
 
-    let state_rx = {
+    let mut state_rx = {
         let state = app.state::<Arc<AppContext>>();
         state.state_bus.subscribe()
     };
@@ -411,13 +412,13 @@ pub fn spawn_tray_recording_pulse(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         let mut bright = false;
         loop {
-            tokio::time::sleep(Duration::from_millis(600)).await;
-
-            let current = state_rx.borrow().clone();
-            if !matches!(current, AppState::Recording) {
-                // Pulse pauses outside the Recording state; we stay in
-                // the loop because a new recording cycle should bring
-                // the same task back to life.
+            // Idle path: no timer — sleep until the state changes. When
+            // the sender is dropped on shutdown, `changed()` errors and
+            // we exit.
+            if !matches!(*state_rx.borrow(), AppState::Recording) {
+                if state_rx.changed().await.is_err() {
+                    break;
+                }
                 continue;
             }
 
@@ -433,9 +434,16 @@ pub fn spawn_tray_recording_pulse(app: AppHandle) {
             }
             bright = !bright;
 
-            // If the receiver was closed (app shutdown), exit.
-            if state_rx.has_changed().is_err() {
-                break;
+            // Recording path: tick the pulse every 600 ms, but wake
+            // early if the state leaves Recording so we drop straight
+            // back to the idle wait instead of blinking a stale frame.
+            tokio::select! {
+                _ = tokio::time::sleep(Duration::from_millis(600)) => {}
+                changed = state_rx.changed() => {
+                    if changed.is_err() {
+                        break;
+                    }
+                }
             }
         }
     });
