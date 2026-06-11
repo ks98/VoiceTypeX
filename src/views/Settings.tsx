@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
-import type { UnlistenFn } from "@tauri-apps/api/event";
+import { listenAll } from "../lib/tauriListen";
 import Field from "../components/Field";
 import Button from "../components/Button";
 import Banner from "../components/Banner";
@@ -171,16 +171,14 @@ export default function Settings(): JSX.Element {
   }, [load, loadAudioDevices]);
 
   useEffect(() => {
-    const unlistens: UnlistenFn[] = [];
-    void listen<ModelDownloadProgress>("model-download-progress", (event) =>
-      setProgress(event.payload),
-    ).then((fn) => unlistens.push(fn));
-    void listen<ModelDownloadProgress>("llm-model-download-progress", (event) =>
-      setLlmProgress(event.payload),
-    ).then((fn) => unlistens.push(fn));
-    return () => {
-      unlistens.forEach((u) => u());
-    };
+    return listenAll([
+      listen<ModelDownloadProgress>("model-download-progress", (event) =>
+        setProgress(event.payload),
+      ),
+      listen<ModelDownloadProgress>("llm-model-download-progress", (event) =>
+        setLlmProgress(event.payload),
+      ),
+    ]);
   }, []);
 
   if (loading || !settings) {

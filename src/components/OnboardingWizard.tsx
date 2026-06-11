@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { useEffect, useRef, useState } from "react";
 import { emit, listen } from "@tauri-apps/api/event";
-import type { UnlistenFn } from "@tauri-apps/api/event";
+import { listenAll } from "../lib/tauriListen";
 import {
   ipcDownloadDefaultModel,
   ipcDownloadLlmDefaultModel,
@@ -107,13 +107,14 @@ export default function OnboardingWizard({
   const [hardware, setHardware] = useState<HardwareReport | null>(null);
 
   useEffect(() => {
-    const unlistens: UnlistenFn[] = [];
-    void listen<ModelDownloadProgress>("model-download-progress", (event) =>
-      setWhisperProgress(event.payload),
-    ).then((fn) => unlistens.push(fn));
-    void listen<ModelDownloadProgress>("llm-model-download-progress", (event) =>
-      setLlmProgress(event.payload),
-    ).then((fn) => unlistens.push(fn));
+    const unlisten = listenAll([
+      listen<ModelDownloadProgress>("model-download-progress", (event) =>
+        setWhisperProgress(event.payload),
+      ),
+      listen<ModelDownloadProgress>("llm-model-download-progress", (event) =>
+        setLlmProgress(event.payload),
+      ),
+    ]);
     void ipcGetWhisperBackend()
       .then(setBackend)
       .catch(() => null);
@@ -121,7 +122,7 @@ export default function OnboardingWizard({
       .then(setHardware)
       .catch(() => null);
     return () => {
-      unlistens.forEach((u) => u());
+      unlisten();
       if (whisperFlashTimer.current) clearTimeout(whisperFlashTimer.current);
       if (llmFlashTimer.current) clearTimeout(llmFlashTimer.current);
     };

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { useEffect, useState } from "react";
 import { listen, emit } from "@tauri-apps/api/event";
-import type { UnlistenFn } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { listenAll } from "../lib/tauriListen";
 import { useT, type TranslateFn } from "../i18n";
 
 type Phase =
@@ -47,30 +47,25 @@ export default function Overlay(): JSX.Element {
   const [engine, setEngine] = useState<EngineStatusPayload | null>(null);
 
   useEffect(() => {
-    const unlistens: UnlistenFn[] = [];
-    listen<StatePayload>("app://state", (event) => {
-      setPhase(event.payload.state);
-      setErrorMsg(event.payload.error ?? null);
-      // Phase leaves recording → clear partial so the next recording
-      // cycle starts with an empty display.
-      if (event.payload.state !== "recording") {
-        setPartial("");
-      }
-    }).then((u) => unlistens.push(u));
-
-    listen<PartialTranscriptPayload>("app://partial-transcript", (event) => {
-      setPartial(event.payload.text ?? "");
-    }).then((u) => unlistens.push(u));
-
-    // Engine status (issue #8): emitted by the backend when a mode becomes
-    // active (recording start). Stays until the next recording overwrites it.
-    listen<EngineStatusPayload>("app://active-engine", (event) => {
-      setEngine(event.payload);
-    }).then((u) => unlistens.push(u));
-
-    return () => {
-      unlistens.forEach((u) => u());
-    };
+    return listenAll([
+      listen<StatePayload>("app://state", (event) => {
+        setPhase(event.payload.state);
+        setErrorMsg(event.payload.error ?? null);
+        // Phase leaves recording → clear partial so the next recording
+        // cycle starts with an empty display.
+        if (event.payload.state !== "recording") {
+          setPartial("");
+        }
+      }),
+      listen<PartialTranscriptPayload>("app://partial-transcript", (event) => {
+        setPartial(event.payload.text ?? "");
+      }),
+      // Engine status (issue #8): emitted by the backend when a mode becomes
+      // active (recording start). Stays until the next recording overwrites it.
+      listen<EngineStatusPayload>("app://active-engine", (event) => {
+        setEngine(event.payload);
+      }),
+    ]);
   }, []);
 
   const meta = phaseMeta(t, phase, errorMsg);
