@@ -107,7 +107,9 @@ pub async fn run_test_transcription(
     let recorder = match RecorderHandle::start(RecorderConfig { device_name }) {
         Ok(r) => r,
         Err(e) => {
-            let _ = state.state_bus.transition(AppState::Idle);
+            if let Err(e) = state.state_bus.transition(AppState::Idle) {
+                tracing::error!(error = %e, "Failed to reset state to Idle after recorder start error");
+            }
             return Err(e.to_string());
         }
     };
@@ -117,7 +119,9 @@ pub async fn run_test_transcription(
     let wav = match recorder.stop_and_finalize().await {
         Ok(w) => w,
         Err(e) => {
-            let _ = state.state_bus.transition(AppState::Idle);
+            if let Err(e) = state.state_bus.transition(AppState::Idle) {
+                tracing::error!(error = %e, "Failed to reset state to Idle after recorder finalize error");
+            }
             return Err(e.to_string());
         }
     };
@@ -150,7 +154,9 @@ pub async fn run_test_transcription(
         .await;
     let elapsed = start.elapsed();
 
-    let _ = state.state_bus.transition(AppState::Idle);
+    if let Err(e) = state.state_bus.transition(AppState::Idle) {
+        tracing::error!(error = %e, "Failed to reset state to Idle after test transcription");
+    }
 
     let text = result.map_err(|e| e.to_string())?;
     let rtf = elapsed.as_secs_f32() / (seconds as f32);
