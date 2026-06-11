@@ -20,7 +20,7 @@ use std::sync::Arc;
 /// uses the same keychain entry for STT and LLM (CLAUDE.md §4.4).
 pub fn make_cloud_processor(provider: &str) -> Result<Arc<dyn Processor>> {
     let key = SecretStore::get(provider)?.ok_or_else(|| {
-        VoiceTypeError::Processing(format!(
+        VoiceTypeError::processing(format!(
             "No API key set for provider '{provider}' — add it under Settings"
         ))
     })?;
@@ -28,7 +28,7 @@ pub fn make_cloud_processor(provider: &str) -> Result<Arc<dyn Processor>> {
         "xai" => Ok(Arc::new(cloud::xai::XaiProcessor::new(key))),
         "openai" => Ok(Arc::new(cloud::openai::OpenAIProcessor::new(key))),
         "anthropic" => Ok(Arc::new(cloud::anthropic::AnthropicProcessor::new(key))),
-        other => Err(VoiceTypeError::Processing(format!(
+        other => Err(VoiceTypeError::processing(format!(
             "Unknown LLM provider: {other}"
         ))),
     }

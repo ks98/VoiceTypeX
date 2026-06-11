@@ -53,7 +53,7 @@ impl WhisperCompatibleClient {
             let part = reqwest::multipart::Part::bytes(audio.to_vec())
                 .file_name("audio.wav")
                 .mime_str("audio/wav")
-                .map_err(|e| VoiceTypeError::Transcription(format!("multipart-Part: {e}")))?;
+                .map_err(|e| VoiceTypeError::transcription(format!("multipart-Part: {e}")))?;
             let mut form = reqwest::multipart::Form::new()
                 .text("model", self.default_model.clone())
                 .part("file", part);
@@ -71,12 +71,12 @@ impl WhisperCompatibleClient {
                 .multipart(form)
                 .send()
                 .await
-                .map_err(|e| VoiceTypeError::Transcription(format!("HTTP {url}: {e}")))?;
+                .map_err(|e| VoiceTypeError::transcription(format!("HTTP {url}: {e}")))?;
 
             let status = response.status();
             if !status.is_success() {
                 tracing::warn!(provider = "whisper_compatible", %status, "transcribe call failed");
-                return Err(VoiceTypeError::Transcription(format!(
+                return Err(VoiceTypeError::transcription(format!(
                     "Whisper-API HTTP {status}"
                 )));
             }
@@ -84,7 +84,7 @@ impl WhisperCompatibleClient {
             let parsed: WhisperResponse = response
                 .json()
                 .await
-                .map_err(|e| VoiceTypeError::Transcription(format!("Whisper-JSON-Parse: {e}")))?;
+                .map_err(|e| VoiceTypeError::transcription(format!("Whisper-JSON-Parse: {e}")))?;
             Ok(parsed.text.trim().to_string())
         })
         .await

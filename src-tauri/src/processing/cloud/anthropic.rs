@@ -52,14 +52,14 @@ impl AnthropicProcessor {
             .json(&body)
             .send()
             .await
-            .map_err(|e| VoiceTypeError::Processing(format!("HTTP {url}: {e}")))?;
+            .map_err(|e| VoiceTypeError::processing(format!("HTTP {url}: {e}")))?;
         let status = response.status();
         if !status.is_success() {
             // Body intentionally dropped: it may reflect sensitive headers
             // (e.g. an auth token echoed by a MITM proxy or misconfigured
             // gateway) and would otherwise land in the user-visible logs tab.
             tracing::warn!(provider = "anthropic", %status, "test_connection failed");
-            return Err(VoiceTypeError::Processing(format!(
+            return Err(VoiceTypeError::processing(format!(
                 "Anthropic HTTP {status}"
             )));
         }
@@ -102,12 +102,12 @@ impl Processor for AnthropicProcessor {
                 .json(&req)
                 .send()
                 .await
-                .map_err(|e| VoiceTypeError::Processing(format!("HTTP {url}: {e}")))?;
+                .map_err(|e| VoiceTypeError::processing(format!("HTTP {url}: {e}")))?;
 
             let status = response.status();
             if !status.is_success() {
                 tracing::warn!(provider = "anthropic", %status, "process call failed");
-                return Err(VoiceTypeError::Processing(format!(
+                return Err(VoiceTypeError::processing(format!(
                     "Anthropic HTTP {status}"
                 )));
             }
@@ -115,7 +115,7 @@ impl Processor for AnthropicProcessor {
             let parsed: MessagesResponse = response
                 .json()
                 .await
-                .map_err(|e| VoiceTypeError::Processing(format!("Anthropic-JSON-Parse: {e}")))?;
+                .map_err(|e| VoiceTypeError::processing(format!("Anthropic-JSON-Parse: {e}")))?;
 
             let text = parsed
                 .content
@@ -127,8 +127,8 @@ impl Processor for AnthropicProcessor {
                 .join("");
 
             if text.is_empty() {
-                return Err(VoiceTypeError::Processing(
-                    "Anthropic response contained no text block".into(),
+                return Err(VoiceTypeError::processing(
+                    "Anthropic response contained no text block",
                 ));
             }
             Ok(text)

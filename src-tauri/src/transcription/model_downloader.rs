@@ -388,9 +388,9 @@ where
 
     let response = reqwest::get(url)
         .await
-        .map_err(|e| VoiceTypeError::Transcription(format!("HTTP error {url}: {e}")))?;
+        .map_err(|e| VoiceTypeError::transcription(format!("HTTP error {url}: {e}")))?;
     if !response.status().is_success() {
-        return Err(VoiceTypeError::Transcription(format!(
+        return Err(VoiceTypeError::transcription(format!(
             "Download HTTP-Status {}: {}",
             response.status(),
             url
@@ -401,17 +401,17 @@ where
     let tmp_path = dest_path.with_extension("partial");
     let mut file = tokio::fs::File::create(&tmp_path)
         .await
-        .map_err(|e| VoiceTypeError::Transcription(format!("create {tmp_path:?}: {e}")))?;
+        .map_err(|e| VoiceTypeError::transcription(format!("create {tmp_path:?}: {e}")))?;
 
     let mut hasher = Sha256::new();
     let mut downloaded: u64 = 0;
     let mut stream = response.bytes_stream();
     while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| VoiceTypeError::Transcription(format!("stream: {e}")))?;
+        let chunk = chunk.map_err(|e| VoiceTypeError::transcription(format!("stream: {e}")))?;
         hasher.update(&chunk);
         file.write_all(&chunk)
             .await
-            .map_err(|e| VoiceTypeError::Transcription(format!("write: {e}")))?;
+            .map_err(|e| VoiceTypeError::transcription(format!("write: {e}")))?;
         downloaded += chunk.len() as u64;
         on_progress(DownloadProgress {
             bytes_downloaded: downloaded,
@@ -420,14 +420,14 @@ where
     }
     file.flush()
         .await
-        .map_err(|e| VoiceTypeError::Transcription(format!("flush: {e}")))?;
+        .map_err(|e| VoiceTypeError::transcription(format!("flush: {e}")))?;
     drop(file);
 
     let actual_hash = format!("{:x}", hasher.finalize());
     if let Some(expected) = expected_sha256 {
         if !actual_hash.eq_ignore_ascii_case(expected) {
             tokio::fs::remove_file(&tmp_path).await.ok();
-            return Err(VoiceTypeError::Transcription(format!(
+            return Err(VoiceTypeError::transcription(format!(
                 "Hash mismatch for {label}: expected={expected}, got={actual_hash}"
             )));
         }
@@ -441,7 +441,7 @@ where
 
     tokio::fs::rename(&tmp_path, dest_path)
         .await
-        .map_err(|e| VoiceTypeError::Transcription(format!("rename to final: {e}")))?;
+        .map_err(|e| VoiceTypeError::transcription(format!("rename to final: {e}")))?;
     Ok(dest_path.to_path_buf())
 }
 
@@ -449,14 +449,14 @@ async fn compute_sha256(path: &Path) -> Result<String> {
     use tokio::io::AsyncReadExt;
     let mut file = tokio::fs::File::open(path)
         .await
-        .map_err(|e| VoiceTypeError::Transcription(format!("open {path:?}: {e}")))?;
+        .map_err(|e| VoiceTypeError::transcription(format!("open {path:?}: {e}")))?;
     let mut hasher = Sha256::new();
     let mut buf = vec![0u8; 64 * 1024];
     loop {
         let n = file
             .read(&mut buf)
             .await
-            .map_err(|e| VoiceTypeError::Transcription(format!("read: {e}")))?;
+            .map_err(|e| VoiceTypeError::transcription(format!("read: {e}")))?;
         if n == 0 {
             break;
         }

@@ -1101,7 +1101,7 @@ mod tests {
             "failing-transcriber"
         }
         async fn transcribe_oneshot(&self, _audio: &[u8], _opts: TranscribeOpts) -> Result<String> {
-            Err(VoiceTypeError::Transcription("mock STT failure".into()))
+            Err(VoiceTypeError::transcription("mock STT failure"))
         }
     }
 
@@ -1260,7 +1260,7 @@ mod tests {
             .await
             .expect_err("transcriber failure should propagate");
 
-        assert!(matches!(err, VoiceTypeError::Transcription(_)));
+        assert!(matches!(err, VoiceTypeError::Transcription { .. }));
         assert!(
             matches!(bus.current(), AppState::Error(_)),
             "STT failure must park in Error, not snap back to Idle"
