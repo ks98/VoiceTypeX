@@ -252,6 +252,51 @@ fn default_ollama_url() -> String {
 mod tests {
     use super::*;
 
+    // Contract test — PAYLOAD-SHAPE parity for `Settings` (#49).
+    //
+    // Pins the exact serialized JSON key set the backend sends over
+    // `get_settings`. The identical key list is hard-coded on the TS side
+    // in `src/lib/payload-contract.test.ts`, anchoring both sides to the
+    // same canonical fields. A Rust field add/rename/remove changes the
+    // serialized keys and fails THIS test; a TS-side `Settings` interface
+    // drift fails the TS test. No field here carries `skip_serializing_if`,
+    // so `Settings::default()` serializes the full set.
+    //
+    // Honest limit (contract-tests-over-codegen, no specta/ts-rs): the two
+    // sides do NOT auto-derive — a coordinated change to the struct AND
+    // both key lists would pass. Accepted trade-off.
+    #[test]
+    fn settings_serialized_key_set_is_pinned() {
+        let value = serde_json::to_value(Settings::default()).expect("Settings serializes");
+        let mut keys: Vec<&str> = value
+            .as_object()
+            .expect("Settings serializes to a JSON object")
+            .keys()
+            .map(String::as_str)
+            .collect();
+        keys.sort_unstable();
+
+        let mut expected = [
+            "audio_input_device",
+            "whisper_model_path",
+            "whisper_default_slot",
+            "autostart",
+            "ollama_url",
+            "ollama_keep_alive",
+            "llm_default_slot",
+            "llm_model_path",
+            "onboarding_done",
+            "whisper_n_threads",
+            "whisper_beam_size",
+            "menu_hotkey",
+            "last_selected_mode_id",
+            "locale",
+        ];
+        expected.sort_unstable();
+
+        assert_eq!(keys, expected);
+    }
+
     /// Deserialize a `Settings` from a JSON object that only sets
     /// `locale`, then return the post-validation `locale`. This drives
     /// `deserialize_locale` exactly as the on-disk loader does.

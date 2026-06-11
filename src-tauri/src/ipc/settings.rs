@@ -204,6 +204,44 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
 
+    // Contract test — PAYLOAD-SHAPE parity for `ModelDownloadProgress` (#49).
+    //
+    // Pins the exact serialized JSON key set the backend emits on the
+    // `model-download-progress` / `llm-model-download-progress` events.
+    // The identical key list is hard-coded on the TS side in
+    // `src/lib/payload-contract.test.ts` (matching the `ModelDownloadProgress`
+    // interface in `src/lib/tauri.ts`), anchoring both sides to the same
+    // canonical fields. A Rust field add/rename/remove fails THIS test; a
+    // TS-side drift fails the TS test.
+    //
+    // `total: Some(..)` ensures the `Option` field serializes (no skip
+    // attribute, but `None` -> `null` still emits the key — either way the
+    // key is present).
+    //
+    // Honest limit (contract-tests-over-codegen, no specta/ts-rs): the two
+    // sides do NOT auto-derive — a coordinated change to the struct AND
+    // both key lists would pass. Accepted trade-off.
+    #[test]
+    fn model_download_progress_serialized_key_set_is_pinned() {
+        let value = serde_json::to_value(ModelDownloadProgress {
+            downloaded: 1,
+            total: Some(2),
+        })
+        .expect("ModelDownloadProgress serializes");
+        let mut keys: Vec<&str> = value
+            .as_object()
+            .expect("ModelDownloadProgress serializes to a JSON object")
+            .keys()
+            .map(String::as_str)
+            .collect();
+        keys.sort_unstable();
+
+        let mut expected = ["downloaded", "total"];
+        expected.sort_unstable();
+
+        assert_eq!(keys, expected);
+    }
+
     fn temp_path(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
             "voicetypex-model-path-test-{}-{name}",
