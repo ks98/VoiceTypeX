@@ -51,8 +51,6 @@ pub enum KeyCommand {
     /// Send Ctrl+Shift+V — terminals (KDE Konsole, …) paste on this, not
     /// on plain Ctrl+V.
     CtrlShiftV,
-    /// Shut down the worker cleanly.
-    Shutdown,
 }
 
 /// List of interfaces we request from the EI server. Versions must
@@ -414,8 +412,9 @@ fn monotonic_time_us() -> u64 {
     anchor.elapsed().as_micros() as u64
 }
 
-/// Worker main loop. Runs until `KeyCommand::Shutdown` is received or
-/// the sender is closed (e.g. app shutdown).
+/// Worker main loop. Runs until the command sender is dropped (e.g. app
+/// shutdown drops the injector), `context.read()` fails, or the setup
+/// deadline elapses without a ready keyboard.
 pub fn run_libei_worker(
     fd: OwnedFd,
     cmd_rx: mpsc::Receiver<KeyCommand>,
@@ -500,7 +499,6 @@ pub fn run_libei_worker(
                     state.pending_key = Some(xkb::Keysym::v);
                     state.pending_shift = true;
                 }
-                Ok(KeyCommand::Shutdown) => state.running = false,
                 Err(mpsc::TryRecvError::Empty) => break,
                 Err(mpsc::TryRecvError::Disconnected) => {
                     state.running = false;
