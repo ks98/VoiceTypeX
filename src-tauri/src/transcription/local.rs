@@ -19,6 +19,7 @@ use crate::transcription::{TranscribeOpts, Transcriber};
 use async_trait::async_trait;
 use parking_lot::RwLock;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use whisper_rs::{
     FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters, WhisperVadParams,
@@ -68,6 +69,14 @@ pub struct LocalTranscriber {
     /// and logs a one-time warning.
     vad_model_path: Option<PathBuf>,
     context: Arc<RwLock<Option<WhisperContext>>>,
+    /// Cooperative cancel flag for the streaming pass (issue #47). Set
+    /// when `finish_recording_and_inject` starts the final pass; checked
+    /// per graph-compute by the streaming pass's whisper.cpp abort
+    /// callback so an in-flight streaming decode bails promptly instead
+    /// of starving the latency-critical final pass for CPU cores. Only
+    /// the Streaming profile installs the callback — the Final pass
+    /// never reads this flag and can never be aborted.
+    streaming_abort: Arc<AtomicBool>,
 }
 
 impl LocalTranscriber {
@@ -76,7 +85,16 @@ impl LocalTranscriber {
             model_path,
             vad_model_path,
             context: Arc::new(RwLock::new(None)),
+            streaming_abort: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    /// Request cancellation of an in-flight streaming pass. The next
+    /// whisper.cpp graph-compute callback returns `true` and the decode
+    /// returns early. Idempotent; the next streaming pass arms itself
+    /// fresh, so the caller does not have to clear the flag.
+    pub fn abort_streaming(&self) {
+        self.streaming_abort.store(true, Ordering::Relaxed);
     }
 }
 
@@ -158,6 +176,8 @@ impl LocalTranscriber {
                 n_threads_override,
                 beam_size_override,
                 DecodeProfile::Final,
+                // Final pass is never aborted (issue #47): no abort flag.
+                None,
             )
         })
         .await
@@ -188,6 +208,12 @@ impl LocalTranscriber {
         // through for a uniform call, the Streaming arm ignores it.
         let beam_size_override = opts.beam_size;
 
+        // Arm the cancel flag fresh for this pass (issue #47): clear any
+        // request left over from a previous cycle, so this pass only
+        // aborts if `finish_recording_and_inject` fires while it runs.
+        self.streaming_abort.store(false, Ordering::Relaxed);
+        let streaming_abort = Arc::clone(&self.streaming_abort);
+
         tokio::task::spawn_blocking(move || -> Result<String> {
             // Load on the blocking pool: the heavy model load and its
             // write lock stay off the async runtime thread.
@@ -202,6 +228,7 @@ impl LocalTranscriber {
                 n_threads_override,
                 beam_size_override,
                 DecodeProfile::Streaming,
+                Some(streaming_abort),
             )
         })
         .await
@@ -224,6 +251,11 @@ fn run_whisper_blocking(
     n_threads_override: Option<u32>,
     beam_size_override: Option<u32>,
     profile: DecodeProfile,
+    // Streaming-only cooperative cancel flag (issue #47). `Some` for the
+    // streaming pass — installs a whisper.cpp abort callback that returns
+    // `true` once the flag is set, so the decode bails when finishing.
+    // `None` for the final pass, which must never be aborted.
+    streaming_abort: Option<Arc<AtomicBool>>,
 ) -> Result<String> {
     let guard = ctx.read();
     let context = guard.as_ref().ok_or_else(|| {
@@ -304,6 +336,18 @@ fn run_whisper_blocking(
             // temp_inc: a fallback retry would double a throwaway pass.
             params.set_no_speech_thold(1.0);
             params.set_temperature_inc(0.0);
+
+            // Cooperative cancel (issue #47): whisper.cpp invokes this
+            // per graph-compute (encoder + each decode step). Returning
+            // `true` makes the decode return early, so an in-flight
+            // streaming pass stops promptly when the stop hotkey fires
+            // and frees the CPU cores for the final pass instead of
+            // running to completion (~2x slower final pass on CPU-only
+            // hardware). `set_abort_callback_safe` requires a 'static
+            // closure; the cloned `Arc<AtomicBool>` provides that.
+            if let Some(flag) = streaming_abort {
+                params.set_abort_callback_safe(move || flag.load(Ordering::Relaxed));
+            }
         }
     }
 

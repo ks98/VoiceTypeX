@@ -462,12 +462,26 @@ async fn finish_recording_and_inject(
     *ctx.active_mode.lock() = None;
 
     // Abort the phase-2 streaming worker before the final pass runs.
-    // abort() interrupts the loop at the next await — CPU work inside
-    // spawn_blocking still finishes, but doesn't block us. Then clear
-    // the partial display in the overlay.
+    // Two-part cancel (issue #47):
+    // 1. `abort_streaming()` sets the cooperative cancel flag the
+    //    streaming pass's whisper.cpp abort callback checks, so an
+    //    in-flight `spawn_blocking` decode returns early instead of
+    //    running to completion and starving the latency-critical final
+    //    pass for CPU cores. Resolved on the same transcriber instance
+    //    the streaming worker uses (same `resolve_local_transcriber`).
+    //    The final pass uses `DecodeProfile::Final`, which never installs
+    //    the callback, so it can never be aborted by this flag.
+    // 2. `handle.abort()` stops the worker's async loop at the next
+    //    await, so no further streaming pass is started.
+    // Only local STT spawns a streaming worker; for cloud modes there is
+    // nothing to cancel and resolving the transcriber would needlessly
+    // touch the model cache.
+    if mode.transcription == TranscriptionTarget::Local {
+        resolve_local_transcriber(ctx, mode).abort_streaming();
+    }
     if let Some(handle) = ctx.active_streaming_handle.lock().take() {
         handle.abort();
-        tracing::debug!("Streaming-Worker abortet");
+        tracing::debug!("Streaming worker aborted");
     }
     let _ = app.emit(
         "app://partial-transcript",
