@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Diagnostics IPC: log stream, app version, system info.
 
+use crate::core::session::SessionInfo;
 use crate::core::AppContext;
 use crate::injection::{InjectOptions, InjectionStrategy};
-use serde::Serialize;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -20,18 +20,6 @@ pub async fn get_recent_logs(
     limit: u32,
 ) -> IpcResult<Vec<String>> {
     Ok(state.log_buffer.lines(limit as usize))
-}
-
-#[derive(Serialize)]
-pub struct SessionInfo {
-    /// `wayland`, `x11`, `windows`, `macos`, `unknown`
-    pub display_server: String,
-    /// True if global hotkeys are expected to work on this session
-    /// (Wayland: no, until phase 5-full).
-    pub global_hotkeys_supported: bool,
-    /// True if the auto-paste shortcut after clipboard-set works
-    /// (Wayland: no without libei).
-    pub auto_paste_supported: bool,
 }
 
 #[tauri::command]

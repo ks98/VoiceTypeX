@@ -11,7 +11,19 @@
 //!   (`injection::linux_wayland`), X11/Windows → enigo Ctrl+V
 //!   (`injection::clipboard_fallback`).
 
-use crate::ipc::diagnostics::SessionInfo;
+use serde::Serialize;
+
+#[derive(Serialize)]
+pub struct SessionInfo {
+    /// `wayland`, `x11`, `windows`, `macos`, `unknown`
+    pub display_server: String,
+    /// True if global hotkeys are expected to work on this session
+    /// (Wayland: no, until phase 5-full).
+    pub global_hotkeys_supported: bool,
+    /// True if the auto-paste shortcut after clipboard-set works
+    /// (Wayland: no without libei).
+    pub auto_paste_supported: bool,
+}
 
 pub fn detect_session() -> SessionInfo {
     #[cfg(target_os = "windows")]
