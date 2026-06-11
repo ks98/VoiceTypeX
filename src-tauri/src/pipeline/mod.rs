@@ -882,7 +882,7 @@ fn resolve_local_transcriber(ctx: &Arc<AppContext>, mode: &Mode) -> Arc<LocalTra
     }
 
     {
-        let cache = ctx.extra_transcribers.lock();
+        let mut cache = ctx.extra_transcribers.lock();
         if let Some(found) = cache.get(slot_slug) {
             return found.clone();
         }
@@ -898,10 +898,14 @@ fn resolve_local_transcriber(ctx: &Arc<AppContext>, mode: &Mode) -> Arc<LocalTra
         "LocalTranscriber override created for mode"
     );
     let mut cache = ctx.extra_transcribers.lock();
-    cache
-        .entry(slot_slug.clone())
-        .or_insert(new_transcriber)
-        .clone()
+    // Re-check under the lock: a concurrent resolver may have inserted this
+    // slot between the read above and now. Reuse theirs so we don't hold two
+    // copies of the same model.
+    if let Some(found) = cache.get(slot_slug) {
+        return found.clone();
+    }
+    cache.insert(slot_slug.clone(), new_transcriber.clone());
+    new_transcriber
 }
 
 /// Analogous resolver for the embedded LLM processor
@@ -919,7 +923,7 @@ fn resolve_embedded_llm(ctx: &Arc<AppContext>, mode: &Mode) -> Arc<LlamaEmbedded
     }
 
     {
-        let cache = ctx.extra_llm_processors.lock();
+        let mut cache = ctx.extra_llm_processors.lock();
         if let Some(found) = cache.get(slot_slug) {
             return found.clone();
         }
@@ -934,10 +938,14 @@ fn resolve_embedded_llm(ctx: &Arc<AppContext>, mode: &Mode) -> Arc<LlamaEmbedded
         "LlamaEmbeddedProcessor override created for mode"
     );
     let mut cache = ctx.extra_llm_processors.lock();
-    cache
-        .entry(slot_slug.clone())
-        .or_insert(new_processor)
-        .clone()
+    // Re-check under the lock: a concurrent resolver may have inserted this
+    // slot between the read above and now. Reuse theirs so we don't hold two
+    // copies of the same model.
+    if let Some(found) = cache.get(slot_slug) {
+        return found.clone();
+    }
+    cache.insert(slot_slug.clone(), new_processor.clone());
+    new_processor
 }
 
 async fn run_cloud_processing(mode: &Mode, transcript: &str) -> Result<String> {

@@ -211,8 +211,8 @@ pub struct AppContext {
     pub transcriber: Arc<dyn Transcriber>,             // app-default transcriber (local or cloud)
     pub local_transcriber: Arc<LocalTranscriber>,      // concrete type for the streaming worker (Phase 2)
     pub local_llm_processor: Arc<LlamaEmbeddedProcessor>, // embedded-LLM default processor (Phase 3b) — #[cfg(not(windows))]
-    pub extra_transcribers: Arc<Mutex<HashMap<String, Arc<LocalTranscriber>>>>, // per-mode Whisper slot cache
-    pub extra_llm_processors: Arc<Mutex<HashMap<String, Arc<LlamaEmbeddedProcessor>>>>, // per-mode LLM slot cache — #[cfg(not(windows))]
+    pub extra_transcribers: Arc<Mutex<BoundedLru<String, Arc<LocalTranscriber>>>>, // per-mode Whisper slot cache, LRU-capped (issue #31)
+    pub extra_llm_processors: Arc<Mutex<BoundedLru<String, Arc<LlamaEmbeddedProcessor>>>>, // per-mode LLM slot cache, LRU-capped — #[cfg(not(windows))]
     pub active_streaming_handle: Arc<Mutex<Option<JoinHandle<()>>>>, // Phase-2 streaming worker handle
     pub injector: Arc<dyn TextInjector>,
     pub selection_buffer: Arc<Mutex<Option<String>>>,  // eager-captured selection for edit modes
@@ -411,9 +411,13 @@ state.
   alternative GGUF slot. The resolver in `pipeline/mod.rs` compares
   against `Settings.llm_default_slot` — on a match (or `null`) the
   global processor is reused, otherwise a new instance is cached lazily
-  in `AppContext.extra_llm_processors` (HashMap, slot slug → Arc).
+  in `AppContext.extra_llm_processors` (bounded LRU, slot slug → Arc).
   Analogously there is `Mode.whisper_model_slot` +
-  `AppContext.extra_transcribers` for Whisper overrides.
+  `AppContext.extra_transcribers` for Whisper overrides. Both caches are
+  capped at `EXTRA_ENGINE_CACHE_CAP` (= 2) entries with least-recently-used
+  eviction so a session that cycles across many override slots doesn't
+  accumulate unbounded multi-GB model memory (issue #31); the app-default
+  engine is held separately and never counts toward the cap.
 
 ### Ollama (`local_engine = "ollama"`) — opt-in for external daemon use
 

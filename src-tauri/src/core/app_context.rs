@@ -6,6 +6,7 @@
 //! them via `tauri::State<'_, AppContext>` from any async context.
 
 use crate::audio::recorder::RecorderHandle;
+use crate::core::bounded_lru::BoundedLru;
 use crate::core::config::Settings;
 use crate::core::log_buffer::LogRingBuffer;
 use crate::core::modes::{Mode, ModesRegistry};
@@ -15,9 +16,17 @@ use crate::injection::TextInjector;
 use crate::processing::embedded::LlamaEmbeddedProcessor;
 use crate::transcription::local::LocalTranscriber;
 use parking_lot::{Mutex, RwLock};
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+
+/// Max number of override engines kept resident per cache
+/// (`extra_transcribers` / `extra_llm_processors`). The app-default
+/// engine is held separately (`local_transcriber` / `local_llm_processor`)
+/// and never counts here, so these caches only hold *override* slots that
+/// differ from the default. Two covers the common "default plus one or two
+/// alternate modes" pattern; a third distinct override evicts the
+/// least-recently-used, bounding the multi-GB-per-entry memory (issue #31).
+pub const EXTRA_ENGINE_CACHE_CAP: usize = 2;
 
 pub struct AppContext {
     pub state_bus: StateBus,
@@ -61,12 +70,21 @@ pub struct AppContext {
     /// triggers lazy load of a new `LocalTranscriber` for that slot;
     /// all further calls use the cached one. Key is the slot slug,
     /// value is the transcriber.
-    pub extra_transcribers: Arc<Mutex<HashMap<String, Arc<LocalTranscriber>>>>,
-    /// Analogously for `mode.embedded_llm_slot` — cache of override
-    /// `LlamaEmbeddedProcessor`s per GGUF slot. Linux/macOS-only (see
+    ///
+    /// Bounded LRU (issue #31): each entry backs a multi-GB Whisper
+    /// model, so the cache is capped at `EXTRA_ENGINE_CACHE_CAP` entries
+    /// and evicts the least-recently-used slot — switching across many
+    /// override slots over a session no longer accumulates unbounded
+    /// model memory. Eviction only drops the cache's `Arc`; an in-flight
+    /// pipeline run that already cloned it keeps its model alive until it
+    /// finishes.
+    pub extra_transcribers: Arc<Mutex<BoundedLru<String, Arc<LocalTranscriber>>>>,
+    /// Analogously for `mode.embedded_llm_slot` — bounded-LRU cache of
+    /// override `LlamaEmbeddedProcessor`s per GGUF slot, capped at
+    /// `EXTRA_ENGINE_CACHE_CAP` (issue #31). Linux/macOS-only (see
     /// `local_llm_processor`).
     #[cfg(not(target_os = "windows"))]
-    pub extra_llm_processors: Arc<Mutex<HashMap<String, Arc<LlamaEmbeddedProcessor>>>>,
+    pub extra_llm_processors: Arc<Mutex<BoundedLru<String, Arc<LlamaEmbeddedProcessor>>>>,
     /// Handle of the currently running streaming decode worker
     /// (phase 2, only when `transcription = "local"`). Spawned in
     /// `start_recording`, aborted in `finish_recording_and_inject`
