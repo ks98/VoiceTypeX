@@ -130,7 +130,7 @@ reis = { version = "=0.6.1", features = ["tokio"] }
 # xkbcommon: keysym-to-keycode mapping for layout-aware keystrokes
 # (e.g. Ctrl+V on QWERTZ vs. QWERTY). Used by the reis example
 # and is the canonical choice.
-xkbcommon = "0.7"
+xkbcommon = "0.8"
 # arboard: reads the PRIMARY selection (highlighted text) for the
 # edit modes directly — natively on X11, on Wayland via
 # wlr/ext-data-control (feature `wayland-data-control`), focus-independent
