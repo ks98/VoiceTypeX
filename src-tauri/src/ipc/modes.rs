@@ -16,8 +16,16 @@ pub async fn get_modes(state: tauri::State<'_, Arc<AppContext>>) -> IpcResult<Ve
     Ok(state.modes.current())
 }
 
+/// Force an immediate re-read of `modes/` from disk, bypassing the
+/// `notify` watcher debounce. Used by the empty-state recovery button in
+/// the menu — when the in-memory list is empty/stale, this re-reads the
+/// TOMLs without waiting for (or relying on) the file-watcher.
 #[tauri::command]
 pub async fn reload_modes(state: tauri::State<'_, Arc<AppContext>>) -> IpcResult<Vec<Mode>> {
+    state
+        .modes
+        .reload(&state.modes_dir)
+        .map_err(|e| e.to_string())?;
     Ok(state.modes.current())
 }
 
