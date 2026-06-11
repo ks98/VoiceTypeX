@@ -48,6 +48,10 @@ impl AppState {
             (Self::Transcribing, Self::Injecting) => true, // Mode without postprocessing
             (Self::Postprocessing, Self::Injecting) => true,
             (Self::Injecting, Self::Idle) => true,
+            // Finish/abort without injection (e.g. the diagnostic test
+            // path, or a recording cancelled before transcription).
+            (Self::Recording, Self::Idle) => true,
+            (Self::Transcribing, Self::Idle) => true,
             (Self::Error(_), Self::Idle) => true,
             (_, Self::Error(_)) => true, // Error is reachable from anywhere
             _ => false,
@@ -141,40 +145,34 @@ mod tests {
         bus.transition(AppState::Idle).unwrap();
     }
 
-    /// Regression test for the "Transcribing deadlock" (issue #17).
+    /// Regression test for the "Transcribing deadlock" (issues #17/#21).
     ///
     /// `run_test_transcription` (ipc/recording.rs) drives the bus
     /// `Idle -> Recording -> Transcribing` and on every exit path tries
-    /// to return to `Idle` — but `Recording -> Idle` and
-    /// `Transcribing -> Idle` are NOT legal transitions, so each
-    /// `transition` returns `Err`. Because the caller swallows those
-    /// errors with `let _ = ...`, the bus stays stuck in `Recording` /
-    /// `Transcribing` — that rejection IS the deadlock mechanism.
-    ///
-    /// This test pins the CURRENT behavior (both edges rejected) so it
-    /// is green on today's `main`. Issue #21 legalizes these edges and
-    /// will flip these assertions to expect success.
+    /// to return to `Idle`. #21 legalizes the `Recording -> Idle` and
+    /// `Transcribing -> Idle` edges ("finish/abort without injection"),
+    /// so each `transition` now succeeds and the bus returns to `Idle`
+    /// instead of getting stuck — that was the deadlock mechanism.
     #[test]
-    fn transcribing_deadlock_recording_and_transcribing_to_idle_rejected() {
-        // Edge-level: both back-to-Idle transitions are illegal today.
-        assert!(!AppState::Recording.can_transition_to(&AppState::Idle));
-        assert!(!AppState::Transcribing.can_transition_to(&AppState::Idle));
+    fn transcribing_deadlock_recording_and_transcribing_to_idle_allowed() {
+        // Edge-level: both back-to-Idle transitions are legal now.
+        assert!(AppState::Recording.can_transition_to(&AppState::Idle));
+        assert!(AppState::Transcribing.can_transition_to(&AppState::Idle));
 
         // Bus-level: replay the run_test_transcription sequence and show
-        // the bus gets stuck instead of returning to Idle.
+        // the bus returns to Idle on every exit path.
         let bus = StateBus::new();
         bus.transition(AppState::Recording).unwrap();
 
-        // L110/L120 case: Recording -> Idle is rejected, bus stays stuck.
-        let err = bus.transition(AppState::Idle).unwrap_err();
-        assert!(matches!(err, VoiceTypeError::InvalidStateTransition { .. }));
-        assert_eq!(bus.current(), AppState::Recording);
+        // L110/L120 case: Recording -> Idle succeeds, bus is back to Idle.
+        bus.transition(AppState::Idle).unwrap();
+        assert_eq!(bus.current(), AppState::Idle);
 
+        bus.transition(AppState::Recording).unwrap();
         bus.transition(AppState::Transcribing).unwrap();
 
-        // L153 case: Transcribing -> Idle is rejected, bus stays stuck.
-        let err = bus.transition(AppState::Idle).unwrap_err();
-        assert!(matches!(err, VoiceTypeError::InvalidStateTransition { .. }));
-        assert_eq!(bus.current(), AppState::Transcribing);
+        // L153 case: Transcribing -> Idle succeeds, bus is back to Idle.
+        bus.transition(AppState::Idle).unwrap();
+        assert_eq!(bus.current(), AppState::Idle);
     }
 }
