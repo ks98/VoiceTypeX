@@ -258,8 +258,10 @@ WebView2 cache, …) are in
   (gnome-keyring) or kwallet must be installed. Headless/server setups
   run in the plaintext fallback with a clear UI warning.
 - **Bug reports:** [GitHub Issues](https://github.com/ks98/VoiceTypeX/issues)
-  including `~/.config/de.kevin-stenzel.voicetypex/voicetypex.log`
-  (if enabled) and the app version from *Settings → Diagnostics*.
+  including the on-disk log and the app version from *Settings →
+  Diagnostics*. The log lives in the app log dir (Linux:
+  `~/.local/share/de.kevin-stenzel.voicetypex/logs/`), rotated daily as
+  `voicetypex.<date>.log` with the last 7 days kept.
 
 ## License
 
