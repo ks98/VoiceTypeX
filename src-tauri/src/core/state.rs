@@ -140,4 +140,41 @@ mod tests {
         assert!(matches!(bus.current(), AppState::Error(_)));
         bus.transition(AppState::Idle).unwrap();
     }
+
+    /// Regression test for the "Transcribing deadlock" (issue #17).
+    ///
+    /// `run_test_transcription` (ipc/recording.rs) drives the bus
+    /// `Idle -> Recording -> Transcribing` and on every exit path tries
+    /// to return to `Idle` — but `Recording -> Idle` and
+    /// `Transcribing -> Idle` are NOT legal transitions, so each
+    /// `transition` returns `Err`. Because the caller swallows those
+    /// errors with `let _ = ...`, the bus stays stuck in `Recording` /
+    /// `Transcribing` — that rejection IS the deadlock mechanism.
+    ///
+    /// This test pins the CURRENT behavior (both edges rejected) so it
+    /// is green on today's `main`. Issue #21 legalizes these edges and
+    /// will flip these assertions to expect success.
+    #[test]
+    fn transcribing_deadlock_recording_and_transcribing_to_idle_rejected() {
+        // Edge-level: both back-to-Idle transitions are illegal today.
+        assert!(!AppState::Recording.can_transition_to(&AppState::Idle));
+        assert!(!AppState::Transcribing.can_transition_to(&AppState::Idle));
+
+        // Bus-level: replay the run_test_transcription sequence and show
+        // the bus gets stuck instead of returning to Idle.
+        let bus = StateBus::new();
+        bus.transition(AppState::Recording).unwrap();
+
+        // L110/L120 case: Recording -> Idle is rejected, bus stays stuck.
+        let err = bus.transition(AppState::Idle).unwrap_err();
+        assert!(matches!(err, VoiceTypeError::InvalidStateTransition { .. }));
+        assert_eq!(bus.current(), AppState::Recording);
+
+        bus.transition(AppState::Transcribing).unwrap();
+
+        // L153 case: Transcribing -> Idle is rejected, bus stays stuck.
+        let err = bus.transition(AppState::Idle).unwrap_err();
+        assert!(matches!(err, VoiceTypeError::InvalidStateTransition { .. }));
+        assert_eq!(bus.current(), AppState::Transcribing);
+    }
 }
