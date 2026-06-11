@@ -72,13 +72,16 @@ sudo apt-get install -y \
     build-essential pkg-config curl \
     libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev \
     libayatana-appindicator3-dev librsvg2-dev \
-    libssl-dev \
     libdbus-1-dev                # keyring -> dbus-secret-service (KEK for secrets.json at-rest) \
     libasound2-dev               # cpal (audio capture) \
     libxdo-dev                   # enigo (X11 keystroke; not runtime-relevant on Wayland) \
-    libclang-dev cmake           # whisper-rs (bindgen + whisper.cpp build) \
+    libudev-dev                  # enigo (Linux device enumeration) \
+    libxcb1-dev libxcb-xtest0-dev libxcb-xfixes0-dev \
+                                 # enigo XCB backend (X11 input injection) \
+    clang libclang-dev cmake     # whisper-rs (bindgen + whisper.cpp build) \
     libvulkan-dev                # gpu-vulkan feature (Phase-3a default), headers + loader \
-    glslc                        # GLSL->SPIR-V shader compiler, needed by whisper.cpp's Vulkan backend at build time \
+    glslc spirv-headers          # GLSL->SPIR-V shader compiler + headers, needed by whisper.cpp's Vulkan backend at build time \
+    patchelf                     # bundling/rpath fixups (tauri AppImage tooling) \
     mesa-vulkan-drivers          # llvmpipe software-Vulkan fallback (systems without hardware Vulkan)
 ```
 
