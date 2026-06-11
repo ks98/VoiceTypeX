@@ -81,19 +81,31 @@ impl StateBus {
     }
 
     /// Validate and set the next state. Logs every transition.
+    ///
+    /// Validation and write happen in a single critical section:
+    /// `send_if_modified` holds the watch's write lock across the
+    /// closure, so a concurrent caller cannot observe the same `current`
+    /// and validate the same edge in between — closing the check-then-act
+    /// race (two tasks racing `Idle -> Recording` etc.).
     pub fn transition(&self, next: AppState) -> Result<()> {
-        let current = self.current();
-        if !current.can_transition_to(&next) {
+        // `from` is set inside the locked closure so the error reports
+        // the value we actually validated against, not a re-read.
+        let mut from: Option<String> = None;
+        let modified = self.sender.send_if_modified(|current| {
+            if !current.can_transition_to(&next) {
+                from = Some(current.label().to_string());
+                return false; // illegal edge: don't write, don't notify
+            }
+            tracing::info!(from = %current.label(), to = %next.label(), "State transition");
+            *current = next.clone();
+            true // notify subscribers, even with none attached yet
+        });
+        if !modified {
             return Err(VoiceTypeError::InvalidStateTransition {
-                from: current.label().to_string(),
+                from: from.expect("from is set whenever the edge is rejected"),
                 to: next.label().to_string(),
             });
         }
-        tracing::info!(from = %current.label(), to = %next.label(), "State transition");
-        // `send_replace` writes the value always, even without active
-        // receivers — crucial because subscribers can attach later via
-        // `subscribe()` and the state must still be correct.
-        self.sender.send_replace(next);
         Ok(())
     }
 }
@@ -174,5 +186,38 @@ mod tests {
         // L153 case: Transcribing -> Idle succeeds, bus is back to Idle.
         bus.transition(AppState::Idle).unwrap();
         assert_eq!(bus.current(), AppState::Idle);
+    }
+
+    /// Regression test for issue #32: `transition` must be atomic
+    /// (check + set under one lock). Many threads race the same
+    /// `Idle -> Recording` edge; exactly one may win, because the loser
+    /// validates `Recording -> Recording` (illegal) once the winner has
+    /// committed inside the same critical section.
+    #[test]
+    fn concurrent_idle_to_recording_only_one_wins() {
+        use std::sync::{Arc, Barrier};
+
+        const THREADS: usize = 32;
+        let bus = StateBus::new();
+        let barrier = Arc::new(Barrier::new(THREADS));
+
+        let handles: Vec<_> = (0..THREADS)
+            .map(|_| {
+                let bus = bus.clone();
+                let barrier = Arc::clone(&barrier);
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    bus.transition(AppState::Recording).is_ok()
+                })
+            })
+            .collect();
+
+        let wins = handles
+            .into_iter()
+            .map(|h| h.join().unwrap())
+            .filter(|&won| won)
+            .count();
+        assert_eq!(wins, 1, "exactly one Idle->Recording transition may win");
+        assert_eq!(bus.current(), AppState::Recording);
     }
 }
