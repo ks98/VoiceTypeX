@@ -52,6 +52,9 @@ thiserror = "2.0"
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# Rotating on-disk log file (daily, bounded). Non-blocking writer keeps
+# logging off the hot path; the WorkerGuard must outlive the app to flush.
+tracing-appender = "0.2"
 
 # OS keychain (BYOK API keys, never in cleartext).
 # Without a backend feature, keyring 3.x falls back to a RAM mock store

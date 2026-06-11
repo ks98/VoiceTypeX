@@ -587,10 +587,22 @@ IPC (see `Settings::load_or_default` / `Settings::save` and
 
 ## Logging
 
-Tracing stack with three layers:
+Tracing stack with four layers:
 - `EnvFilter` (RUST_LOG compatible; default `voicetypex=info,tauri=info,warn`)
 - `fmt::layer()` for stdout (dev)
 - `LogRingBuffer::layer()` (in-memory, 500 lines, polled by the Logs view)
+- a rolling on-disk file (`tracing-appender`, daily rotation, last 7 files
+  kept) under the per-OS app log dir (`app_log_dir()`:
+  `~/.local/share/<identifier>/logs` on Linux,
+  `<LocalAppData>/<identifier>/logs` on Windows,
+  `~/Library/Logs/<identifier>` on macOS) — so crashes survive a restart
+
+`init_tracing` runs in `run()` before the Tauri app handle exists, so it
+installs the first three layers plus an empty reloadable slot for the file
+layer; the `.setup()` hook then resolves `app_log_dir()` and swaps the real
+rolling-file layer in. Trade-off: events emitted before `.setup()` (the
+active-backend line, Tauri plugin init) reach stdout + the ring buffer but
+not the file. A failure to open the log dir is non-fatal (warn + continue).
 
 CLAUDE.md's privacy/logging rules are strict: audio/transcript/LLM-response data **never** go
 into the default logging. A diagnostic-logging toggle in the settings

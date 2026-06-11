@@ -214,9 +214,10 @@ WebView2 cache, …) are in
 ## Privacy & Security
 
 - Audio, transcripts, and LLM responses are **not** logged. The
-  `LogRingBuffer` (visible in the *Logs* tab) filters out provider
-  response bodies and transcript snippets — only status codes, provider
-  names, and duration metrics make it into the logs.
+  `LogRingBuffer` (visible in the *Logs* tab) and the rotating on-disk
+  log file (under the app log dir, daily rotation, last 7 files kept)
+  both filter out provider response bodies and transcript snippets — only
+  status codes, provider names, and duration metrics make it into the logs.
 - **No** telemetry, **no** analytics.
 - **Cloud API keys are stored encrypted at rest**: on Windows via DPAPI,
   on Linux with AES-256-GCM (KEK in the OS keyring). On Linux systems
