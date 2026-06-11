@@ -7,6 +7,7 @@ pub mod config;
 pub mod default_modes;
 pub mod edit;
 pub mod error;
+pub mod events;
 pub mod hardware;
 pub mod log_buffer;
 pub mod modes;

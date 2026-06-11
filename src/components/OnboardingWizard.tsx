@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { emit, listen } from "@tauri-apps/api/event";
 import { listenAll } from "../lib/tauriListen";
+import { EVENTS } from "../lib/events";
 import {
   ipcDownloadDefaultModel,
   ipcDownloadLlmDefaultModel,
@@ -66,7 +67,7 @@ export default function OnboardingWizard({
   const onPickLocale = (next: SupportedLocale) => {
     void update({ locale: next }).then(() => {
       useI18nStore.setState({ locale: next });
-      void emit("i18n://locale-changed", { locale: next });
+      void emit(EVENTS.LOCALE_CHANGED, { locale: next });
       // Re-seed the bundled default modes in the chosen language so their
       // names / system prompts / dictation commands match the UI (#6).
       // Onboarding-only — the user hasn't customized modes yet here.
@@ -108,10 +109,10 @@ export default function OnboardingWizard({
 
   useEffect(() => {
     const unlisten = listenAll([
-      listen<ModelDownloadProgress>("model-download-progress", (event) =>
+      listen<ModelDownloadProgress>(EVENTS.MODEL_DOWNLOAD_PROGRESS, (event) =>
         setWhisperProgress(event.payload),
       ),
-      listen<ModelDownloadProgress>("llm-model-download-progress", (event) =>
+      listen<ModelDownloadProgress>(EVENTS.LLM_MODEL_DOWNLOAD_PROGRESS, (event) =>
         setLlmProgress(event.payload),
       ),
     ]);

@@ -6,6 +6,7 @@ import App from "./App";
 import Menu from "./views/Menu";
 import Overlay from "./views/Overlay";
 import { initTheme, subscribeSystemTheme } from "./lib/theme";
+import { EVENTS } from "./lib/events";
 import { ipcGetSettings, retryWhileUnmanaged } from "./lib/tauri";
 import { pickSupported, useI18nStore } from "./i18n";
 import "./styles/globals.css";
@@ -50,7 +51,7 @@ const view =
 // language in settings, the event is emitted and all three stores are
 // updated locally. The subscriber is registered BEFORE the render so
 // that even a tightly-timed simultaneous event is not lost.
-void listen<{ locale: string }>("i18n://locale-changed", (event) => {
+void listen<{ locale: string }>(EVENTS.LOCALE_CHANGED, (event) => {
   const next = pickSupported(event.payload.locale);
   useI18nStore.setState({ locale: next });
 });

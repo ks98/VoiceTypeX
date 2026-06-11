@@ -8,6 +8,7 @@ import Settings from "./views/Settings";
 import Modes from "./views/Modes";
 import Logs from "./views/Logs";
 import { useSettingsStore, useUIStore } from "./store";
+import { EVENTS } from "./lib/events";
 import { useT } from "./i18n";
 
 export default function App(): JSX.Element {
@@ -27,7 +28,7 @@ export default function App(): JSX.Element {
   // the Logs tab.
   useEffect(() => {
     let unlisten: UnlistenFn | null = null;
-    void listen("app://focus-logs", () => setActiveTab("logs")).then((u) => {
+    void listen(EVENTS.FOCUS_LOGS, () => setActiveTab("logs")).then((u) => {
       unlisten = u;
     });
     return () => {

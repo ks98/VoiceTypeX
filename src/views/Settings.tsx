@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
 import { listenAll } from "../lib/tauriListen";
+import { EVENTS } from "../lib/events";
 import Field from "../components/Field";
 import Button from "../components/Button";
 import Banner from "../components/Banner";
@@ -172,10 +173,10 @@ export default function Settings(): JSX.Element {
 
   useEffect(() => {
     return listenAll([
-      listen<ModelDownloadProgress>("model-download-progress", (event) =>
+      listen<ModelDownloadProgress>(EVENTS.MODEL_DOWNLOAD_PROGRESS, (event) =>
         setProgress(event.payload),
       ),
-      listen<ModelDownloadProgress>("llm-model-download-progress", (event) =>
+      listen<ModelDownloadProgress>(EVENTS.LLM_MODEL_DOWNLOAD_PROGRESS, (event) =>
         setLlmProgress(event.payload),
       ),
     ]);
@@ -658,7 +659,7 @@ function LanguageField({
             useI18nStore.setState({ locale: next });
             // Cross-window sync: overlay + menu listen for this event
             // in main.tsx and update their store accordingly.
-            void emit("i18n://locale-changed", { locale: next });
+            void emit(EVENTS.LOCALE_CHANGED, { locale: next });
           });
         }}
       >

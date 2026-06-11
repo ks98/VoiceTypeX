@@ -244,7 +244,7 @@ async fn start_recording(app: &AppHandle, ctx: &Arc<AppContext>, mode: &Mode) ->
         let settings = ctx.settings.read();
         crate::core::modes::resolve_engine_status(mode, &settings)
     };
-    if let Err(e) = app.emit("app://active-engine", &engine_status) {
+    if let Err(e) = app.emit(crate::core::events::ACTIVE_ENGINE, &engine_status) {
         tracing::warn!(error = %e, "emit app://active-engine failed");
     }
 
@@ -440,7 +440,7 @@ async fn streaming_worker(
                 if !curr_text.is_empty() && curr_text != committed {
                     committed = curr_text.clone();
                     let emit_result = app.emit(
-                        "app://partial-transcript",
+                        crate::core::events::PARTIAL_TRANSCRIPT,
                         PartialTranscriptPayload {
                             text: committed.clone(),
                         },
@@ -681,7 +681,7 @@ async fn finish_recording_and_inject(
         tracing::debug!("Streaming worker aborted");
     }
     let _ = app.emit(
-        "app://partial-transcript",
+        crate::core::events::PARTIAL_TRANSCRIPT,
         PartialTranscriptPayload {
             text: String::new(),
         },
@@ -1395,7 +1395,7 @@ pub fn spawn_state_event_emitter(app: AppHandle) {
                 }),
                 other => serde_json::json!({ "state": other.label() }),
             };
-            let _ = app.emit("app://state", payload);
+            let _ = app.emit(crate::core::events::STATE, payload);
         }
     });
 }
