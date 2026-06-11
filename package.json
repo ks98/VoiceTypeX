@@ -1,6 +1,6 @@
 {
   "name": "voicetypex",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Cross-platform dictation tool with cursor insertion",
   "license": "GPL-3.0-or-later",
   "private": true,
