@@ -32,16 +32,14 @@ impl WhisperCompatibleClient {
         base_url: impl Into<String>,
         default_model: impl Into<String>,
         api_key: String,
+        client: reqwest::Client,
     ) -> Self {
         Self {
             base_url: base_url.into(),
             default_model: default_model.into(),
             api_key,
             provider,
-            client: reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(120))
-                .build()
-                .expect("reqwest client builder (timeout)"),
+            client,
         }
     }
 
@@ -70,6 +68,9 @@ impl WhisperCompatibleClient {
             let response = self
                 .client
                 .post(&url)
+                // The shared client carries no default timeout (issue #41);
+                // keep the per-request 120 s budget the dedicated client used.
+                .timeout(std::time::Duration::from_secs(120))
                 .bearer_auth(&self.api_key)
                 .multipart(form)
                 .send()

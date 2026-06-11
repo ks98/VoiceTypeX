@@ -92,6 +92,14 @@ pub struct AppContext {
     /// type matches the project-wide convention
     /// `tauri::async_runtime::spawn(...)`.
     pub active_streaming_handle: Arc<Mutex<Option<tauri::async_runtime::JoinHandle<()>>>>,
+    /// App-wide shared `reqwest::Client` for all cloud STT/LLM calls
+    /// (issue #41). One client = one connection pool, so TLS sessions
+    /// and keep-alive connections survive across dictations instead of
+    /// paying a fresh handshake per call. It is internally `Arc`'d, so
+    /// the factories clone it cheaply per call. No default timeout is
+    /// set here — each provider applies its own per-request `.timeout()`
+    /// (STT 120 s, LLM 60 s), preserving the previous per-client budgets.
+    pub http_client: reqwest::Client,
     pub injector: Arc<dyn TextInjector>,
     /// Selection captured eagerly when the menu hotkey opens the menu
     /// in `Idle` (see `pipeline::handle_menu_hotkey`). Consumed by edit

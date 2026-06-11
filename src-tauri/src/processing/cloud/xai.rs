@@ -18,13 +18,14 @@ pub struct XaiProcessor {
 }
 
 impl XaiProcessor {
-    pub fn new(api_key: String) -> Self {
+    pub fn new(api_key: String, client: reqwest::Client) -> Self {
         Self {
             inner: OpenAICompatibleClient::new(
                 ProviderId::Xai,
                 "https://api.x.ai/v1",
                 DEFAULT_MODEL,
                 api_key,
+                client,
             ),
         }
     }

@@ -13,13 +13,14 @@ pub struct GroqTranscriber {
 }
 
 impl GroqTranscriber {
-    pub fn new(api_key: String) -> Self {
+    pub fn new(api_key: String, client: reqwest::Client) -> Self {
         Self {
             inner: WhisperCompatibleClient::new(
                 ProviderId::Groq,
                 "https://api.groq.com/openai/v1",
                 "whisper-large-v3-turbo",
                 api_key,
+                client,
             ),
         }
     }

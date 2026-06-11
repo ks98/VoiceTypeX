@@ -5,12 +5,14 @@
 //! booleans. Write operations send the key from the UI directly into
 //! the OS keychain.
 
+use crate::core::app_context::AppContext;
 use crate::core::error::ProviderId;
 use crate::processing::cloud::anthropic::AnthropicProcessor;
 use crate::processing::cloud::openai_compatible::OpenAICompatibleClient;
 use crate::secrets::SecretStore;
 use crate::transcription::cloud::deepgram::DeepgramTranscriber;
 use serde::Serialize;
+use std::sync::Arc;
 
 type IpcResult<T> = std::result::Result<T, String>;
 
@@ -81,10 +83,17 @@ pub async fn delete_provider_key(provider: String) -> IpcResult<()> {
 /// OpenAI-compatible `GET /models` test. Anthropic/Deepgram follow
 /// in phase 2.5+.
 #[tauri::command]
-pub async fn test_provider_connection(provider: String) -> IpcResult<()> {
+pub async fn test_provider_connection(
+    state: tauri::State<'_, Arc<AppContext>>,
+    provider: String,
+) -> IpcResult<()> {
     let key = SecretStore::get(&provider)
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("No API key set for '{provider}'"))?;
+
+    // Reuse the app-wide shared HTTP client (issue #41) so the test
+    // call warms the same connection pool a later dictation uses.
+    let client = state.http_client.clone();
 
     match provider.as_str() {
         "xai" => OpenAICompatibleClient::new(
@@ -92,6 +101,7 @@ pub async fn test_provider_connection(provider: String) -> IpcResult<()> {
             "https://api.x.ai/v1",
             "grok-4-fast-non-reasoning",
             key,
+            client,
         )
         .test_connection()
         .await
@@ -101,6 +111,7 @@ pub async fn test_provider_connection(provider: String) -> IpcResult<()> {
             "https://api.openai.com/v1",
             "gpt-4o-mini",
             key,
+            client,
         )
         .test_connection()
         .await
@@ -110,15 +121,16 @@ pub async fn test_provider_connection(provider: String) -> IpcResult<()> {
             "https://api.groq.com/openai/v1",
             "whisper-large-v3-turbo",
             key,
+            client,
         )
         .test_connection()
         .await
         .map_err(|e| e.to_string()),
-        "anthropic" => AnthropicProcessor::new(key)
+        "anthropic" => AnthropicProcessor::new(key, client)
             .test_connection()
             .await
             .map_err(|e| e.to_string()),
-        "deepgram" => DeepgramTranscriber::new(key)
+        "deepgram" => DeepgramTranscriber::new(key, client)
             .test_connection()
             .await
             .map_err(|e| e.to_string()),

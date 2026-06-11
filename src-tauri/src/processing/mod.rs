@@ -18,7 +18,11 @@ use std::sync::Arc;
 
 /// Factory: returns the matching cloud processor for a provider. xAI
 /// uses the same keychain entry for STT and LLM (CLAUDE.md §4.4).
-pub fn make_cloud_processor(provider: &str) -> Result<Arc<dyn Processor>> {
+///
+/// `client` is the app-wide shared `reqwest::Client` (issue #41) — it
+/// is internally `Arc`'d, so cloning it per call reuses one connection
+/// pool across dictations.
+pub fn make_cloud_processor(provider: &str, client: reqwest::Client) -> Result<Arc<dyn Processor>> {
     let key = SecretStore::get(provider)?.ok_or_else(|| {
         // A missing key is an auth problem, not a processing transport
         // failure — route it through `Secrets` so `kind()` reports
@@ -28,9 +32,11 @@ pub fn make_cloud_processor(provider: &str) -> Result<Arc<dyn Processor>> {
         ))
     })?;
     match provider {
-        "xai" => Ok(Arc::new(cloud::xai::XaiProcessor::new(key))),
-        "openai" => Ok(Arc::new(cloud::openai::OpenAIProcessor::new(key))),
-        "anthropic" => Ok(Arc::new(cloud::anthropic::AnthropicProcessor::new(key))),
+        "xai" => Ok(Arc::new(cloud::xai::XaiProcessor::new(key, client))),
+        "openai" => Ok(Arc::new(cloud::openai::OpenAIProcessor::new(key, client))),
+        "anthropic" => Ok(Arc::new(cloud::anthropic::AnthropicProcessor::new(
+            key, client,
+        ))),
         other => Err(VoiceTypeError::processing(format!(
             "Unknown LLM provider: {other}"
         ))),
