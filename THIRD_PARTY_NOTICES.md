@@ -139,11 +139,11 @@ stored locally (chmod 0600) and never go into logs.
 | Service | License / TOS | Usage |
 |---|---|---|
 | [Ollama](https://ollama.com/) (local daemon) | MIT (code) | Legacy LLM path, opt-in via `local_engine = "ollama"` |
-| [xAI API](https://x.ai/api) | xAI ToS | Cloud STT (Grok-STT) + LLM (Grok-4) |
+| [xAI API](https://x.ai/api) | xAI ToS | Cloud STT (Grok-STT) + LLM (Grok-4-fast) |
 | [OpenAI API](https://openai.com/api/) | OpenAI ToS | Cloud STT (Whisper API) + LLM (GPT) |
 | [Anthropic API](https://www.anthropic.com/) | Anthropic ToS | Cloud LLM (Claude) |
 | [Groq API](https://groq.com/) | Groq ToS | Cloud STT (Whisper-Turbo) |
-| [Deepgram API](https://deepgram.com/) | Deepgram ToS | Cloud STT (Nova-2) |
+| [Deepgram API](https://deepgram.com/) | Deepgram ToS | Cloud STT (Nova-3) |
 
 ---
 
