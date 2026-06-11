@@ -13,7 +13,6 @@
     "dialog:default",
     "notification:default",
     "os:default",
-    "fs:default",
     "clipboard-manager:default",
     "autostart:default",
     "updater:default",
