@@ -137,6 +137,43 @@ and cleared at the very top of `finish_recording_and_inject`.
 UI trigger buttons in the mode list call `execute_mode` directly — the
 toggle logic is the same as for the hotkey.
 
+### `run_stages` (pure core) vs. `finish_recording_and_inject` (glue)
+
+`finish_recording_and_inject` is split into an `AppHandle`-free stage
+**core** and a **caller** that owns all UI/glue (issues #34–#36):
+
+- **`run_stages(deps, samples, mode, selection, resolve_processor)`** is
+  the pure core. It runs **STT → (optional) LLM → output-action
+  resolution** on the captured 16 kHz f32 `samples` and drives the
+  `Postprocessing` AppState transition, with the same per-stage
+  `inspect_err(|e| transition(Error))` recovery as the inline code had.
+  It names **no `AppHandle` and no `AppContext`** — it only touches the
+  `StateBus` and the resolved trait objects bundled in `PipelineDeps`
+  (`StageTranscriber::Local | Cloud`, the `TranscribeOpts`, the
+  `system_prompt` + `ProcessOpts`). The processor *instance* is resolved
+  by the caller-supplied `resolve_processor` closure, which `run_stages`
+  invokes **after** the `Postprocessing` transition — so a
+  processor-resolution failure parks from `Postprocessing` and never
+  skips the STT pass (the original ordering). `run_stages` stops at the
+  inject boundary and returns `StageOutput` (`final_text`,
+  `output_action`, and the #43 `transcribe_ms`/`process_ms`).
+- **`finish_recording_and_inject`** keeps everything `AppHandle`-bound
+  around that core: streaming-worker abort + `app://partial-transcript`
+  clear (#47), the stop cue, `active_mode` clearing, the
+  `recorder.stop_and_finalize()` + the `Transcribing` transition (kept in
+  the caller because a finalize failure must park from `Transcribing`),
+  the transcriber/processor/WAV resolution (#46/#30/#42), the
+  `Injecting` transition, the **empty-output overlay hide**, the
+  **timing-critical `overlay.hide()` → `sleep(80 ms)` → `inject`** focus
+  choreography (Wayland-load-bearing, see the table in
+  [§ Branching in the Pipeline Code](#branching-in-the-pipeline-code)),
+  the `Idle` transition and the #43 stage-timing log. `run_stages` has
+  zero window/cue/tray/emit calls.
+
+The `run_pipeline_stages_for_test` helper in the test module still
+mirrors the pre-extraction stage choreography and is kept untouched for
+now (issue #38 later deletes the copy and tests `run_stages` directly).
+
 ## Edit Modes (selection → LLM → replace/insert)
 
 Modes with `Mode.input == Selection` transform selected text instead of

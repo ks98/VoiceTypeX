@@ -396,8 +396,8 @@ impl Mode {
     ///    present** (`local_llm_model` or `ollama_model_tag`): set
     ///    `local_engine = "ollama"` explicitly. Otherwise the new code
     ///    default ("embedded", see
-    ///    `pipeline/mod.rs::run_local_processing`) would route the mode
-    ///    to embedded — and a value like `"gemma3:4b"` is an Ollama tag,
+    ///    `pipeline/mod.rs::resolve_local_processor_for_mode`) would route
+    ///    the mode to embedded — and a value like `"gemma3:4b"` is an Ollama tag,
     ///    not a GGUF slot, which would cause load errors.
     ///
     /// Modes without any engine hints are left untouched and the code
@@ -872,8 +872,8 @@ mod tests {
     #[test]
     fn fresh_local_mode_keeps_engine_none_for_default_embedded() {
         // Fresh mode without any Ollama hints: `local_engine` stays
-        // `None`. The code default in `run_local_processing` then
-        // falls back to "embedded".
+        // `None`. The code default in `resolve_local_processor_for_mode`
+        // then falls back to "embedded".
         let m = parse(
             r#"
             id = "korr-neu"
