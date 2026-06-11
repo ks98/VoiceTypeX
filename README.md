@@ -243,8 +243,8 @@ WebView2 cache, …) are in
   publish the `latest.json` manifest the check compares against
   (`includeUpdaterJson: false`), so it currently offers no updates. This
   is gated on [Issue #2](https://github.com/ks98/VoiceTypeX/issues/2):
-  the manifest is armed once the AppImage Validate workflow confirms a
-  launching AppImage. Until then, **update manually** — re-download from
+  the manifest is armed once a launching AppImage is confirmed (no
+  white screen). Until then, **update manually** — re-download from
   the official GitHub releases, or for **`.deb`/`.rpm`** use your package
   manager. When the updater goes live, self-update will target the
   **Windows NSIS installer** and the **Linux AppImage** (`.deb`/`.rpm`

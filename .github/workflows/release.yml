@@ -198,8 +198,8 @@ jobs:
           # We build NSIS (not WiX) on Windows -> NSIS in latest.json.
           # Do NOT upload latest.json yet: the AppImage build was just
           # (via NO_STRIP) fixed and is not yet validated for
-          # runnability (white-screen risk). Arm it once the
-          # appimage-validate workflow confirms a launching AppImage.
+          # runnability (white-screen risk). Arm it once a launching
+          # AppImage is confirmed (no white screen).
           # (deb/rpm could also self-update with tauri-plugin-updater 2.10.1
           # — separate path.) -> ks98/VoiceTypeX#2
           # Input name is `includeUpdaterJson` on tauri-action@v0; a prior

@@ -138,7 +138,7 @@ offered them.
   fixed via `NO_STRIP=true` — background in
   [#2](https://github.com/ks98/VoiceTypeX/issues/2). The in-app
   auto-updater (AppImage) is still **disabled** (`includeUpdaterJson: false`)
-  until the `AppImage Validate` workflow confirms a launching AppImage.
+  until a launching AppImage is confirmed (no white screen).
 - **Windows** (NSIS): **in the release** — STT (whisper.cpp + Vulkan) +
   Cloud/Ollama LLM. The embedded llama-cpp-2 has been removed on Windows
   ([#1](https://github.com/ks98/VoiceTypeX/issues/1): ggml symbol collision
