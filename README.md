@@ -165,7 +165,10 @@ signing key): see [`docs/RELEASING.md`](docs/RELEASING.md).
 2. **Open the main window:** left-click the tray icon, or right-click →
    *"Open Settings"*.
 3. **Load a Whisper model:** *Settings* tab → *"Download Default
-   Model"*. This downloads the model configured in `whisper_default_slot`
+   Model"* (the onboarding wizard offers the same download in its
+   speech-recognition step — or, as an experimental alternative, a
+   sign-in with your ChatGPT subscription, which switches the bundled
+   default modes to ChatGPT and skips the download). This downloads the model configured in `whisper_default_slot`
    (default since May 2026: `ggml-large-v3-turbo-q8_0`, ~874 MB) plus
    Silero VAD v6.2.0 (~885 kB) with SHA-256 verification from Hugging Face
    to `app_config_dir/models/`. Existing users on a Q5 setup keep Q5;
