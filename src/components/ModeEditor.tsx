@@ -26,7 +26,7 @@ interface ModeEditorProps {
 }
 
 const STT_PROVIDERS = ["xai", "openai", "groq", "deepgram", "chatgpt"];
-const LLM_PROVIDERS = ["xai", "openai", "anthropic"];
+const LLM_PROVIDERS = ["xai", "openai", "anthropic", "chatgpt"];
 
 function emptyMode(): Mode {
   return {
@@ -459,14 +459,20 @@ export default function ModeEditor({
                     <option value="">{t("mode_editor.stt.choose")}</option>
                     {LLM_PROVIDERS.map((p) => (
                       <option key={p} value={p}>
-                        {p}
+                        {p === "chatgpt"
+                          ? t("mode_editor.provider.chatgpt")
+                          : p}
                       </option>
                     ))}
                   </select>
                 </Field>
                 <Field
                   label={t("mode_editor.llm.cloud_model.label")}
-                  hint={t("mode_editor.llm.cloud_model.hint")}
+                  hint={
+                    draft.cloud_llm_provider === "chatgpt"
+                      ? t("mode_editor.llm.chatgpt_model_hint")
+                      : t("mode_editor.llm.cloud_model.hint")
+                  }
                 >
                   <input
                     className={`${inputCls} font-mono`}
@@ -477,6 +483,15 @@ export default function ModeEditor({
                   />
                 </Field>
               </div>
+            ) : null}
+
+            {isCloudLLM &&
+            draft.cloud_llm_provider === "chatgpt" &&
+            chatgpt &&
+            chatgpt.state !== "connected" ? (
+              <Banner tone="warning" dense>
+                {t("mode_editor.chatgpt.not_connected")}
+              </Banner>
             ) : null}
 
             {needsSystemPrompt ? (

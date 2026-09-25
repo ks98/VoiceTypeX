@@ -95,7 +95,7 @@ pub fn classify_failure(
             FailureKind::Auth,
             format!("ChatGPT rejected the sign-in (HTTP {status}) — sign in again under Settings → ChatGPT account"),
         ),
-        400 | 404 | 405 | 415 => fail(
+        404 | 405 | 415 => fail(
             FailureKind::Http,
             format!("ChatGPT HTTP {status}{suffix} (the unofficial endpoint may have changed)"),
         ),
@@ -168,15 +168,20 @@ mod tests {
         assert_eq!(classify(401, false, "", "").kind, FailureKind::Auth);
         let rl = classify(429, false, "application/json", "{}");
         assert_eq!((rl.kind, rl.status), (FailureKind::Http, 429));
-        let changed = classify(
+        let bad_model = classify(
             400,
             false,
             "application/json",
             r#"{"detail":"The 'gpt-5' model is not supported"}"#,
         );
-        assert_eq!(changed.kind, FailureKind::Http);
-        assert!(changed.message.contains("not supported"));
-        assert!(changed.message.contains("may have changed"));
+        assert_eq!(bad_model.kind, FailureKind::Http);
+        assert_eq!(
+            bad_model.message,
+            "ChatGPT HTTP 400: The 'gpt-5' model is not supported"
+        );
+        assert!(classify(404, false, "text/html", "")
+            .message
+            .contains("may have changed"));
         assert_eq!(
             classify(502, false, "text/html", "").kind,
             FailureKind::Http

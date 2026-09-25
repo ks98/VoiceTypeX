@@ -148,7 +148,7 @@ output_fallback = "replace"  # only with output="auto": action when the
 cloud_stt_provider = "xai"     # "xai" | "openai" | "groq" | "deepgram" | "chatgpt" (ChatGPT sign-in, experimental)
 
 # Only if processing = "cloud":
-cloud_llm_provider = "xai"     # "xai" | "openai" | "anthropic"
+cloud_llm_provider = "xai"     # "xai" | "openai" | "anthropic" | "chatgpt" (ChatGPT sign-in, experimental; model default gpt-5.5)
 cloud_llm_model = "grok-4-fast-non-reasoning"
                                # provider-specific model identifier
                                # xAI default is grok-4-fast-non-reasoning

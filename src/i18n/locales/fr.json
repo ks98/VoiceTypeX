@@ -434,6 +434,7 @@
   "mode_editor.llm.cloud_provider": "Provider LLM cloud",
   "mode_editor.llm.cloud_model.label": "ID du modèle",
   "mode_editor.llm.cloud_model.hint": "p.ex. grok-4-fast-non-reasoning, gpt-4o-mini, claude-sonnet-4-6",
+  "mode_editor.llm.chatgpt_model_hint": "Facultatif. Laissez vide pour gpt-5.5 — le seul modèle dont le fonctionnement avec un compte ChatGPT est confirmé à ce jour.",
   "mode_editor.llm.system_prompt.label": "Prompt système",
   "mode_editor.llm.system_prompt.hint": "Envoyé comme message système au LLM. Décrit la tâche (p.ex. « Corrige la grammaire, garde le style inchangé »).",
   "mode_editor.sampling.intro": "Vide = défaut du provider/moteur. Modifiez seulement si vous savez ce que les valeurs font.",

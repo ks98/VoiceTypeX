@@ -18,11 +18,22 @@ use std::sync::Arc;
 
 /// Factory: returns the matching cloud processor for a provider. xAI
 /// uses the same keychain entry for STT and LLM (CLAUDE.md §4.4).
+/// `chatgpt` needs no key: it uses the ChatGPT sign-in held by `chatgpt`.
 ///
 /// `client` is the app-wide shared `reqwest::Client` (issue #41) — it
 /// is internally `Arc`'d, so cloning it per call reuses one connection
 /// pool across dictations.
-pub fn make_cloud_processor(provider: &str, client: reqwest::Client) -> Result<Arc<dyn Processor>> {
+pub fn make_cloud_processor(
+    provider: &str,
+    client: reqwest::Client,
+    chatgpt: &Arc<crate::chatgpt::ChatGptSession>,
+) -> Result<Arc<dyn Processor>> {
+    if provider == "chatgpt" {
+        return Ok(Arc::new(cloud::chatgpt::ChatGptProcessor::new(
+            Arc::clone(chatgpt),
+            client,
+        )));
+    }
     let key = SecretStore::get(provider)?.ok_or_else(|| {
         // A missing key is an auth problem, not a processing transport
         // failure — route it through `Secrets` so `kind()` reports

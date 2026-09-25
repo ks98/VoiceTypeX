@@ -248,8 +248,8 @@ slot-selectable as GGUF on the embedded path. Enabled per mode via
 ## ChatGPT subscription (experimental)
 
 Lets users sign in with their ChatGPT plan (Plus, Pro, Business) instead
-of an API key. **Status:** sign-in and the cloud STT provider `chatgpt`
-are implemented; LLM post-processing is not yet.
+of an API key. **Status:** sign-in plus the cloud provider `chatgpt` for
+STT and for LLM post-processing are implemented.
 
 **Why experimental/unofficial:** OpenAI offers no public OAuth
 registration for third-party apps that covers audio. VoiceTypeX
@@ -317,15 +317,29 @@ sign-in); everything else is transient. Observed access-token lifetime:
 - Errors: 401/403 → sign-in rejected (auth, not retried);
   `usage_limit_reached` (with `resets_at`), `usage_not_included` and a
   Cloudflare block (403 with `cf-mitigated` or an HTML body) → definitive
-  rejection, not retried; 429/5xx → retried; 400/404/415 → "the
-  unofficial endpoint may have changed".
+  rejection, not retried; 429/5xx → retried; 404/405/415 → "the
+  unofficial endpoint may have changed"; other statuses carry the
+  backend's `detail` text.
 
-**Planned (not implemented yet):** LLM post-processing via
-`POST https://chatgpt.com/backend-api/codex/responses` (Responses API,
-`store: false`, `stream: true`, system prompt in `instructions`). Of the
-models tried, only `gpt-5.5` was accepted with a ChatGPT account
-(`gpt-5.4` and `gpt-5` return 400 "not supported when using Codex with a
-ChatGPT account").
+**LLM post-processing** (`processing/cloud/chatgpt.rs`, provider
+`chatgpt`):
+- `POST https://chatgpt.com/backend-api/codex/responses` (the Codex
+  backend, undocumented for third parties), same headers as STT plus
+  `OpenAI-Beta: responses=experimental` and `Accept: text/event-stream`.
+  Body: Responses API `{model, instructions: <system prompt>, input:
+  [user message with the transcript], store: false, stream: true}` —
+  `store: false` and streaming are required by the backend. Sampling
+  parameters and `max_tokens` are not sent.
+- The server-sent events are read to the end: text from
+  `response.output_text.delta`, end marker `response.completed`;
+  `response.failed`/`error` or a stream without completion is an error
+  (no partial text is ever injected).
+- Model: the mode's `cloud_llm_model`, default `gpt-5.5`. Of the models
+  tried on 2026-09-25 only `gpt-5.5` was accepted with a ChatGPT account;
+  `gpt-5.4` and `gpt-5` return 400 "not supported when using Codex with
+  a ChatGPT account".
+- Observed: the bundled German correction prompt on a short dictation
+  took ~2.8 s.
 
 A fallback to `api.openai.com/v1/audio/transcriptions` with the ChatGPT
 token is deliberately excluded: it is most likely billed as metered API
