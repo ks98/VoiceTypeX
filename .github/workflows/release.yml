@@ -6,7 +6,9 @@
 # Flow: git-cliff generates the release notes -> tauri-action builds the
 # bundles (Linux: deb/rpm/AppImage, Windows: NSIS), signs the
 # updater artifacts with the minisign key, creates a GitHub release as a
-# DRAFT (review gate) and uploads assets + latest.json.
+# DRAFT (review gate) and uploads assets + latest.json. The updater-json
+# job then restricts latest.json to the AppImage + NSIS (.deb/.rpm stay
+# on manual updates).
 # Publishing is a deliberate manual click ("Publish release"
 # or `gh release edit <tag> --draft=false`) — only then does
 # /releases/latest/download/latest.json point to the new version and the
@@ -196,16 +198,47 @@ jobs:
           # skips them, stable users are not offered them.
           prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') }}
           # We build NSIS (not WiX) on Windows -> NSIS in latest.json.
-          # Do NOT upload latest.json yet: the AppImage build was just
-          # (via NO_STRIP) fixed and is not yet validated for
-          # runnability (white-screen risk). Arm it once a launching
-          # AppImage is confirmed (no white screen).
-          # (deb/rpm could also self-update with tauri-plugin-updater 2.10.1
-          # — separate path.) -> ks98/VoiceTypeX#2
+          # Armed since the v0.1.2 AppImage was confirmed to launch (no
+          # white screen). Each matrix leg adds its platforms to the same
+          # latest.json, including `linux-x86_64-deb`/`-rpm` entries that
+          # tauri-plugin-updater would install via pkexec — the
+          # updater-json job below strips those again.
           # Input name is `includeUpdaterJson` on tauri-action@v0; a prior
           # `uploadUpdaterJson` was silently ignored (an unknown input ->
           # latest.json got uploaded regardless of the intended guard). The
           # dev branch renamed it back to `uploadUpdaterJson`, so pin the
           # action version if you ever bump @v0.
-          includeUpdaterJson: false
+          includeUpdaterJson: true
           args: ${{ matrix.args }}
+
+  # Self-update is offered for the AppImage + NSIS only. tauri-plugin-updater
+  # looks up `{os}-{arch}-{bundle}` first and falls back to `{os}-{arch}`, so
+  # dropping the deb/rpm entries AND the generic `linux-x86_64` fallback
+  # leaves .deb/.rpm installs without an update target (they update
+  # manually, see README), while the AppImage still finds
+  # `linux-x86_64-appimage`. Fails if an expected entry is missing, e.g. when
+  # the two matrix legs raced on their read-modify-write of latest.json —
+  # re-run the failed leg, then this job.
+  updater-json:
+    name: Restrict latest.json to AppImage + NSIS
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Strip deb/rpm + generic linux entries
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern latest.json
+          jq 'del(.platforms["linux-x86_64", "linux-x86_64-deb", "linux-x86_64-rpm"])' \
+            latest.json > latest.filtered.json
+          for key in linux-x86_64-appimage windows-x86_64-nsis; do
+            jq -e --arg k "$key" '.platforms[$k].url and .platforms[$k].signature' \
+              latest.filtered.json > /dev/null \
+              || { echo "::error::latest.json lacks platform '$key'"; exit 1; }
+          done
+          mv latest.filtered.json latest.json
+          gh release upload "$TAG" latest.json --repo "$GITHUB_REPOSITORY" --clobber
+          jq -c '.platforms | keys' latest.json

@@ -498,6 +498,7 @@
 
   "settings.update.label": "Actualizaciones",
   "settings.update.hint": "Buscar una nueva versión. La actualización automática se aplica al instalador de Windows y al AppImage de Linux; para .deb/.rpm, usa tu gestor de paquetes o vuelve a descargar.",
+  "settings.update.unsupported_bundle": "Las actualizaciones automáticas no están disponibles para instalaciones .deb/.rpm. Descarga las nuevas versiones desde la página de releases de GitHub.",
   "settings.update.current": "Versión instalada: {version}",
   "settings.update.btn.check": "Buscar actualizaciones",
   "settings.update.btn.checking": "Buscando…",

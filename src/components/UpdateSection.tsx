@@ -4,11 +4,12 @@ import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import Field from "./Field";
 import Button from "./Button";
-import { ipcGetAppVersion } from "../lib/tauri";
+import { ipcGetAppVersion, ipcGetSelfUpdateSupported } from "../lib/tauri";
 import { useT, type TranslateFn } from "../i18n";
 
 // Self-update only applies to AppImage (Linux) + NSIS (Windows). deb/rpm
-// have no updater path — hence the note in `hint`. Download
+// have no updater path (release.yml strips them from latest.json) — hence
+// the note in `hint` and no check button there. Download
 // only starts on click (large bundle, possibly metered connection).
 type Status =
   | "idle"
@@ -34,6 +35,8 @@ function fmtSize(t: TranslateFn, bytes: number): string {
 export default function UpdateSection(): JSX.Element {
   const t = useT();
   const [version, setVersion] = useState("");
+  // null until the backend answered; deb/rpm (false) get no check button.
+  const [selfUpdate, setSelfUpdate] = useState<boolean | null>(null);
   const [status, setStatus] = useState<Status>("idle");
   const [update, setUpdate] = useState<Update | null>(null);
   const [downloaded, setDownloaded] = useState(0);
@@ -44,6 +47,9 @@ export default function UpdateSection(): JSX.Element {
     void ipcGetAppVersion()
       .then(setVersion)
       .catch(() => {});
+    void ipcGetSelfUpdateSupported()
+      .then(setSelfUpdate)
+      .catch(() => setSelfUpdate(true));
   }, []);
 
   const onCheck = async () => {
@@ -160,16 +166,24 @@ export default function UpdateSection(): JSX.Element {
           </div>
         ) : null}
 
-        <Button
-          variant="secondary"
-          onClick={() => void onCheck()}
-          disabled={busy}
-          className="self-start"
-        >
-          {status === "checking"
-            ? t("settings.update.btn.checking")
-            : t("settings.update.btn.check")}
-        </Button>
+        {selfUpdate === false ? (
+          <div className="text-xs text-fg-muted">
+            {t("settings.update.unsupported_bundle")}
+          </div>
+        ) : null}
+
+        {selfUpdate === true ? (
+          <Button
+            variant="secondary"
+            onClick={() => void onCheck()}
+            disabled={busy}
+            className="self-start"
+          >
+            {status === "checking"
+              ? t("settings.update.btn.checking")
+              : t("settings.update.btn.check")}
+          </Button>
+        ) : null}
       </div>
     </Field>
   );

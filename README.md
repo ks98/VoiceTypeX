@@ -12,7 +12,7 @@ GNOME 46+)**, **Linux/X11**, and **Windows**. Auto-paste on Wayland via
 `xdg-desktop-portal.RemoteDesktop` + libei. Settings and the Wayland
 permission token persist. Release bundles for Linux
 (`.deb` / `.rpm` / AppImage) and Windows (NSIS) are available; the
-in-app auto-updater is **in preparation** (not yet active — see
+in-app auto-updater covers the AppImage and the Windows installer (see
 [Beta Status & Updates](#beta-status--updates)).
 The **Windows release** includes speech recognition (whisper.cpp + Vulkan)
 and cloud LLM post-processing; the **embedded local LLM (llama-cpp-2) is
@@ -237,19 +237,18 @@ WebView2 cache, …) are in
 
 ## Beta Status & Updates
 
-- **Auto-updater — in preparation (not yet active).** The in-app update
-  check (*Settings → Diagnostics → Updates*) and minisign/Ed25519 signing
-  of the artifacts are wired up, but the release pipeline does not yet
-  publish the `latest.json` manifest the check compares against
-  (`includeUpdaterJson: false`), so it currently offers no updates. The
-  manifest is armed once a launching AppImage is confirmed (no white
-  screen; the AppImage *bundling* itself was fixed in
-  [#2](https://github.com/ks98/VoiceTypeX/issues/2)). Until then,
-  **update manually** — re-download from
-  the official GitHub releases, or for **`.deb`/`.rpm`** use your package
-  manager. When the updater goes live, self-update will target the
-  **Windows NSIS installer** and the **Linux AppImage** (`.deb`/`.rpm`
-  stay on the package-manager path).
+- **Auto-updater — AppImage + Windows installer.** The in-app update
+  check (*Settings → Diagnostics → Updates*) compares against the
+  `latest.json` manifest of the newest GitHub release; the download
+  only starts on click and is minisign/Ed25519-verified before
+  installation. The manifest is published starting with the first
+  release after v0.1.2, so v0.1.2 AppImage/NSIS installs are offered
+  that release as their first update.
+- **`.deb`/`.rpm` installs do not self-update.** Install the new package
+  from the official GitHub releases with your package manager
+  (e.g. `sudo apt install ./VoiceTypeX_<version>_amd64.deb`). The update
+  check is hidden for these installs; in v0.1.2 it is still visible and
+  reports that no matching platform was found.
 - **The Windows installer is not (yet) Authenticode-signed.** On first
   launch, SmartScreen shows "Unknown publisher" → *More info → Run
   anyway*. This is independent of the minisign updater signature.

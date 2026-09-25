@@ -100,6 +100,7 @@
 
   "settings.update.label": "Updates",
   "settings.update.hint": "Check for a new version. Auto-update applies to the Windows installer and the Linux AppImage; .deb/.rpm installs update via your package manager or by re-downloading.",
+  "settings.update.unsupported_bundle": "Automatic updates aren't available for .deb/.rpm installs. Download new versions from the GitHub releases page.",
   "settings.update.current": "Installed version: {version}",
   "settings.update.btn.check": "Check for updates",
   "settings.update.btn.checking": "Checking…",
