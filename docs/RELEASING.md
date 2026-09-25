@@ -17,12 +17,13 @@ delivered to users.
   │       • builds deb / rpm / AppImage                           │
   │       • signs the updater artifacts (minisign)                │
   │       • creates a GitHub release as a DRAFT                   │
-  │       • uploads assets (latest.json NOT yet — see #2)         │
+  │       • uploads assets (latest.json NOT yet — see below)      │
   └──────────────────────────────────────────────────────────────┘
         │
         ▼  You review the draft release and click "Publish"
    → assets are downloadable from the published release
-   → the in-app updater stays inactive until latest.json is armed (#2)
+   → the in-app updater stays inactive until latest.json is armed
+     (see "Platform status")
 ```
 
 > **Windows is back in the release** (NSIS installer with STT + Vulkan +
@@ -90,7 +91,7 @@ Self-update runs **per channel** — there is no single "one" updater:
 | Package | Update path |
 |---|---|
 | **AppImage** (Linux) | In-app updater (*Settings → Diagnostics & tests → Updates*) |
-| **NSIS** (Windows, once reactivated) | In-app updater |
+| **NSIS** (Windows) | In-app updater |
 | **`.deb`** | Package manager or re-download from the GitHub release |
 | **`.rpm`** | Package manager or re-download from the GitHub release |
 
