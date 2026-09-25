@@ -123,6 +123,8 @@ pub struct AppContext {
     /// set here — each provider applies its own per-request `.timeout()`
     /// (STT 120 s, LLM 60 s), preserving the previous per-client budgets.
     pub http_client: reqwest::Client,
+    /// ChatGPT account sign-in (experimental subscription provider).
+    pub chatgpt: Arc<crate::chatgpt::ChatGptSession>,
     pub injector: Arc<dyn TextInjector>,
     /// Selection captured eagerly when the menu hotkey opens the menu
     /// in `Idle` (see `pipeline::handle_menu_hotkey`). Consumed by edit

@@ -23,4 +23,6 @@ export const EVENTS = {
   LLM_MODEL_DOWNLOAD_PROGRESS: "llm-model-download-progress",
   /** Cross-window locale sync (settings/onboarding → every webview window). */
   LOCALE_CHANGED: "i18n://locale-changed",
+  /** ChatGPT account status after every sign-in change (backend → settings). */
+  CHATGPT_STATUS: "app://chatgpt-status",
 } as const;

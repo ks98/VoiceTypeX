@@ -248,12 +248,15 @@ pub struct AppContext {
     pub recorder_slot: Arc<Mutex<Option<RecorderHandle>>>,
     pub active_mode: Arc<Mutex<Option<Mode>>>,         // which mode is currently running?
     pub effective_menu_hotkey: Arc<RwLock<Option<String>>>, // Wayland: trigger returned by the portal
-    pub transcriber: Arc<dyn Transcriber>,             // app-default transcriber (local or cloud)
-    pub local_transcriber: Arc<LocalTranscriber>,      // concrete type for the streaming worker (Phase 2)
+    pub local_transcriber: Arc<RwLock<Arc<LocalTranscriber>>>, // default whisper slot, swappable without restart (issue #30)
     pub local_llm_processor: Arc<LlamaEmbeddedProcessor>, // embedded-LLM default processor (Phase 3b) — #[cfg(not(windows))]
     pub extra_transcribers: Arc<Mutex<BoundedLru<String, Arc<LocalTranscriber>>>>, // per-mode Whisper slot cache, LRU-capped (issue #31)
     pub extra_llm_processors: Arc<Mutex<BoundedLru<String, Arc<LlamaEmbeddedProcessor>>>>, // per-mode LLM slot cache, LRU-capped — #[cfg(not(windows))]
+    pub cloud_transcribers: Mutex<HashMap<String, Arc<dyn Transcriber>>>, // per-provider cloud STT cache (issue #42)
+    pub cloud_processors: Mutex<HashMap<String, Arc<dyn Processor>>>,     // per-provider cloud LLM cache (issue #42)
     pub active_streaming_handle: Arc<Mutex<Option<JoinHandle<()>>>>, // Phase-2 streaming worker handle
+    pub http_client: reqwest::Client,                  // one shared connection pool for all cloud calls (issue #41)
+    pub chatgpt: Arc<ChatGptSession>,                  // ChatGPT account sign-in (experimental)
     pub injector: Arc<dyn TextInjector>,
     pub selection_buffer: Arc<Mutex<Option<String>>>,  // eager-captured selection for edit modes
     pub settings: Arc<RwLock<Settings>>,
@@ -261,6 +264,7 @@ pub struct AppContext {
     pub log_buffer: LogRingBuffer,
     pub model_dir: PathBuf,
     pub modes_dir: PathBuf,
+    pub kde_focus: Arc<RwLock<Option<Arc<KdeFocusTracker>>>>, // KWin focus tracker for paste_shortcut = "auto" — #[cfg(linux)]
 }
 ```
 
@@ -624,12 +628,40 @@ command `get_effective_menu_hotkey` reads this cache; the frontend
 effective trigger + a hint about the system settings on Wayland, while
 on X11 / Windows the field stays editable.
 
+## ChatGPT Account (experimental)
+
+Signs in with a ChatGPT plan instead of an API key (see
+[`PROVIDERS.md`](PROVIDERS.md) → *ChatGPT subscription*). So far only
+the sign-in exists; using it for STT/LLM follows.
+
+- `chatgpt/oauth.rs` — PKCE, authorize URL, callback parsing, code
+  exchange (pure except the token request).
+- `chatgpt/jwt.rs` — account id / plan / email / `exp` from the token
+  claims (no signature check, see module doc).
+- `chatgpt/loopback.rs` — one-shot HTTP listener on `127.0.0.1:1455`
+  (fallback `1457`) for the OAuth redirect.
+- `chatgpt/session.rs` — `ChatGptSession` (in `AppContext`): stored
+  credentials + the sign-in attempt in progress; no `AppHandle`, so it
+  is unit-testable.
+- `ipc/chatgpt.rs` — `get_chatgpt_status`, `chatgpt_login_start`,
+  `chatgpt_login_complete_manual` (paste fallback),
+  `chatgpt_login_cancel`, `chatgpt_logout`. Every change emits
+  `app://chatgpt-status` with the full `ChatGptStatus`
+  (`state`, `email`, `plan`, `auth_url`, `error`); tokens never reach
+  the frontend.
+
+`chatgpt_login_start` binds the listener, opens the browser via
+`tauri-plugin-opener` (Rust side only, no webview capability) and
+returns the pending status right away; a spawned task waits up to
+5 minutes for the callback, exchanges the code and stores the result.
+
 ## Persistence
 
 | What | Where | Format |
 |---|---|---|
 | User settings (PTT, model slot, audio device, …) | `~/.config/.../settings.json` | JSON, chmod 0644 |
 | API keys (BYOK) | `~/.config/.../secrets.json` (source of truth) + OS keychain (mirror) | JSON, chmod 0600 |
+| ChatGPT sign-in (experimental) | `secrets.json` entry `chatgpt_oauth` | JSON (tokens + account id), encrypted with the rest of `secrets.json` |
 | Wayland `restore_token` | `~/.config/.../wayland_session.json` | JSON, chmod 0600 |
 | Modes (hot-reload) | `~/.config/.../modes/*.toml` | TOML |
 | Whisper models | `~/.config/.../models/*.bin` | GGML, SHA-256-verified |
@@ -672,7 +704,7 @@ React 18 + TypeScript strict + Tailwind v3 + Zustand.
   distinguished via the `?window=` query in `main.tsx`).
 - **Components (`src/components/`):** Sidebar, ThemeToggle, Field,
   OnboardingWizard, ModeEditor, TestTranscriptionSection,
-  AutoPasteTestSection, ApiKeysSection
+  AutoPasteTestSection, ApiKeysSection, ChatGptAccountSection
 - **Stores (`src/store/index.ts`):** UI (tab state + theme choice),
   Settings, Modes — with async actions, one per IPC command
 - **IPC wrapper (`src/lib/tauri.ts`):** the only place that uses

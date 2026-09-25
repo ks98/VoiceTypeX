@@ -1,18 +1,23 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { describe, expect, it } from "vitest";
-import type { HardwareReport, ModelDownloadProgress } from "./tauri";
+import type {
+  ChatGptStatus,
+  HardwareReport,
+  ModelDownloadProgress,
+} from "./tauri";
 import type { Mode, Settings } from "./types";
 
 // Contract test — PAYLOAD-SHAPE parity (#49).
 //
-// For the four key IPC payloads (Settings, Mode, HardwareReport,
-// ModelDownloadProgress) this pins the exact field set of the TS
-// interface against the same canonical key list the Rust side pins in
-// its own #[test]s:
+// For the five key IPC payloads (Settings, Mode, HardwareReport,
+// ModelDownloadProgress, ChatGptStatus) this pins the exact field set of
+// the TS interface against the same canonical key list the Rust side pins
+// in its own #[test]s:
 //   - Settings              -> src-tauri/src/core/config.rs
 //   - Mode                  -> src-tauri/src/core/modes.rs
 //   - HardwareReport        -> src-tauri/src/core/hardware.rs
 //   - ModelDownloadProgress -> src-tauri/src/ipc/settings.rs
+//   - ChatGptStatus         -> src-tauri/src/chatgpt/session.rs
 //
 // How this catches drift:
 //   * Each `sample` is annotated `satisfies <Interface>`, so `tsc`
@@ -187,6 +192,21 @@ describe("ModelDownloadProgress payload shape", () => {
       downloaded: 1,
       total: 2,
     } satisfies ModelDownloadProgress;
+    expect(keysOf(sample)).toStrictEqual(sorted(EXPECTED));
+  });
+});
+
+describe("ChatGptStatus payload shape", () => {
+  const EXPECTED = ["auth_url", "email", "error", "plan", "state"] as const;
+
+  it("TS ChatGptStatus has exactly the canonical Rust serde field set", () => {
+    const sample = {
+      state: "connected",
+      email: null,
+      plan: null,
+      auth_url: null,
+      error: null,
+    } satisfies ChatGptStatus;
     expect(keysOf(sample)).toStrictEqual(sorted(EXPECTED));
   });
 });

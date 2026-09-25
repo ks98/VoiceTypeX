@@ -258,6 +258,44 @@ export interface ProviderStatus {
   error: string | null;
 }
 
+/** ChatGPT account sign-in (experimental subscription provider). */
+export type ChatGptAuthState = "disconnected" | "pending" | "connected";
+
+export interface ChatGptStatus {
+  state: ChatGptAuthState;
+  email: string | null;
+  /** Raw plan type from the token ("plus", "pro", …). */
+  plan: string | null;
+  /** Only while pending — the address to open for signing in. */
+  auth_url: string | null;
+  /** Last sign-in failure or a problem reading the stored sign-in. */
+  error: string | null;
+}
+
+export async function ipcGetChatGptStatus(): Promise<ChatGptStatus> {
+  return invoke<ChatGptStatus>("get_chatgpt_status");
+}
+
+export async function ipcChatGptLoginStart(): Promise<ChatGptStatus> {
+  return invoke<ChatGptStatus>("chatgpt_login_start");
+}
+
+export async function ipcChatGptLoginCompleteManual(
+  redirectUrl: string,
+): Promise<ChatGptStatus> {
+  return invoke<ChatGptStatus>("chatgpt_login_complete_manual", {
+    redirectUrl,
+  });
+}
+
+export async function ipcChatGptLoginCancel(): Promise<void> {
+  return invoke("chatgpt_login_cancel");
+}
+
+export async function ipcChatGptLogout(): Promise<void> {
+  return invoke("chatgpt_logout");
+}
+
 export interface TestTranscriptionResult {
   rtf: number;
   text: string;

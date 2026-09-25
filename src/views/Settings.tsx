@@ -9,6 +9,7 @@ import Button from "../components/Button";
 import Banner from "../components/Banner";
 import Loading from "../components/Loading";
 import ApiKeysSection from "../components/ApiKeysSection";
+import ChatGptAccountSection from "../components/ChatGptAccountSection";
 import TestTranscriptionSection from "../components/TestTranscriptionSection";
 import AutoPasteTestSection from "../components/AutoPasteTestSection";
 import UpdateSection from "../components/UpdateSection";
@@ -108,6 +109,7 @@ const SUBNAV_ITEMS = [
   { id: "privacy-startup", key: "settings.subnav.privacy_startup" },
   { id: "cache", key: "settings.subnav.cache" },
   { id: "diagnostics", key: "settings.subnav.diagnostics" },
+  { id: "chatgpt", key: "settings.subnav.chatgpt" },
   { id: "api-keys", key: "settings.subnav.api_keys" },
   { id: "danger-zone", key: "settings.subnav.danger_zone" },
 ] as const;
@@ -561,6 +563,10 @@ export default function Settings(): JSX.Element {
           />
           <TestTranscriptionSection />
           <AutoPasteTestSection />
+        </section>
+
+        <section id="chatgpt" className="scroll-mt-6">
+          <ChatGptAccountSection />
         </section>
 
         <section
