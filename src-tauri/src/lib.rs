@@ -5,6 +5,7 @@
 //! details see [`pipeline`].
 
 pub mod audio;
+pub mod chatgpt;
 pub mod core;
 pub mod hotkey;
 pub mod injection;
@@ -75,6 +76,7 @@ pub fn run() {
         ))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             ipc::settings::get_settings,
             ipc::settings::set_settings,
@@ -112,6 +114,11 @@ pub fn run() {
             ipc::secrets::delete_provider_key,
             ipc::secrets::test_provider_connection,
             ipc::secrets::is_secrets_encrypted_at_rest,
+            ipc::chatgpt::get_chatgpt_status,
+            ipc::chatgpt::chatgpt_login_start,
+            ipc::chatgpt::chatgpt_login_complete_manual,
+            ipc::chatgpt::chatgpt_login_cancel,
+            ipc::chatgpt::chatgpt_logout,
         ])
         .setup(move |app| {
             let app_handle = app.handle().clone();
@@ -307,6 +314,7 @@ pub fn run() {
                 cloud_processors: Mutex::new(HashMap::new()),
                 active_streaming_handle: Arc::new(Mutex::new(None)),
                 http_client,
+                chatgpt: Arc::new(crate::chatgpt::ChatGptSession::load()),
                 injector,
                 selection_buffer: Arc::new(Mutex::new(None)),
                 settings: Arc::new(RwLock::new(initial_settings)),

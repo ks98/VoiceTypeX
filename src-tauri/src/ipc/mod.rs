@@ -2,6 +2,7 @@
 //! Tauri command handlers. The frontend calls these via `invoke()`.
 
 pub mod cache;
+pub mod chatgpt;
 pub mod diagnostics;
 pub mod modes;
 pub mod recording;

@@ -245,6 +245,62 @@ slot-selectable as GGUF on the embedded path. Enabled per mode via
 - **Timeout:** 300 s (local inference can take a while on CPU)
 - **Endpoint overridable:** the `ollama_url` settings field.
 
+## ChatGPT subscription (experimental)
+
+Lets users sign in with their ChatGPT plan (Plus, Pro, Business) instead
+of an API key. **Status:** sign-in, storage and sign-out are
+implemented; using the account for STT and LLM post-processing is not
+yet.
+
+**Why experimental/unofficial:** OpenAI offers no public OAuth
+registration for third-party apps that covers audio. VoiceTypeX
+therefore uses the sign-in of OpenAI's Codex CLI ("Sign in with
+ChatGPT"), including its client id. OpenAI's official "Sign in with
+ChatGPT" for third-party apps was a preview limited to text models as
+of 2026-09. The feature may break or be restricted at any time; the UI
+requires an explicit acknowledgment before signing in.
+
+**Sources:** there is no official documentation of this flow for
+third-party use. The implementation mirrors OpenAI's open-source Codex
+CLI (`openai/codex`, `codex-rs/login/src/server.rs` and
+`token_data.rs`, commit `86be532`) and OpenClaw
+(`openclaw/openclaw`, `extensions/openai/openai-chatgpt-oauth-*.ts`,
+commit `36def8b`), both read on 2026-09-25.
+
+**Flow** (`src-tauri/src/chatgpt/`):
+- Authorize: `https://auth.openai.com/oauth/authorize` with
+  `response_type=code`, `client_id=app_EMoamEEZ73f0CkXaXp7hrann`,
+  `redirect_uri=http://127.0.0.1:1455/auth/callback` (fallback port
+  1457, as in the Codex CLI),
+  `scope=openid profile email offline_access`, PKCE `S256`, `state`,
+  `id_token_add_organizations=true`, `codex_cli_simplified_flow=true`,
+  `originator=voicetypex`.
+- Callback: loopback listener bound to `127.0.0.1` only; `state` must
+  match; other paths get a 404; the success page never echoes the
+  query. If both ports are busy or the browser cannot reach the
+  listener, the user pastes the redirect URL instead.
+- Token exchange: `POST https://auth.openai.com/oauth/token`,
+  form-encoded `grant_type=authorization_code`, `client_id`, `code`,
+  `code_verifier`, `redirect_uri`. Error bodies are reduced to their
+  OAuth error code before logging.
+- Claims: `["https://api.openai.com/auth"].chatgpt_account_id` and
+  `chatgpt_plan_type` plus `email` (or the
+  `https://api.openai.com/profile` claim), from the `id_token` with the
+  access token as fallback.
+
+**Identification policy:** requests identify as VoiceTypeX
+(`originator=voicetypex`). VoiceTypeX never impersonates another client
+(no Codex-Desktop originator, no browser User-Agent), even if that means
+a request gets blocked.
+
+**Planned (not implemented yet):** STT via the undocumented
+`POST https://chatgpt.com/backend-api/transcribe` (the endpoint Codex
+Desktop dictation uses) and LLM post-processing via
+`POST https://chatgpt.com/backend-api/codex/responses`. A fallback to
+`api.openai.com/v1/audio/transcriptions` with the ChatGPT token is
+deliberately excluded: it is most likely billed as metered API usage,
+not covered by the plan.
+
 ## Secret Handling
 
 API keys live per provider in the file `~/.config/.../secrets.json`
@@ -257,6 +313,12 @@ key length for diagnostics. Provider requests go exclusively through
 the Rust backend; the key never leaves the process for the frontend
 (the `get_provider_status` IPC returns only
 `{ configured: bool, error: Option<String> }`).
+
+The ChatGPT sign-in is stored the same way, as the single entry
+`chatgpt_oauth` (access, refresh and id token plus account id, written
+together because the refresh token rotates). It is not part of the BYOK
+provider list, so `set_provider_key` cannot write it; the factory reset
+deletes it.
 
 ## Known Limitations
 

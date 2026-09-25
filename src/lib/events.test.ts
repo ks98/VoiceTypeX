@@ -25,6 +25,7 @@ const CANONICAL_EVENT_WIRE_NAMES = {
   MODEL_DOWNLOAD_PROGRESS: "model-download-progress",
   LLM_MODEL_DOWNLOAD_PROGRESS: "llm-model-download-progress",
   LOCALE_CHANGED: "i18n://locale-changed",
+  CHATGPT_STATUS: "app://chatgpt-status",
 } as const;
 
 describe("EVENTS wire-name parity", () => {

@@ -7,7 +7,7 @@
 //! 2. `reset_wayland_token` — Wayland permission token; the next
 //!    auto-paste inject re-triggers the `xdg-desktop-portal` dialog.
 //! 3. `reset_app_factory` — settings, modes (back to the 6 defaults),
-//!    secrets, Wayland token. Models and the models cache are
+//!    secrets (incl. the ChatGPT sign-in), Wayland token. Models and the models cache are
 //!    intentionally preserved (re-download would be expensive for the
 //!    user).
 //!
@@ -92,6 +92,9 @@ pub async fn reset_app_factory(state: tauri::State<'_, Arc<AppContext>>) -> IpcR
         if let Err(e) = SecretStore::delete(provider) {
             accumulated_errors.push(format!("secrets.{provider}: {e}"));
         }
+    }
+    if let Err(e) = state.chatgpt.logout() {
+        accumulated_errors.push(format!("chatgpt sign-in: {e}"));
     }
     // Drop every cached cloud client now that all keys are gone (issue #42).
     state.clear_cloud_caches();
