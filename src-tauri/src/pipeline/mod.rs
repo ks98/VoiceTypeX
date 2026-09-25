@@ -1175,7 +1175,7 @@ fn resolve_cloud_transcriber(
 
     // Build outside the lock — `make_cloud_transcriber` does a keychain
     // read, which we don't want to hold the cache mutex across.
-    let new_transcriber = make_cloud_transcriber(provider, ctx.http_client.clone())?;
+    let new_transcriber = make_cloud_transcriber(provider, ctx.http_client.clone(), &ctx.chatgpt)?;
     let mut cache = ctx.cloud_transcribers.lock();
     // Re-check under the lock: a concurrent resolver may have inserted
     // this provider between the read above and now. Reuse theirs.

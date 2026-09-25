@@ -145,7 +145,7 @@ output_fallback = "replace"  # only with output="auto": action when the
                              # LLM emits no control line. Not "auto".
 
 # Only if transcription = "cloud":
-cloud_stt_provider = "xai"     # "xai" | "openai" | "groq" | "deepgram"
+cloud_stt_provider = "xai"     # "xai" | "openai" | "groq" | "deepgram" | "chatgpt" (ChatGPT sign-in, experimental)
 
 # Only if processing = "cloud":
 cloud_llm_provider = "xai"     # "xai" | "openai" | "anthropic"

@@ -218,7 +218,7 @@ differentiate in `core::session::is_wayland()`).
 
 | Trait | File | Implementations |
 |---|---|---|
-| `Transcriber` | `transcription/mod.rs` | `LocalTranscriber` (whisper-rs), `XaiTranscriber`, `OpenAITranscriber`, `GroqTranscriber`, `DeepgramTranscriber` |
+| `Transcriber` | `transcription/mod.rs` | `LocalTranscriber` (whisper-rs), `XaiTranscriber`, `OpenAITranscriber`, `GroqTranscriber`, `DeepgramTranscriber`, `ChatGptTranscriber` (experimental) |
 | `Processor` | `processing/mod.rs` | `LlamaEmbeddedProcessor` (embedded llama-cpp-2, **default engine**), `OllamaProcessor` (local Ollama daemon, opt-in), `XaiProcessor`/`OpenAIProcessor` (via the shared `OpenAICompatibleClient`), `AnthropicProcessor` |
 | `TextInjector` | `injection/mod.rs` | `ClipboardFallbackInjector` (X11/Windows: enigo Ctrl+V), `WaylandLibeiInjector` (Wayland: libei via xdg-desktop-portal.RemoteDesktop) — the trait additionally carries `read_selection()` (the input side of the edit modes, see below). On KDE Plasma 6 the paste shortcut (Ctrl+Shift+V for terminals vs Ctrl+V) is chosen via `injection/focus_tracker.rs` — a bundled KWin script reports the active window's `resourceClass` over a zbus service, cached in `AppContext.kde_focus` |
 
@@ -631,8 +631,8 @@ on X11 / Windows the field stays editable.
 ## ChatGPT Account (experimental)
 
 Signs in with a ChatGPT plan instead of an API key (see
-[`PROVIDERS.md`](PROVIDERS.md) → *ChatGPT subscription*). So far only
-the sign-in exists; using it for STT/LLM follows.
+[`PROVIDERS.md`](PROVIDERS.md) → *ChatGPT subscription*). Used by the
+cloud STT provider `chatgpt`; LLM post-processing follows.
 
 - `chatgpt/oauth.rs` — PKCE, authorize URL, callback parsing, code
   exchange (pure except the token request).
@@ -642,7 +642,17 @@ the sign-in exists; using it for STT/LLM follows.
   (fallback `1457`) for the OAuth redirect.
 - `chatgpt/session.rs` — `ChatGptSession` (in `AppContext`): stored
   credentials + the sign-in attempt in progress; no `AppHandle`, so it
-  is unit-testable.
+  is unit-testable. `access()` hands out a valid access token and
+  refreshes it within 5 minutes of expiry; `refresh_after_401()` retries
+  once after a rejected token. A `tokio::Mutex` is held across the
+  refresh request, so concurrent callers never spend the same rotating
+  refresh token twice; a permanently rejected refresh signs out.
+- `chatgpt/api.rs` — shared headers (honest `originator` /
+  User-Agent) and the failure classification (auth / definitive
+  rejection / HTTP) for the `chatgpt.com/backend-api` calls.
+- `transcription/cloud/chatgpt.rs` — `ChatGptTranscriber`; built by
+  `make_cloud_transcriber` without a keychain lookup (it takes the
+  session instead) and cached like the other cloud providers.
 - `ipc/chatgpt.rs` — `get_chatgpt_status`, `chatgpt_login_start`,
   `chatgpt_login_complete_manual` (paste fallback),
   `chatgpt_login_cancel`, `chatgpt_logout`. Every change emits

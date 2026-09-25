@@ -1,20 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { useEffect, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { useState } from "react";
 import Banner from "./Banner";
 import Button from "./Button";
 import Input from "./Input";
 import Loading from "./Loading";
-import { EVENTS } from "../lib/events";
-import { listenAll } from "../lib/tauriListen";
 import {
   ipcChatGptLoginCancel,
   ipcChatGptLoginCompleteManual,
   ipcChatGptLoginStart,
   ipcChatGptLogout,
-  ipcGetChatGptStatus,
-  type ChatGptStatus,
 } from "../lib/tauri";
+import { useChatGptStatus } from "../lib/useChatGptStatus";
 import { useT } from "../i18n";
 
 // The backend owns the sign-in state and pushes every change as an event;
@@ -23,24 +19,12 @@ import { useT } from "../i18n";
 // it out on its own.
 export default function ChatGptAccountSection(): JSX.Element {
   const t = useT();
-  const [status, setStatus] = useState<ChatGptStatus | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const { status, setStatus, loadError } = useChatGptStatus();
   const [actionError, setActionError] = useState<string | null>(null);
   const [ack, setAck] = useState(false);
   const [busy, setBusy] = useState(false);
   const [pasteDraft, setPasteDraft] = useState("");
   const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    void ipcGetChatGptStatus()
-      .then(setStatus)
-      .catch((e) => setLoadError(String(e)));
-    return listenAll([
-      listen<ChatGptStatus>(EVENTS.CHATGPT_STATUS, (event) =>
-        setStatus(event.payload),
-      ),
-    ]);
-  }, []);
 
   const run = async (action: () => Promise<unknown>) => {
     setBusy(true);

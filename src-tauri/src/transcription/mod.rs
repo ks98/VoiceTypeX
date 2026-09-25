@@ -22,7 +22,8 @@ use std::sync::Arc;
 
 /// Factory: returns the matching `Transcriber` for a cloud provider.
 /// Reads the API key from the OS keychain. Fails with a clear message
-/// if the key is not set.
+/// if the key is not set. `chatgpt` needs no key: it uses the ChatGPT
+/// sign-in held by `chatgpt` and checks it per request.
 ///
 /// `client` is the app-wide shared `reqwest::Client` (issue #41) — it
 /// is internally `Arc`'d, so cloning it per call reuses one connection
@@ -30,7 +31,14 @@ use std::sync::Arc;
 pub fn make_cloud_transcriber(
     provider: &str,
     client: reqwest::Client,
+    chatgpt: &Arc<crate::chatgpt::ChatGptSession>,
 ) -> Result<Arc<dyn Transcriber>> {
+    if provider == "chatgpt" {
+        return Ok(Arc::new(cloud::chatgpt::ChatGptTranscriber::new(
+            Arc::clone(chatgpt),
+            client,
+        )));
+    }
     let key = SecretStore::get(provider)?.ok_or_else(|| {
         // A missing key is an auth problem, not a transcription transport
         // failure — route it through `Secrets` so `kind()` reports

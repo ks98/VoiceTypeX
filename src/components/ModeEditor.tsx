@@ -8,6 +8,7 @@ import Banner from "./Banner";
 import WhisperModelCards from "./WhisperModelCards";
 import { computeBlockingReasons } from "./modeValidation";
 import { LLM_SLOTS } from "../lib/llmSlots";
+import { useChatGptStatus } from "../lib/useChatGptStatus";
 import { useT, type TranslateFn } from "../i18n";
 
 // Local input classes — the ModeEditor has ~17 sites with different
@@ -24,7 +25,7 @@ interface ModeEditorProps {
   onSaved: () => void;
 }
 
-const STT_PROVIDERS = ["xai", "openai", "groq", "deepgram"];
+const STT_PROVIDERS = ["xai", "openai", "groq", "deepgram", "chatgpt"];
 const LLM_PROVIDERS = ["xai", "openai", "anthropic"];
 
 function emptyMode(): Mode {
@@ -64,6 +65,7 @@ export default function ModeEditor({
   onSaved,
 }: ModeEditorProps): JSX.Element {
   const t = useT();
+  const { status: chatgpt } = useChatGptStatus();
   const isEdit = initial !== null;
   const [draft, setDraft] = useState<Mode>(initial ?? emptyMode());
   const [saving, setSaving] = useState(false);
@@ -290,11 +292,24 @@ export default function ModeEditor({
                   <option value="">{t("mode_editor.stt.choose")}</option>
                   {STT_PROVIDERS.map((p) => (
                     <option key={p} value={p}>
-                      {p}
+                      {p === "chatgpt" ? t("mode_editor.provider.chatgpt") : p}
                     </option>
                   ))}
                 </select>
               </Field>
+            ) : null}
+
+            {isCloudSTT && draft.cloud_stt_provider === "chatgpt" ? (
+              <div className="flex flex-col gap-2">
+                <p className="text-xs text-fg-faint">
+                  {t("mode_editor.stt.chatgpt_hint")}
+                </p>
+                {chatgpt && chatgpt.state !== "connected" ? (
+                  <Banner tone="warning" dense>
+                    {t("mode_editor.chatgpt.not_connected")}
+                  </Banner>
+                ) : null}
+              </div>
             ) : null}
 
             {isLocalSTT ? (
