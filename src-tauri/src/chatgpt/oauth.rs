@@ -17,7 +17,7 @@ use std::time::Duration;
 /// third-party apps, which is why this provider is experimental.
 const CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
 const AUTHORIZE_URL: &str = "https://auth.openai.com/oauth/authorize";
-const TOKEN_URL: &str = "https://auth.openai.com/oauth/token";
+pub const TOKEN_URL: &str = "https://auth.openai.com/oauth/token";
 const SCOPE: &str = "openid profile email offline_access";
 /// Sent honestly as ourselves — never impersonate another client.
 pub const ORIGINATOR: &str = "voicetypex";
@@ -184,6 +184,66 @@ pub async fn exchange_code(
         .map_err(|e| other(format!("ChatGPT sign-in: unexpected token response: {e}")))
 }
 
+#[derive(Debug, PartialEq)]
+pub enum RefreshError {
+    /// The refresh token is dead (expired, reused, revoked): only a new
+    /// sign-in helps.
+    Permanent(String),
+    /// Network trouble or an unexpected server answer: worth trying again.
+    Transient(String),
+}
+
+/// Exchanges the refresh token for a new token set. JSON body, like the
+/// Codex CLI (`codex-rs/login/src/auth/manager.rs`). The refresh token
+/// rotates: the caller must persist the new one or the session dies.
+pub async fn refresh(
+    client: &reqwest::Client,
+    token_url: &str,
+    refresh_token: &str,
+) -> std::result::Result<TokenResponse, RefreshError> {
+    let resp = client
+        .post(token_url)
+        .timeout(TOKEN_TIMEOUT)
+        .json(&serde_json::json!({
+            "client_id": CLIENT_ID,
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+        }))
+        .send()
+        .await
+        .map_err(|e| RefreshError::Transient(format!("token refresh request failed: {e}")))?;
+    let status = resp.status().as_u16();
+    let body = resp.text().await.unwrap_or_default();
+    if !(200..300).contains(&status) {
+        return Err(classify_refresh_failure(
+            status,
+            error_code(&body).as_deref(),
+        ));
+    }
+    serde_json::from_str(&body)
+        .map_err(|e| RefreshError::Transient(format!("unexpected token refresh response: {e}")))
+}
+
+/// Same rule as the Codex CLI: 401, a known dead-token code, or
+/// `400 invalid_grant` are permanent; everything else is transient.
+fn classify_refresh_failure(status: u16, code: Option<&str>) -> RefreshError {
+    let code_lc = code.map(str::to_ascii_lowercase);
+    let dead_token = matches!(
+        code_lc.as_deref(),
+        Some("refresh_token_expired" | "refresh_token_reused" | "refresh_token_invalidated")
+    );
+    let invalid_grant = status == 400 && code_lc.as_deref() == Some("invalid_grant");
+    let detail = format!(
+        "HTTP {status}{}",
+        code.map(|c| format!(": {c}")).unwrap_or_default()
+    );
+    if status == 401 || dead_token || invalid_grant {
+        RefreshError::Permanent(detail)
+    } else {
+        RefreshError::Transient(detail)
+    }
+}
+
 /// Only the OAuth error code is surfaced — the body of a token response
 /// must never end up in logs or messages.
 fn error_code(body: &str) -> Option<String> {
@@ -300,6 +360,35 @@ mod tests {
             Some("refresh_token_reused".into())
         );
         assert_eq!(error_code("<html>nope</html>"), None);
+    }
+
+    #[test]
+    fn refresh_failures_follow_the_codex_rule() {
+        use RefreshError::*;
+        assert!(matches!(classify_refresh_failure(401, None), Permanent(_)));
+        assert!(matches!(
+            classify_refresh_failure(400, Some("invalid_grant")),
+            Permanent(_)
+        ));
+        for code in [
+            "refresh_token_expired",
+            "refresh_token_reused",
+            "REFRESH_TOKEN_INVALIDATED",
+        ] {
+            assert!(matches!(
+                classify_refresh_failure(403, Some(code)),
+                Permanent(_)
+            ));
+        }
+        assert!(matches!(classify_refresh_failure(500, None), Transient(_)));
+        assert!(matches!(
+            classify_refresh_failure(400, Some("invalid_request")),
+            Transient(_)
+        ));
+        assert_eq!(
+            classify_refresh_failure(400, Some("invalid_grant")),
+            Permanent("HTTP 400: invalid_grant".into())
+        );
     }
 
     #[test]

@@ -5,6 +5,7 @@
 //! the APIs differ. xAI has its own format; OpenAI/Groq are
 //! Whisper-API-compatible, but Deepgram is again distinct.
 
+pub mod chatgpt;
 pub mod deepgram;
 pub mod groq;
 pub mod openai;

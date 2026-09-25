@@ -248,9 +248,8 @@ slot-selectable as GGUF on the embedded path. Enabled per mode via
 ## ChatGPT subscription (experimental)
 
 Lets users sign in with their ChatGPT plan (Plus, Pro, Business) instead
-of an API key. **Status:** sign-in, storage and sign-out are
-implemented; using the account for STT and LLM post-processing is not
-yet.
+of an API key. **Status:** sign-in and the cloud STT provider `chatgpt`
+are implemented; LLM post-processing is not yet.
 
 **Why experimental/unofficial:** OpenAI offers no public OAuth
 registration for third-party apps that covers audio. VoiceTypeX
@@ -293,13 +292,44 @@ commit `36def8b`), both read on 2026-09-25.
 (no Codex-Desktop originator, no browser User-Agent), even if that means
 a request gets blocked.
 
-**Planned (not implemented yet):** STT via the undocumented
-`POST https://chatgpt.com/backend-api/transcribe` (the endpoint Codex
-Desktop dictation uses) and LLM post-processing via
-`POST https://chatgpt.com/backend-api/codex/responses`. A fallback to
-`api.openai.com/v1/audio/transcriptions` with the ChatGPT token is
-deliberately excluded: it is most likely billed as metered API usage,
-not covered by the plan.
+**Token refresh:** `POST https://auth.openai.com/oauth/token` with a
+JSON body `{client_id, grant_type: "refresh_token", refresh_token}`, as
+in the Codex CLI (`codex-rs/login/src/auth/manager.rs`). Refreshed
+within 5 minutes of expiry and once after a 401. The refresh token
+rotates, so only one refresh runs at a time. HTTP 401,
+`refresh_token_expired` / `_reused` / `_invalidated` and
+`400 invalid_grant` are permanent (the app signs out and asks for a new
+sign-in); everything else is transient. Observed access-token lifetime:
+10 days.
+
+**STT** (`transcription/cloud/chatgpt.rs`, provider `chatgpt`):
+- `POST https://chatgpt.com/backend-api/transcribe` (undocumented; the
+  endpoint Codex Desktop dictation uses), headers `Authorization:
+  Bearer`, `ChatGPT-Account-Id`, `originator: voicetypex`,
+  `User-Agent: VoiceTypeX/<version>`; multipart `file` (the 16 kHz mono
+  WAV) plus `language` if the mode sets one (reportedly ignored).
+  Response `{"text": "…"}`. No initial prompt.
+- Observed 2026-09-25 with a Plus account: HTTP 200 in ~2 s for short
+  clips, ~4.5 s for 127 s; **no truncation** up to 326 s of real speech
+  (whole file vs. 30 s chunks gave the same word count), so the whole
+  recording is sent in one request. Identical *repeated* sentences are
+  collapsed by the backend.
+- Errors: 401/403 → sign-in rejected (auth, not retried);
+  `usage_limit_reached` (with `resets_at`), `usage_not_included` and a
+  Cloudflare block (403 with `cf-mitigated` or an HTML body) → definitive
+  rejection, not retried; 429/5xx → retried; 400/404/415 → "the
+  unofficial endpoint may have changed".
+
+**Planned (not implemented yet):** LLM post-processing via
+`POST https://chatgpt.com/backend-api/codex/responses` (Responses API,
+`store: false`, `stream: true`, system prompt in `instructions`). Of the
+models tried, only `gpt-5.5` was accepted with a ChatGPT account
+(`gpt-5.4` and `gpt-5` return 400 "not supported when using Codex with a
+ChatGPT account").
+
+A fallback to `api.openai.com/v1/audio/transcriptions` with the ChatGPT
+token is deliberately excluded: it is most likely billed as metered API
+usage, not covered by the plan.
 
 ## Secret Handling
 

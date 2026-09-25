@@ -61,6 +61,18 @@ impl ProviderFault {
             provider: None,
         }
     }
+
+    /// Definitive rejection with a known HTTP status that neither a retry
+    /// nor new credentials can fix (usage limit reached, plan lacks the
+    /// feature, blocked by a protection layer). Classified `Other`, so a
+    /// 429/403 here is neither retried nor reported as an auth problem.
+    pub fn rejected(status: u16, provider: ProviderId) -> Self {
+        Self {
+            class: FaultClass::Other,
+            status: Some(status),
+            provider: Some(provider),
+        }
+    }
 }
 
 /// What a [`ProviderFault`] represents, decoupled from the display
@@ -71,7 +83,8 @@ pub enum FaultClass {
     Http,
     /// No HTTP response was produced (timeout/DNS/connection refused).
     Network,
-    /// Anything else (parse error, empty response, factory miss).
+    /// Anything else (parse error, empty response, factory miss, or a
+    /// definitive provider rejection — see [`ProviderFault::rejected`]).
     #[default]
     Other,
 }
@@ -85,6 +98,8 @@ pub enum ProviderId {
     Deepgram,
     Anthropic,
     Ollama,
+    /// ChatGPT subscription (experimental, see `crate::chatgpt`).
+    ChatGpt,
 }
 
 #[derive(Debug, Error)]
@@ -186,6 +201,19 @@ impl VoiceTypeError {
         }
     }
 
+    /// Construct a `Transcription` error for a definitive provider
+    /// rejection (see [`ProviderFault::rejected`]).
+    pub fn transcription_rejected(
+        status: u16,
+        provider: ProviderId,
+        message: impl Into<String>,
+    ) -> Self {
+        Self::Transcription {
+            message: message.into(),
+            fault: ProviderFault::rejected(status, provider),
+        }
+    }
+
     /// Construct a `Processing` error for a non-transport failure
     /// (parse error, empty response, factory miss). Classifies as `Other`.
     pub fn processing(message: impl Into<String>) -> Self {
@@ -264,12 +292,22 @@ impl VoiceTypeError {
         }
     }
 
+    fn fault_provider(&self) -> Option<ProviderId> {
+        match self {
+            Self::Transcription { fault, .. } | Self::Processing { fault, .. } => fault.provider,
+            _ => None,
+        }
+    }
+
     /// Short English user-facing hint for what to do. The frontend
     /// banner currently shows this string directly; full per-locale
     /// translation of recovery hints is a follow-up refactor.
     pub fn recovery_hint(&self) -> &'static str {
         match self.kind() {
             ErrorKind::Configuration => "Check your settings — a required field may be missing.",
+            ErrorKind::Authentication if self.fault_provider() == Some(ProviderId::ChatGpt) => {
+                "ChatGPT sign-in missing or expired. Sign in again under Settings → ChatGPT account."
+            }
             ErrorKind::Authentication => {
                 "API key missing or invalid. Set it under Settings → Cloud API keys."
             }
@@ -491,5 +529,23 @@ mod tests {
         hints.sort();
         hints.dedup();
         assert_eq!(hints.len(), 4);
+    }
+
+    #[test]
+    fn rejected_fault_is_not_retryable_even_for_429_or_403() {
+        for status in [429, 403] {
+            let e = VoiceTypeError::transcription_rejected(status, ProviderId::ChatGpt, "x");
+            assert_eq!(e.kind(), ErrorKind::Other);
+            assert!(!e.is_retryable());
+        }
+    }
+
+    #[test]
+    fn chatgpt_auth_failure_points_to_the_account_section() {
+        let chatgpt = VoiceTypeError::transcription_http(401, ProviderId::ChatGpt, "x");
+        let byok = VoiceTypeError::transcription_http(401, ProviderId::OpenAi, "x");
+        assert_eq!(chatgpt.kind(), ErrorKind::Authentication);
+        assert!(chatgpt.recovery_hint().contains("ChatGPT account"));
+        assert!(byok.recovery_hint().contains("Cloud API keys"));
     }
 }

@@ -7,6 +7,7 @@
 //! API for third-party apps — it reuses the Codex client id and may break
 //! or be restricted at any time. See docs/PROVIDERS.md.
 
+pub mod api;
 pub mod jwt;
 pub mod loopback;
 pub mod oauth;

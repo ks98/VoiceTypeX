@@ -110,6 +110,12 @@ still accepted but ignored. You change the menu hotkey itself under
   Settings page in a collapsible "Ollama Configuration" block.
 - **Cloud providers (BYOK):** xAI (STT + Grok, default `grok-4-fast-non-reasoning`),
   OpenAI Whisper + GPT, Groq Whisper, Deepgram, Anthropic Claude
+- **ChatGPT subscription (experimental):** sign in under *Settings →
+  ChatGPT account* and pick `chatgpt` as the cloud STT provider of a
+  mode — dictation then uses your ChatGPT Plus/Pro/Business plan instead
+  of an API key. It relies on an unofficial, undocumented ChatGPT
+  interface and may stop working at any time (details in
+  [`docs/PROVIDERS.md`](docs/PROVIDERS.md))
 - **Wayland auto-paste:** ashpd (RemoteDesktop portal) + reis (libei)
 - **Secrets:** `~/.config/.../secrets.json` (chmod 0600), **encrypted
   at rest**: Windows uses DPAPI (`CryptProtectData`), and Linux uses
