@@ -13,7 +13,7 @@ GNOME 46+)**, **Linux/X11**, and **Windows**. Auto-paste on Wayland via
 permission token persist. Release bundles for Linux
 (`.deb` / `.rpm` / AppImage) and Windows (NSIS) are available; the
 in-app auto-updater is **in preparation** (not yet active — see
-[Issue #2](https://github.com/ks98/VoiceTypeX/issues/2)).
+[Beta Status & Updates](#beta-status--updates)).
 The **Windows release** includes speech recognition (whisper.cpp + Vulkan)
 and cloud LLM post-processing; the **embedded local LLM (llama-cpp-2) is
 Linux/macOS-only** — on Windows its ggml symbols collided with those of
@@ -241,10 +241,11 @@ WebView2 cache, …) are in
   check (*Settings → Diagnostics → Updates*) and minisign/Ed25519 signing
   of the artifacts are wired up, but the release pipeline does not yet
   publish the `latest.json` manifest the check compares against
-  (`includeUpdaterJson: false`), so it currently offers no updates. This
-  is gated on [Issue #2](https://github.com/ks98/VoiceTypeX/issues/2):
-  the manifest is armed once a launching AppImage is confirmed (no
-  white screen). Until then, **update manually** — re-download from
+  (`includeUpdaterJson: false`), so it currently offers no updates. The
+  manifest is armed once a launching AppImage is confirmed (no white
+  screen; the AppImage *bundling* itself was fixed in
+  [#2](https://github.com/ks98/VoiceTypeX/issues/2)). Until then,
+  **update manually** — re-download from
   the official GitHub releases, or for **`.deb`/`.rpm`** use your package
   manager. When the updater goes live, self-update will target the
   **Windows NSIS installer** and the **Linux AppImage** (`.deb`/`.rpm`
