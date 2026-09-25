@@ -394,27 +394,43 @@ sudo apt-get install rpm
 pnpm tauri build
 ```
 
-**Output paths after a successful build:**
+**Output paths after a successful build** (sizes as of v0.1.2):
 
 ```
-src-tauri/target/release/bundle/deb/VoiceTypeX_0.1.0_amd64.deb         (~5 MB)
-src-tauri/target/release/bundle/appimage/VoiceTypeX_0.1.0_amd64.AppImage  (~110 MB)
-src-tauri/target/release/bundle/rpm/VoiceTypeX-0.1.0-1.x86_64.rpm      (~5 MB)
+src-tauri/target/release/bundle/deb/VoiceTypeX_<version>_amd64.deb           (~63 MB)
+src-tauri/target/release/bundle/appimage/VoiceTypeX_<version>_amd64.AppImage  (~97 MB)
+src-tauri/target/release/bundle/rpm/VoiceTypeX-<version>-1.x86_64.rpm         (~63 MB)
 ```
 
 The NSIS installer is skipped on Linux (the NSIS toolchain is
 Windows-specific) — no error, that's expected.
 
+**glibc floor:** the release bundles are built on ubuntu-24.04 and need
+**glibc ≥ 2.39** (checked against the v0.1.2 binaries) — e.g. Debian 13
+(trixie), Ubuntu 24.04, Fedora 40 or newer. Debian 12 (bookworm, glibc
+2.36) is not supported. A local build inherits the glibc of the build
+system.
+
+**Which format?** The **AppImage** is the only Linux format the in-app
+updater updates (see [`RELEASING.md`](RELEASING.md) → *"Auto-update"*),
+but it does not add itself to the app menu. **`.deb`/`.rpm`** are
+regular system packages with a menu entry, updated manually by
+installing the next release's package.
+
 ### Installing the `.deb` (Debian / Ubuntu / Linux Mint)
 
+Download the `.deb` from the GitHub release (or use the local build
+path above), then:
+
 ```bash
-sudo dpkg -i src-tauri/target/release/bundle/deb/VoiceTypeX_0.1.0_amd64.deb
-# If dependencies are missing:
-sudo apt-get -f install
+sudo apt install ./VoiceTypeX_<version>_amd64.deb
 ```
 
+`apt` resolves the dependencies (see *"Runtime dependencies"* below);
+on Debian 13 `libasound2t64` satisfies the `libasound2` dependency.
 After installation *VoiceTypeX* appears in the app menu. Start it
-via the menu or `voicetypex` in the terminal.
+via the menu or `voicetypex` in the terminal. To update, install the
+next release's `.deb` the same way.
 
 Uninstall: `sudo apt remove voice-type-x` (Tauri normalizes
 `identifier` to a kebab-case package name). User data and
@@ -423,48 +439,83 @@ keychain entries are left behind — for cleanup see the section
 
 ### Installing the `.rpm` (Fedora / RHEL / openSUSE)
 
-Copy the RPM to the target system (e.g. via `scp`, USB stick), then:
+Download the `.rpm` from the GitHub release (or use the local build
+path above), then:
 
 ```bash
-sudo dnf install ./VoiceTypeX-0.1.0-1.x86_64.rpm
-# Or classically:
-sudo rpm -i VoiceTypeX-0.1.0-1.x86_64.rpm
+sudo dnf install ./VoiceTypeX-<version>-1.x86_64.rpm
 ```
+
+To update, install the next release's `.rpm` the same way.
 
 Uninstall: `sudo dnf remove voice-type-x`. User data is left behind
 — see *"Uninstall"*.
 
 ### Running the AppImage (universal Linux)
 
-No installation needed — `chmod +x`, then double-click or in the
-terminal:
+No installation needed, but the AppImage runtime needs FUSE 2
+(`libfuse2t64` on Debian 13 / Ubuntu 24.04). Keep it under a stable
+filename without the version, so a menu entry keeps working across
+updates:
 
 ```bash
-chmod +x VoiceTypeX_0.1.0_amd64.AppImage
-./VoiceTypeX_0.1.0_amd64.AppImage
+sudo apt install libfuse2t64
+mkdir -p ~/Applications
+mv VoiceTypeX_<version>_amd64.AppImage ~/Applications/VoiceTypeX.AppImage
+chmod +x ~/Applications/VoiceTypeX.AppImage
+~/Applications/VoiceTypeX.AppImage
 ```
 
 If FUSE is missing or disabled on the system:
 
 ```bash
-./VoiceTypeX_0.1.0_amd64.AppImage --appimage-extract-and-run
+~/Applications/VoiceTypeX.AppImage --appimage-extract-and-run
 ```
 
-The AppImage contains the complete GTK/WebKit stack — it works on
-any modern Linux distro, but it does **not** integrate into the app
-menu. For permanent use, DEB or RPM is recommended.
+The AppImage bundles the GTK/WebKit stack (not glibc — see the glibc
+floor above). It does **not** integrate into the app menu by itself;
+to add an entry:
+
+```bash
+cd /tmp && ~/Applications/VoiceTypeX.AppImage --appimage-extract \
+  'usr/share/icons/hicolor/128x128/apps/voicetypex.png' >/dev/null
+install -Dm644 squashfs-root/usr/share/icons/hicolor/128x128/apps/voicetypex.png \
+  ~/.local/share/icons/hicolor/128x128/apps/voicetypex.png
+rm -rf squashfs-root
+cat > ~/.local/share/applications/voicetypex.desktop <<EOF
+[Desktop Entry]
+Type=Application
+Name=VoiceTypeX
+Comment=Dictate — VoiceTypeX writes it.
+Exec=$HOME/Applications/VoiceTypeX.AppImage
+Icon=voicetypex
+StartupWMClass=voicetypex
+Categories=Office;
+Terminal=false
+EOF
+```
 
 ### Runtime dependencies (what the packages require)
 
-- **`.deb`** (determined by Tauri's bundler): `libopenblas0`,
-  `libasound2`, `libxdo3`, `libayatana-appindicator3-1`,
-  `libwebkit2gtk-4.1-0`, `libgtk-3-0` — all from the standard Debian
-  repo.
-- **`.rpm`** (determined by Tauri's bundler): `openblas-serial`,
-  `alsa-lib`, `libxdo`, `libayatana-appindicator3.so.1`,
-  `libwebkit2gtk-4.1.so.0`, `libgtk-3.so.0` — all from the
-  standard Fedora repo.
-- **AppImage**: nothing — everything baked in, ~110 MB.
+As of v0.1.2, read from the published packages:
+
+- **`.deb`**: `libvulkan1`, `mesa-vulkan-drivers`, `libasound2`,
+  `libxdo3` (from `bundle.linux.deb.depends` in `tauri.conf.json`) plus
+  `libayatana-appindicator3-1`, `libwebkit2gtk-4.1-0`, `libgtk-3-0`
+  (added by Tauri's bundler) — all from the standard Debian repo.
+- **`.rpm`**: `vulkan-loader`, `mesa-vulkan-drivers`, `alsa-lib`,
+  `libxdo` (from `bundle.linux.rpm.depends`) plus the automatically
+  added `libayatana-appindicator3.so.1()(64bit)`,
+  `libwebkit2gtk-4.1.so.0()(64bit)`, `libgtk-3.so.0()(64bit)` — all
+  from the standard Fedora repo.
+- **AppImage**: FUSE 2 on the host (or `--appimage-extract-and-run`);
+  everything else is bundled.
+
+On all formats: Wayland auto-paste needs the portal stack listed at
+the top of this file; the tray icon on GNOME needs the AppIndicator
+extension (`gnome-shell-extension-appindicator`); API keys are
+encrypted at rest only with a Secret Service keyring (gnome-keyring or
+KWallet), otherwise they fall back to plaintext with a warning banner.
 
 ## Uninstall — complete trace removal
 
