@@ -17,13 +17,14 @@ delivered to users.
   │       • builds deb / rpm / AppImage                           │
   │       • signs the updater artifacts (minisign)                │
   │       • creates a GitHub release as a DRAFT                   │
-  │       • uploads assets (latest.json NOT yet — see below)      │
+  │       • uploads assets + latest.json                          │
+  │  3. updater-json: strips the deb/rpm + generic linux          │
+  │       entries from latest.json (AppImage + NSIS only)         │
   └──────────────────────────────────────────────────────────────┘
         │
         ▼  You review the draft release and click "Publish"
    → assets are downloadable from the published release
-   → the in-app updater stays inactive until latest.json is armed
-     (see "Platform status")
+   → AppImage + NSIS installs are offered the new version in-app
 ```
 
 > **Windows is back in the release** (NSIS installer with STT + Vulkan +
@@ -82,7 +83,8 @@ Local preview: `git cliff --unreleased` or `git cliff --latest`.
   `clippy`, `pnpm lint`/`format:check`, `cargo test`, `vitest`,
   `cargo audit`/`pnpm audit`. Linux (full) + Windows
   (full build + `cargo test --lib`) + audit.
-- **`release.yml`** — only on `v*` tags: changelog + tauri-action.
+- **`release.yml`** — only on `v*` tags: changelog + tauri-action +
+  the `updater-json` filter.
 
 ## Auto-update
 
@@ -107,6 +109,27 @@ https://github.com/ks98/VoiceTypeX/releases/latest/download/latest.json
 as long as a release is a draft, the updater does not see it. The download
 is **click-gated** (full bundle, no deltas) and **minisign-verified**
 before installation.
+
+**Why `.deb`/`.rpm` do not self-update:** `tauri-plugin-updater` looks up
+`{os}-{arch}-{bundle}` first and then falls back to `{os}-{arch}`.
+tauri-action writes `linux-x86_64-deb`/`-rpm` entries (which the plugin
+would install via `pkexec dpkg -i` / `rpm -U`) plus a generic
+`linux-x86_64` entry pointing at the AppImage. The `updater-json` job
+deletes all three, so a `.deb`/`.rpm` install finds no target while the
+AppImage still finds `linux-x86_64-appimage`. The app hides the update
+check for `.deb`/`.rpm` (`get_self_update_supported`, based on the bundle
+type the bundler patches into each binary).
+
+**Before publishing**, check the draft's manifest:
+
+```bash
+gh release download vX.Y.Z --pattern latest.json --output - | jq '.platforms | keys'
+# expected: ["linux-x86_64-appimage", "windows-x86_64", "windows-x86_64-nsis"]
+```
+
+If the `updater-json` job failed with "latest.json lacks platform …", the
+two build legs raced on latest.json: re-run the failed build leg, then
+the `updater-json` job.
 
 ## Signing key (critical)
 
@@ -137,16 +160,16 @@ offered them.
 
 - **Linux** (deb / rpm / AppImage): in the release. The AppImage build was
   fixed via `NO_STRIP=true` — background in
-  [#2](https://github.com/ks98/VoiceTypeX/issues/2). The in-app
-  auto-updater (AppImage) is still **disabled** (`includeUpdaterJson: false`)
-  until a launching AppImage is confirmed (no white screen).
+  [#2](https://github.com/ks98/VoiceTypeX/issues/2). The v0.1.2 AppImage
+  was confirmed to launch (no white screen), so the in-app updater is
+  armed for the AppImage starting with the first release after v0.1.2;
+  `.deb`/`.rpm` stay on manual updates (see "Auto-update").
 - **Windows** (NSIS): **in the release** — STT (whisper.cpp + Vulkan) +
   Cloud/Ollama LLM. The embedded llama-cpp-2 has been removed on Windows
   ([#1](https://github.com/ks98/VoiceTypeX/issues/1): ggml symbol collision
   between the two ggml copies when MSVC links), which lets the link
   succeed; CI builds and tests Windows fully (`cargo build + test`). The
-  NSIS auto-updater is wired up; the `latest.json` is — as with AppImage —
-  still disabled (see above).
+  NSIS auto-updater is armed together with the AppImage (see above).
 - **macOS**: out of scope.
 
 ## Initial setup checklist (one-time)

@@ -6,12 +6,26 @@ use crate::core::AppContext;
 use crate::injection::{InjectOptions, InjectionStrategy};
 use std::sync::Arc;
 use std::time::Duration;
+use tauri::utils::config::BundleType;
 
 type IpcResult<T> = std::result::Result<T, String>;
 
 #[tauri::command]
 pub async fn get_app_version() -> IpcResult<String> {
     Ok(env!("CARGO_PKG_VERSION").to_string())
+}
+
+#[tauri::command]
+pub async fn get_self_update_supported() -> IpcResult<bool> {
+    Ok(self_update_supported(tauri::utils::platform::bundle_type()))
+}
+
+/// `.deb`/`.rpm` stay on manual updates: release.yml strips their entries
+/// (and the generic `linux-x86_64` fallback) from latest.json, so the
+/// updater would only report "no platform found" there. Unknown bundle
+/// types (dev builds) keep the check.
+fn self_update_supported(bundle: Option<BundleType>) -> bool {
+    !matches!(bundle, Some(BundleType::Deb | BundleType::Rpm))
 }
 
 #[tauri::command]
@@ -97,5 +111,18 @@ mod tests {
     #[test]
     fn delay_above_cap_is_rejected() {
         assert!(validate_delay_secs(MAX_TEST_AUTO_PASTE_DELAY_SECS + 1).is_err());
+    }
+
+    #[test]
+    fn deb_and_rpm_have_no_self_update() {
+        assert!(!self_update_supported(Some(BundleType::Deb)));
+        assert!(!self_update_supported(Some(BundleType::Rpm)));
+    }
+
+    #[test]
+    fn appimage_nsis_and_unknown_keep_self_update() {
+        assert!(self_update_supported(Some(BundleType::AppImage)));
+        assert!(self_update_supported(Some(BundleType::Nsis)));
+        assert!(self_update_supported(None));
     }
 }

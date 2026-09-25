@@ -101,6 +101,7 @@ pub fn run() {
             ipc::recording::cancel_menu,
             ipc::recording::run_test_transcription,
             ipc::diagnostics::get_app_version,
+            ipc::diagnostics::get_self_update_supported,
             ipc::diagnostics::get_recent_logs,
             ipc::diagnostics::get_session_info,
             ipc::diagnostics::get_whisper_backend,

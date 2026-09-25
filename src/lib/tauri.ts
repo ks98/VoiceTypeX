@@ -95,6 +95,10 @@ export async function ipcGetAppVersion(): Promise<string> {
   return invoke<string>("get_app_version");
 }
 
+export async function ipcGetSelfUpdateSupported(): Promise<boolean> {
+  return invoke<boolean>("get_self_update_supported");
+}
+
 export async function ipcGetRecentLogs(limit: number): Promise<string[]> {
   return invoke<string[]>("get_recent_logs", { limit });
 }
