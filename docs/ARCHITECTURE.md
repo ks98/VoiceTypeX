@@ -219,7 +219,7 @@ differentiate in `core::session::is_wayland()`).
 | Trait | File | Implementations |
 |---|---|---|
 | `Transcriber` | `transcription/mod.rs` | `LocalTranscriber` (whisper-rs), `XaiTranscriber`, `OpenAITranscriber`, `GroqTranscriber`, `DeepgramTranscriber`, `ChatGptTranscriber` (experimental) |
-| `Processor` | `processing/mod.rs` | `LlamaEmbeddedProcessor` (embedded llama-cpp-2, **default engine**), `OllamaProcessor` (local Ollama daemon, opt-in), `XaiProcessor`/`OpenAIProcessor` (via the shared `OpenAICompatibleClient`), `AnthropicProcessor` |
+| `Processor` | `processing/mod.rs` | `LlamaEmbeddedProcessor` (embedded llama-cpp-2, **default engine**), `OllamaProcessor` (local Ollama daemon, opt-in), `XaiProcessor`/`OpenAIProcessor` (via the shared `OpenAICompatibleClient`), `AnthropicProcessor`, `ChatGptProcessor` (experimental) |
 | `TextInjector` | `injection/mod.rs` | `ClipboardFallbackInjector` (X11/Windows: enigo Ctrl+V), `WaylandLibeiInjector` (Wayland: libei via xdg-desktop-portal.RemoteDesktop) — the trait additionally carries `read_selection()` (the input side of the edit modes, see below). On KDE Plasma 6 the paste shortcut (Ctrl+Shift+V for terminals vs Ctrl+V) is chosen via `injection/focus_tracker.rs` — a bundled KWin script reports the active window's `resourceClass` over a zbus service, cached in `AppContext.kde_focus` |
 
 **Hotkey registration** is platform-direct (no trait, see
@@ -632,7 +632,7 @@ on X11 / Windows the field stays editable.
 
 Signs in with a ChatGPT plan instead of an API key (see
 [`PROVIDERS.md`](PROVIDERS.md) → *ChatGPT subscription*). Used by the
-cloud STT provider `chatgpt`; LLM post-processing follows.
+cloud STT and LLM provider `chatgpt`.
 
 - `chatgpt/oauth.rs` — PKCE, authorize URL, callback parsing, code
   exchange (pure except the token request).
@@ -650,9 +650,11 @@ cloud STT provider `chatgpt`; LLM post-processing follows.
 - `chatgpt/api.rs` — shared headers (honest `originator` /
   User-Agent) and the failure classification (auth / definitive
   rejection / HTTP) for the `chatgpt.com/backend-api` calls.
-- `transcription/cloud/chatgpt.rs` — `ChatGptTranscriber`; built by
-  `make_cloud_transcriber` without a keychain lookup (it takes the
-  session instead) and cached like the other cloud providers.
+- `transcription/cloud/chatgpt.rs` — `ChatGptTranscriber`, and
+  `processing/cloud/chatgpt.rs` — `ChatGptProcessor` (Codex Responses
+  API over server-sent events); both are built by their factories
+  without a keychain lookup (they take the session instead) and cached
+  like the other cloud providers.
 - `ipc/chatgpt.rs` — `get_chatgpt_status`, `chatgpt_login_start`,
   `chatgpt_login_complete_manual` (paste fallback),
   `chatgpt_login_cancel`, `chatgpt_logout`. Every change emits

@@ -1198,7 +1198,7 @@ fn resolve_cloud_processor(ctx: &Arc<AppContext>, provider: &str) -> Result<Arc<
         }
     }
 
-    let new_processor = make_cloud_processor(provider, ctx.http_client.clone())?;
+    let new_processor = make_cloud_processor(provider, ctx.http_client.clone(), &ctx.chatgpt)?;
     let mut cache = ctx.cloud_processors.lock();
     if let Some(found) = cache.get(provider) {
         return Ok(found.clone());

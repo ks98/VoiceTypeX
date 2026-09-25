@@ -448,6 +448,7 @@
   "mode_editor.llm.cloud_provider": "Cloud LLM provider",
   "mode_editor.llm.cloud_model.label": "Model ID",
   "mode_editor.llm.cloud_model.hint": "e.g. grok-4-fast-non-reasoning, gpt-4o-mini, claude-sonnet-4-6",
+  "mode_editor.llm.chatgpt_model_hint": "Optional. Leave empty for gpt-5.5 — the only model confirmed to work with a ChatGPT account so far.",
   "mode_editor.llm.system_prompt.label": "System prompt",
   "mode_editor.llm.system_prompt.hint": "Sent as system message to the LLM. Describes the task (e.g. \"Fix grammar, keep style unchanged\").",
   "mode_editor.sampling.intro": "Empty = provider/engine default. Only change if you know what the values do.",

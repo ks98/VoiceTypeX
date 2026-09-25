@@ -241,6 +241,19 @@ impl VoiceTypeError {
         }
     }
 
+    /// Construct a `Processing` error for a definitive provider rejection
+    /// (see [`ProviderFault::rejected`]).
+    pub fn processing_rejected(
+        status: u16,
+        provider: ProviderId,
+        message: impl Into<String>,
+    ) -> Self {
+        Self::Processing {
+            message: message.into(),
+            fault: ProviderFault::rejected(status, provider),
+        }
+    }
+
     /// Classify the error into a machine-readable category.
     ///
     /// The cloud stages read the structured `ProviderFault` exclusively —

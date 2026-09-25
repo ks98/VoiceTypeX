@@ -5,6 +5,7 @@
 //! Anthropic is standalone (CLAUDE.md §4.6).
 
 pub mod anthropic;
+pub mod chatgpt;
 pub mod openai;
 pub mod openai_compatible;
 pub mod xai;
