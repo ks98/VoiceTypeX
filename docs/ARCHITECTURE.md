@@ -667,6 +667,15 @@ cloud STT and LLM provider `chatgpt`.
 returns the pending status right away; a spawned task waits up to
 5 minutes for the callback, exchanges the code and stores the result.
 
+The onboarding wizard (step 2) offers the sign-in as an alternative to
+the local Whisper download. The choice only takes effect once signed in
+(`src/components/onboardingFlow.ts`, pure and unit-tested): on
+completion the bundled default modes — only values still at their
+bundled defaults — are rewritten to `chatgpt` for STT and, if chosen
+(default on), for post-processing; the xAI-key and local-LLM steps are
+then skipped. It runs on completion rather than on leaving step 2
+because the language picker re-seeds the default modes from any step.
+
 ## Persistence
 
 | What | Where | Format |

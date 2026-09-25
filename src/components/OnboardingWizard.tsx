@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { emit, listen } from "@tauri-apps/api/event";
 import { listenAll } from "../lib/tauriListen";
 import { EVENTS } from "../lib/events";
@@ -7,21 +7,34 @@ import {
   ipcDownloadDefaultModel,
   ipcDownloadLlmDefaultModel,
   ipcGetHardwareReport,
+  ipcGetModes,
   ipcGetWhisperBackend,
   ipcReseedDefaultModes,
   ipcSetProviderKey,
   ipcTestProviderConnection,
+  ipcUpdateMode,
   type HardwareReport,
   type ModelDownloadProgress,
   type WhisperBackendInfo,
 } from "../lib/tauri";
 import { recommendLlmSlot } from "../lib/recommend";
 import { isWindows } from "../lib/platform";
+import type { Mode } from "../lib/types";
+import { useChatGptStatus } from "../lib/useChatGptStatus";
 import { useModesStore, useSettingsStore } from "../store";
 import Banner from "./Banner";
 import Button from "./Button";
+import ChatGptAccountSection from "./ChatGptAccountSection";
 import Input from "./Input";
 import Logo from "./Logo";
+import {
+  applyChatGptChoice,
+  effectiveSttChoice,
+  wizardSteps,
+  type DefaultModeKind,
+  type SttChoice,
+  type WizardStep,
+} from "./onboardingFlow";
 import {
   LOCALE_NATIVE_NAMES,
   SUPPORTED_LOCALES,
@@ -31,9 +44,6 @@ import {
   type SupportedLocale,
   type TranslateFn,
 } from "../i18n";
-
-type Step = 1 | 2 | 3 | 4 | 5;
-const TOTAL_STEPS = 5;
 
 interface OnboardingWizardProps {
   onClose: () => void;
@@ -77,7 +87,22 @@ export default function OnboardingWizard({
     });
   };
 
-  const [step, setStep] = useState<Step>(1);
+  const [step, setStep] = useState<WizardStep>(1);
+
+  // Speech-to-text engine choice (step 2). ChatGPT only takes effect once
+  // signed in; with it doing the post-processing too, steps 3 and 4 drop.
+  const [sttChoice, setSttChoice] = useState<SttChoice>("local");
+  const [llmViaChatGpt, setLlmViaChatGpt] = useState(true);
+  const { status: chatgpt } = useChatGptStatus();
+  const effectiveStt = effectiveSttChoice(
+    sttChoice,
+    chatgpt?.state === "connected",
+  );
+  const steps = wizardSteps(effectiveStt, llmViaChatGpt);
+  const stepIndex = Math.max(0, steps.indexOf(step));
+  const prevStep = steps[stepIndex - 1];
+  const nextStep = steps[stepIndex + 1];
+  const [finishError, setFinishError] = useState<string | null>(null);
 
   // Whisper download — background, persistent across step changes.
   const [whisperStatus, setWhisperStatus] = useState<DownloadStatus>({
@@ -202,14 +227,39 @@ export default function OnboardingWizard({
     }
   };
 
-  const onFinish = async () => {
-    await update({ onboarding_done: true });
-    onClose();
+  // Applied on completion, not when leaving step 2: the language picker
+  // re-seeds the default modes from any step and would undo it.
+  const describeChatGptMode = (
+    kind: DefaultModeKind,
+    next: Mode,
+  ): string | null => {
+    if (kind === "exact") return t("wizard.chatgpt.mode_desc.exact");
+    if (kind === "correction") {
+      return next.processing === "cloud"
+        ? t("wizard.chatgpt.mode_desc.correction")
+        : t("wizard.chatgpt.mode_desc.correction_local_llm");
+    }
+    return null;
   };
 
-  const skipAll = async () => {
-    await update({ onboarding_done: true });
-    onClose();
+  const finalize = async () => {
+    setFinishError(null);
+    try {
+      if (effectiveStt === "chatgpt") {
+        for (const mode of await ipcGetModes()) {
+          const next = applyChatGptChoice(mode, {
+            llm: llmViaChatGpt,
+            describe: describeChatGptMode,
+          });
+          if (next) await ipcUpdateMode(next);
+        }
+        useModesStore.setState({ modes: await ipcGetModes() });
+      }
+      await update({ onboarding_done: true });
+      onClose();
+    } catch (e) {
+      setFinishError(t("wizard.finish.apply_failed", { message: String(e) }));
+    }
   };
 
   const anyRunning =
@@ -225,7 +275,7 @@ export default function OnboardingWizard({
                 {t("wizard.header.title")}
               </h2>
               <div className="text-xs text-fg-faint mt-0.5">
-                {t("wizard.header.subtitle", { total: TOTAL_STEPS })}
+                {t("wizard.header.subtitle", { total: steps.length })}
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -243,12 +293,12 @@ export default function OnboardingWizard({
                   </option>
                 ))}
               </select>
-              <Button variant="ghost" size="sm" onClick={() => void skipAll()}>
+              <Button variant="ghost" size="sm" onClick={() => void finalize()}>
                 {t("wizard.header.skip")}
               </Button>
             </div>
           </div>
-          <StepIndicator current={step} total={TOTAL_STEPS} />
+          <StepIndicator current={stepIndex + 1} total={steps.length} />
           <MiniProgressStack
             whisperStatus={whisperStatus}
             whisperProgress={whisperProgress}
@@ -260,10 +310,20 @@ export default function OnboardingWizard({
         </div>
 
         <div className="px-6 py-8 min-h-[360px]">
+          {finishError ? (
+            <Banner tone="error" className="mb-4">
+              {finishError}
+            </Banner>
+          ) : null}
           {step === 1 ? (
             <StepWelcome />
           ) : step === 2 ? (
-            <StepDownload
+            <StepStt
+              choice={sttChoice}
+              onChoose={setSttChoice}
+              connected={chatgpt?.state === "connected"}
+              llmViaChatGpt={llmViaChatGpt}
+              onToggleLlm={setLlmViaChatGpt}
               onDownload={onDownload}
               downloadStarted={
                 whisperStatus.kind !== "idle" || settings?.whisper_model_path
@@ -315,6 +375,7 @@ export default function OnboardingWizard({
               backend={backend}
               hardware={hardware}
               anyDownloadRunning={anyRunning}
+              chatgptApplied={effectiveStt === "chatgpt"}
             />
           )}
         </div>
@@ -322,22 +383,17 @@ export default function OnboardingWizard({
         <div className="px-6 py-4 border-t border-outline flex justify-between items-center gap-2">
           <Button
             variant="ghost"
-            onClick={() => setStep((s) => Math.max(1, (s - 1) as Step) as Step)}
-            disabled={step === 1}
+            onClick={() => prevStep && setStep(prevStep)}
+            disabled={!prevStep}
           >
             {t("wizard.nav.back")}
           </Button>
-          {step < TOTAL_STEPS ? (
-            <Button
-              variant="secondary"
-              onClick={() =>
-                setStep((s) => Math.min(TOTAL_STEPS, (s + 1) as Step) as Step)
-              }
-            >
+          {nextStep ? (
+            <Button variant="secondary" onClick={() => setStep(nextStep)}>
               {t("wizard.nav.next")}
             </Button>
           ) : (
-            <Button onClick={() => void onFinish()}>
+            <Button onClick={() => void finalize()}>
               {t("wizard.nav.finish")}
             </Button>
           )}
@@ -347,11 +403,21 @@ export default function OnboardingWizard({
   );
 }
 
-function StepDownload({
+function StepStt({
+  choice,
+  onChoose,
+  connected,
+  llmViaChatGpt,
+  onToggleLlm,
   onDownload,
   downloadStarted,
   modelPath,
 }: {
+  choice: SttChoice;
+  onChoose: (choice: SttChoice) => void;
+  connected: boolean;
+  llmViaChatGpt: boolean;
+  onToggleLlm: (on: boolean) => void;
   onDownload: () => void;
   downloadStarted: boolean;
   modelPath: string | null;
@@ -362,9 +428,100 @@ function StepDownload({
       <Hero icon={<CloudDownloadIcon />} />
       <div>
         <h3 className="text-lg font-semibold text-fg">
-          {t("wizard.download.title")}
+          {t("wizard.stt.title")}
         </h3>
-        <p className="text-sm text-fg-muted mt-1">
+        <p className="text-sm text-fg-muted mt-1">{t("wizard.stt.intro")}</p>
+      </div>
+      <ChoiceCard
+        selected={choice === "local"}
+        onSelect={() => onChoose("local")}
+        title={t("wizard.download.title")}
+        badge={t("wizard.stt.local.badge")}
+      >
+        {choice === "local" ? (
+          <LocalDownload
+            onDownload={onDownload}
+            downloadStarted={downloadStarted}
+            modelPath={modelPath}
+          />
+        ) : null}
+      </ChoiceCard>
+      <ChoiceCard
+        selected={choice === "chatgpt"}
+        onSelect={() => onChoose("chatgpt")}
+        title={t("wizard.stt.chatgpt.title")}
+        badge={t("chatgpt.badge.experimental")}
+      >
+        <p className="text-sm text-fg-muted">{t("wizard.stt.chatgpt.body")}</p>
+        {choice === "chatgpt" ? (
+          <div className="flex flex-col gap-3 mt-3">
+            <ChatGptAccountSection showHeader={false} />
+            <label className="flex items-center gap-2 text-sm text-fg">
+              <input
+                type="checkbox"
+                checked={llmViaChatGpt}
+                onChange={(e) => onToggleLlm(e.target.checked)}
+              />
+              {t("wizard.stt.chatgpt.llm_toggle")}
+            </label>
+            {!connected ? (
+              <p className="text-xs text-fg-faint">
+                {t("wizard.stt.chatgpt.not_signed_in")}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+      </ChoiceCard>
+    </div>
+  );
+}
+
+function ChoiceCard({
+  selected,
+  onSelect,
+  title,
+  badge,
+  children,
+}: {
+  selected: boolean;
+  onSelect: () => void;
+  title: string;
+  badge: string;
+  children: ReactNode;
+}): JSX.Element {
+  return (
+    <div
+      className={
+        "rounded-md border p-4 transition-colors " +
+        (selected ? "border-brand bg-brand/5" : "border-outline")
+      }
+    >
+      <label className="flex items-center gap-2 cursor-pointer">
+        <input type="radio" checked={selected} onChange={onSelect} />
+        <span className="text-sm font-semibold text-fg">{title}</span>
+        <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-elevated border border-outline text-fg-muted">
+          {badge}
+        </span>
+      </label>
+      <div className="mt-2 pl-6">{children}</div>
+    </div>
+  );
+}
+
+function LocalDownload({
+  onDownload,
+  downloadStarted,
+  modelPath,
+}: {
+  onDownload: () => void;
+  downloadStarted: boolean;
+  modelPath: string | null;
+}): JSX.Element {
+  const t = useT();
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <p className="text-sm text-fg-muted">
           {t("wizard.download.intro_prefix")}{" "}
           <code className="text-brand font-mono">
             ggml-large-v3-turbo-q8_0.bin
@@ -494,10 +651,12 @@ function StepFinish({
   backend,
   hardware,
   anyDownloadRunning,
+  chatgptApplied,
 }: {
   backend: WhisperBackendInfo | null;
   hardware: HardwareReport | null;
   anyDownloadRunning: boolean;
+  chatgptApplied: boolean;
 }): JSX.Element {
   const t = useT();
   return (
@@ -507,6 +666,9 @@ function StepFinish({
         <Banner tone="warning">
           {t("wizard.finish.warning_downloads_running")}
         </Banner>
+      ) : null}
+      {chatgptApplied ? (
+        <Banner tone="info">{t("wizard.finish.chatgpt_applied")}</Banner>
       ) : null}
       <div>
         <h3 className="text-lg font-semibold text-fg">

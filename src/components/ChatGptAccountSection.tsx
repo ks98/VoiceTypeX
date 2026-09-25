@@ -17,7 +17,12 @@ import { useT } from "../i18n";
 // this component only keeps UI-local extras (consent tick, paste draft).
 // Leaving the view does not cancel a pending sign-in — the backend times
 // it out on its own.
-export default function ChatGptAccountSection(): JSX.Element {
+export default function ChatGptAccountSection({
+  showHeader = true,
+}: {
+  /** The onboarding wizard embeds the section in its own card. */
+  showHeader?: boolean;
+}): JSX.Element {
   const t = useT();
   const { status, setStatus, loadError } = useChatGptStatus();
   const [actionError, setActionError] = useState<string | null>(null);
@@ -75,10 +80,14 @@ export default function ChatGptAccountSection(): JSX.Element {
 
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <h2 className="text-lg font-semibold text-fg">{t("chatgpt.title")}</h2>
-        <p className="text-xs text-fg-faint mt-1">{t("chatgpt.intro")}</p>
-      </div>
+      {showHeader ? (
+        <div>
+          <h2 className="text-lg font-semibold text-fg">
+            {t("chatgpt.title")}
+          </h2>
+          <p className="text-xs text-fg-faint mt-1">{t("chatgpt.intro")}</p>
+        </div>
+      ) : null}
 
       {loadError ? (
         <Banner tone="error">
