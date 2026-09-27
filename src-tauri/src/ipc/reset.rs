@@ -6,7 +6,7 @@
 //! 1. `reset_api_keys` — all provider keys (file + keychain).
 //! 2. `reset_wayland_token` — Wayland permission token; the next
 //!    auto-paste inject re-triggers the `xdg-desktop-portal` dialog.
-//! 3. `reset_app_factory` — settings, modes (back to the 6 defaults),
+//! 3. `reset_app_factory` — settings, modes (back to the 9 defaults),
 //!    secrets (incl. the ChatGPT sign-in), Wayland token. Models and the models cache are
 //!    intentionally preserved (re-download would be expensive for the
 //!    user).
