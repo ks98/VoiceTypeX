@@ -104,6 +104,9 @@ struct StageOutput {
     output_action: OutputAction,
     transcribe_ms: u64,
     process_ms: u64,
+    /// Set when post-processing failed in a voice mode and `final_text` is
+    /// the raw transcript instead — the caller tells the user.
+    post_processing_error: Option<String>,
 }
 
 /// Configuration of the streaming decode loop. Kept centrally here so the
@@ -599,23 +602,42 @@ where
     // resolve failure parks from `Postprocessing` exactly as the inline
     // `run_local_processing` / `run_cloud_processing` did.
     let t_process_start = std::time::Instant::now();
+    let mut post_processing_error = None;
     let llm_output = match resolve_processor {
         None => processing_input,
         Some(resolve) => {
             deps.state_bus.transition(AppState::Postprocessing)?;
-            let processor = resolve().inspect_err(|e| {
-                let _ = deps.state_bus.transition(AppState::Error(e.to_string()));
-            })?;
-            processor
-                .process(
-                    &processing_input,
-                    deps.process_opts.system_prompt,
-                    deps.process_opts.opts.clone(),
-                )
-                .await
-                .inspect_err(|e| {
+            let processed = match resolve() {
+                Ok(processor) => {
+                    processor
+                        .process(
+                            &processing_input,
+                            deps.process_opts.system_prompt,
+                            deps.process_opts.opts.clone(),
+                        )
+                        .await
+                }
+                Err(e) => Err(e),
+            };
+            match processed {
+                Ok(text) => text,
+                // A voice mode keeps the dictation: the raw transcript is
+                // inserted instead. Not for edit modes — their input is the
+                // spoken instruction, which must never replace the selection.
+                Err(e) if matches!(mode.input, InputSource::Voice) => {
+                    tracing::warn!(
+                        mode = %mode.id,
+                        error = %e,
+                        "Post-processing failed — inserting the raw transcript"
+                    );
+                    post_processing_error = Some(e.to_string());
+                    processing_input
+                }
+                Err(e) => {
                     let _ = deps.state_bus.transition(AppState::Error(e.to_string()));
-                })?
+                    return Err(e);
+                }
+            }
         }
     };
     let process_ms = t_process_start.elapsed().as_millis() as u64;
@@ -635,6 +657,7 @@ where
         output_action,
         transcribe_ms,
         process_ms,
+        post_processing_error,
     })
 }
 
@@ -821,6 +844,7 @@ async fn finish_recording_and_inject(
         output_action,
         transcribe_ms,
         process_ms,
+        post_processing_error,
     } = run_stages(&deps, &samples, mode, selection, resolve_processor).await?;
 
     ctx.state_bus.transition(AppState::Injecting)?;
@@ -891,6 +915,14 @@ async fn finish_recording_and_inject(
     let inject_ms = t_inject_start.elapsed().as_millis() as u64;
 
     ctx.state_bus.transition(AppState::Idle)?;
+    if let Some(reason) = post_processing_error {
+        let _ = app
+            .notification()
+            .builder()
+            .title("VoiceTypeX — Post-processing failed")
+            .body(format!("The raw transcript was inserted instead. {reason}"))
+            .show();
+    }
     // Per-stage latency summary (issue #43). The stage durations sum to
     // less than felt latency because fixed glue (overlay hide + 80 ms
     // focus-handoff sleep, audio cues) sits between them; `total` is the
@@ -1713,25 +1745,29 @@ mod tests {
         );
     }
 
-    /// A processing failure parks in `Error(_)` too — but only after the
-    /// `Postprocessing` transition (the STT pass already ran). This mirrors
-    /// the inline ordering: a processor failure must park from
-    /// `Postprocessing`, never skip STT.
+    /// In an edit mode a processing failure parks in `Error(_)` — only
+    /// after the `Postprocessing` transition (the STT pass already ran).
+    /// No raw fallback here: the transcript is the spoken instruction and
+    /// must never replace the selection.
     #[tokio::test]
     async fn run_stages_processor_error_parks_in_error_after_postprocessing() {
         let bus = bus_at_transcribing();
         let transcriber = MockTranscriber {
-            output: "Hallo Welt".into(),
+            output: "make it formal".into(),
         };
         let processor = Arc::new(FailingProcessor);
-        let mode = Mode::diagnostic();
+        let mode = Mode {
+            input: InputSource::Selection,
+            processing: ProcessingTarget::Cloud,
+            ..Mode::diagnostic()
+        };
         let deps = cloud_deps(&bus, &transcriber, "");
 
         let err = run_stages(
             &deps,
             &[0.0_f32; 16],
             &mode,
-            None,
+            Some("Hallo Leute".to_string()),
             Some(|| Ok(processor as Arc<dyn Processor>)),
         )
         .await
@@ -1742,6 +1778,71 @@ mod tests {
             matches!(bus.current(), AppState::Error(_)),
             "LLM failure must park in Error"
         );
+    }
+
+    /// In a voice mode a processing failure keeps the dictation: the raw
+    /// transcript comes back with the reason, and the pipeline does not
+    /// park in Error.
+    #[tokio::test]
+    async fn run_stages_voice_mode_falls_back_to_the_raw_transcript() {
+        let bus = bus_at_transcribing();
+        let transcriber = MockTranscriber {
+            output: "Hallo Welt".into(),
+        };
+        let processor = Arc::new(FailingProcessor);
+        let mode = Mode {
+            processing: ProcessingTarget::Cloud,
+            ..Mode::diagnostic()
+        };
+        let deps = cloud_deps(&bus, &transcriber, "");
+
+        let out = run_stages(
+            &deps,
+            &[0.0_f32; 16],
+            &mode,
+            None,
+            Some(|| Ok(processor as Arc<dyn Processor>)),
+        )
+        .await
+        .expect("voice mode falls back instead of failing");
+
+        assert_eq!(out.final_text, "Hallo Welt");
+        assert_eq!(out.output_action, OutputAction::Insert);
+        assert!(out
+            .post_processing_error
+            .as_deref()
+            .is_some_and(|e| e.contains("mock LLM failure")));
+        assert_eq!(bus.current(), AppState::Postprocessing);
+    }
+
+    /// The fallback also covers a processor that cannot even be resolved
+    /// (e.g. a missing API key) in a voice mode.
+    #[tokio::test]
+    async fn run_stages_voice_mode_falls_back_when_the_processor_cannot_be_resolved() {
+        let bus = bus_at_transcribing();
+        let transcriber = MockTranscriber {
+            output: "Hallo Welt".into(),
+        };
+        let mode = Mode {
+            processing: ProcessingTarget::Cloud,
+            ..Mode::diagnostic()
+        };
+        let deps = cloud_deps(&bus, &transcriber, "");
+
+        let out = run_stages(
+            &deps,
+            &[0.0_f32; 16],
+            &mode,
+            None,
+            Some(|| -> Result<Arc<dyn Processor>> {
+                Err(VoiceTypeError::Secrets("No API key set".into()))
+            }),
+        )
+        .await
+        .expect("voice mode falls back instead of failing");
+
+        assert_eq!(out.final_text, "Hallo Welt");
+        assert!(out.post_processing_error.is_some());
     }
 
     /// Edit-mode path: a `Selection` mode composes the captured selection
