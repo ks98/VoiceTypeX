@@ -1,66 +1,99 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { listen, emit } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { listenAll } from "../lib/tauriListen";
 import { EVENTS } from "../lib/events";
-import { useLocale, useT, type TranslateFn } from "../i18n";
+import { useLocale, useT } from "../i18n";
 import { formatDate, formatNumber } from "../i18n/format";
 import { overlayHint } from "../lib/chatgptUsage";
 import { useChatGptUsage } from "../lib/useChatGptUsage";
-
-type Phase =
-  | "idle"
-  | "recording"
-  | "transcribing"
-  | "postprocessing"
-  | "injecting"
-  | "error";
+import { ipcGetEffectiveMenuHotkey, ipcGetSettings } from "../lib/tauri";
+import {
+  errorStage,
+  hotkeyLabel,
+  silenceHintDue,
+  type EngineStatus,
+  type Phase,
+} from "../lib/overlayModel";
+import OverlayCard from "../components/overlay/OverlayCard";
+import type {
+  LevelListener,
+  LevelSubscribe,
+} from "../components/overlay/LevelWaveform";
 
 type StatePayload = { state: Phase; error?: string };
 type PartialTranscriptPayload = { text: string };
-type EngineSegment = {
-  location: "local" | "cloud";
-  provider: string | null;
-  model: string;
-};
-type EngineStatusPayload = { stt: EngineSegment; llm: EngineSegment | null };
+type AudioLevelPayload = { level: number };
+
+/** Phases with a running clock. */
+const TIMED: readonly Phase[] = ["recording", "transcribing", "postprocessing"];
+const TICK_MS = 250;
 
 /**
- * Live overlay window — displays the pipeline-phase indicator during
- * recording/transcribe/… Visibility is driven by the backend.
+ * Live overlay window — container of the overlay card: subscribes to the
+ * pipeline events and derives what the pure `OverlayCard` renders.
+ * Visibility is driven by the backend.
  *
  * The phase default is "recording" because the backend only makes the
- * window visible when the pipeline transitions into recording. That way
- * the first visible frame already shows "Listening…" instead of being
- * empty.
+ * window visible when the pipeline transitions into recording, so the
+ * first visible frame never shows an empty card.
  *
- * Phase 2: while recording with local STT, the backend emits
- * `app://partial-transcript` events carrying stable word prefixes from
- * LocalAgreement-2. We show the latest snapshot in a second line below
- * the status header. On a phase change away from recording
- * (transcribing/postprocessing/injecting/idle) the partial is cleared
- * implicitly — either by an empty event from the backend or by our
- * local phase reset.
+ * `app://partial-transcript` (local Whisper streaming) carries the live
+ * transcript; it is cleared when the phase leaves recording.
+ * `app://audio-level` feeds the waveform at 25 Hz through a small fan-out
+ * instead of React state, so level updates never re-render the tree.
  */
 export default function Overlay(): JSX.Element {
   const t = useT();
-  const [phase, setPhase] = useState<Phase>("recording");
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [partial, setPartial] = useState<string>("");
-  const [engine, setEngine] = useState<EngineStatusPayload | null>(null);
   const locale = useLocale();
   const { usage } = useChatGptUsage();
+  const [phase, setPhase] = useState<Phase>("recording");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [failedIn, setFailedIn] = useState<Phase | null>(null);
+  const [partial, setPartial] = useState("");
+  const [engine, setEngine] = useState<EngineStatus | null>(null);
+  const [session, setSession] = useState(0);
+  const [hotkey, setHotkey] = useState<string | null>(null);
+  const [phaseStart, setPhaseStart] = useState(() => Date.now());
+  const [now, setNow] = useState(() => Date.now());
+  const [silent, setSilent] = useState(false);
+
+  const lastPhase = useRef<Phase | null>(null);
+  const maxLevel = useRef(0);
+  const levelListeners = useRef(new Set<LevelListener>());
+
+  const subscribeLevels = useCallback<LevelSubscribe>((listener) => {
+    levelListeners.current.add(listener);
+    return () => {
+      levelListeners.current.delete(listener);
+    };
+  }, []);
 
   useEffect(() => {
     return listenAll([
       listen<StatePayload>(EVENTS.STATE, (event) => {
-        setPhase(event.payload.state);
+        const next = event.payload.state;
+        const previous = lastPhase.current;
+        lastPhase.current = next;
+        const at = Date.now();
+        setPhase(next);
         setErrorMsg(event.payload.error ?? null);
-        // Phase leaves recording → clear partial so the next recording
-        // cycle starts with an empty display.
-        if (event.payload.state !== "recording") {
+        setPhaseStart(at);
+        setNow(at);
+        if (next === "error") setFailedIn(previous);
+        if (next !== "recording") {
           setPartial("");
+        } else if (previous !== "recording") {
+          setSession((s) => s + 1);
+          setSilent(false);
+          maxLevel.current = 0;
+          // Re-read per recording: the hotkey may have changed meanwhile.
+          void Promise.all([ipcGetEffectiveMenuHotkey(), ipcGetSettings()])
+            .then(([effective, settings]) =>
+              setHotkey(hotkeyLabel(effective ?? settings.menu_hotkey)),
+            )
+            .catch(() => setHotkey(null));
         }
       }),
       listen<PartialTranscriptPayload>(EVENTS.PARTIAL_TRANSCRIPT, (event) => {
@@ -68,17 +101,33 @@ export default function Overlay(): JSX.Element {
       }),
       // Engine status (issue #8): emitted by the backend when a mode becomes
       // active (recording start). Stays until the next recording overwrites it.
-      listen<EngineStatusPayload>(EVENTS.ACTIVE_ENGINE, (event) => {
+      listen<EngineStatus>(EVENTS.ACTIVE_ENGINE, (event) => {
         setEngine(event.payload);
+      }),
+      listen<AudioLevelPayload>(EVENTS.AUDIO_LEVEL, (event) => {
+        const level = event.payload.level;
+        if (level > maxLevel.current) maxLevel.current = level;
+        levelListeners.current.forEach((listener) => listener(level));
       }),
     ]);
   }, []);
 
-  const meta = phaseMeta(t, phase, errorMsg);
+  useEffect(() => {
+    if (!TIMED.includes(phase)) return;
+    const id = window.setInterval(() => {
+      const at = Date.now();
+      setNow(at);
+      if (phase === "recording") {
+        setSilent(silenceHintDue(at - phaseStart, maxLevel.current));
+      }
+    }, TICK_MS);
+    return () => window.clearInterval(id);
+  }, [phase, phaseStart]);
+
   // ChatGPT usage hint (≥ 80 %), only while a mode that uses ChatGPT runs.
   const usesChatGpt =
     engine?.stt.provider === "chatgpt" || engine?.llm?.provider === "chatgpt";
-  const hint = usesChatGpt ? overlayHint(usage, Date.now() / 1000) : null;
+  const hint = usesChatGpt ? overlayHint(usage, now / 1000) : null;
   const hintText = !hint
     ? null
     : hint.level === "reached"
@@ -103,132 +152,39 @@ export default function Overlay(): JSX.Element {
             maximumFractionDigits: 0,
           }),
         });
-  const visiblePartial = truncateStart(partial, 65);
-  const isError = phase === "error";
 
   return (
     <div className="h-screen w-screen overflow-hidden p-2 select-none pointer-events-none">
-      <div
-        className={
-          "h-full w-full rounded-lg vtx-glass px-4 py-2.5 flex flex-col justify-center gap-1 " +
-          // E1: same container, key-based content — cross-fade.
-          // A4: on error, clicks must register (detail path).
-          (isError ? "pointer-events-auto" : "")
+      <OverlayCard
+        phase={phase}
+        session={session}
+        engine={engine}
+        partial={partial}
+        elapsedMs={now - phaseStart}
+        silent={silent}
+        hotkey={hotkey}
+        usageHint={
+          hint && hintText
+            ? {
+                text: hintText,
+                level: hint.level === "reached" ? "reached" : "warn",
+              }
+            : null
         }
-      >
-        <div
-          key={phase}
-          className="flex items-center gap-3 animate-[vtx-fadein_200ms_ease-out] transition-opacity duration-200"
-        >
-          <span
-            className={`shrink-0 inline-flex items-center justify-center h-7 w-7 rounded-md ${meta.iconBg} ${meta.iconColor}`}
-            aria-hidden
-          >
-            {meta.icon}
-          </span>
-          {isError ? (
-            <button
-              type="button"
-              onClick={openLogsInMainWindow}
-              title={errorMsg ?? t("overlay.error_tooltip_fallback")}
-              className="flex-1 text-left text-fg text-sm leading-snug font-medium whitespace-normal break-words cursor-pointer hover:text-status-error focus:outline-none focus-visible:ring-2 focus-visible:ring-status-error/50 rounded"
-            >
-              {meta.label}
-            </button>
-          ) : (
-            <p className="flex-1 text-fg text-sm leading-snug font-medium overflow-hidden text-ellipsis whitespace-nowrap">
-              {meta.label}
-            </p>
-          )}
-          {phase === "recording" ? <RecordingDot /> : null}
-        </div>
-        {phase === "recording" && visiblePartial && !engine ? (
-          <p
-            key={visiblePartial}
-            className="text-fg text-xs italic leading-snug pl-10 pr-1 overflow-hidden text-ellipsis whitespace-nowrap animate-[vtx-fadein_120ms_ease-out]"
-            title={partial}
-          >
-            {visiblePartial}
-          </p>
-        ) : null}
-        {engine && !isError ? (
-          <div className="flex items-center gap-1.5 text-[10px] text-fg-faint pl-10 pr-1 overflow-hidden whitespace-nowrap">
-            <EngineSeg label={t("overlay.engine.stt")} seg={engine.stt} t={t} />
-            {engine.llm ? (
-              <>
-                <span className="text-outline" aria-hidden>
-                  ·
-                </span>
-                <EngineSeg
-                  label={t("overlay.engine.llm")}
-                  seg={engine.llm}
-                  t={t}
-                />
-              </>
-            ) : null}
-            {hint && hintText ? (
-              <span
-                className={
-                  "ml-auto shrink-0 " +
-                  (hint.level === "reached"
-                    ? "text-status-error"
-                    : "text-status-processing")
-                }
-              >
-                {hintText}
-              </span>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
+        error={
+          phase === "error"
+            ? { message: errorMsg, stage: errorStage(failedIn) }
+            : null
+        }
+        levels={subscribeLevels}
+        onErrorClick={openLogsInMainWindow}
+      />
     </div>
   );
 }
 
-/** One engine segment (STT or LLM) of the overlay status line: a label, a
- *  local/cloud dot, the location word, and `provider·model`. */
-function EngineSeg({
-  label,
-  seg,
-  t,
-}: {
-  label: string;
-  seg: EngineSegment;
-  t: TranslateFn;
-}): JSX.Element {
-  const isLocal = seg.location === "local";
-  const detail = seg.provider
-    ? seg.model
-      ? `${seg.provider}·${seg.model}`
-      : seg.provider
-    : seg.model;
-  return (
-    <span className="inline-flex items-center gap-1 overflow-hidden">
-      <span className="font-medium text-fg-muted">{label}</span>
-      <span
-        className={
-          "inline-block h-1.5 w-1.5 rounded-full shrink-0 " +
-          (isLocal ? "bg-status-done" : "bg-brand")
-        }
-        aria-hidden
-      />
-      <span>
-        {t(isLocal ? "overlay.engine.local" : "overlay.engine.cloud")}
-      </span>
-      {detail ? (
-        <span
-          className="font-mono overflow-hidden text-ellipsis min-w-0"
-          title={detail}
-        >
-          {detail}
-        </span>
-      ) : null}
-    </span>
-  );
-}
-
 /**
- * When the user clicks the error text, we bring the main window to
+ * When the user clicks the error card, we bring the main window to
  * the front and signal "show logs" via an event. App.tsx listens to
  * `app://focus-logs` and switches to the Logs tab.
  */
@@ -242,177 +198,7 @@ async function openLogsInMainWindow(): Promise<void> {
     await emit(EVENTS.FOCUS_LOGS);
   } catch {
     // The window API can fail on restrictive capabilities — in that
-    // case the user still sees the full error text in the overlay
-    // (wrap + title tooltip), which is tolerable.
+    // case the user still sees the error message in the overlay (with
+    // the full text as tooltip), which is tolerable.
   }
-}
-
-/**
- * If the text is longer than `max`, show only the end with an
- * ellipsis at the beginning — feels live ("…what is being said
- * right now"), fits the fixed-width overlay box without wrapping.
- */
-function truncateStart(text: string, max: number): string {
-  if (!text) return "";
-  if (text.length <= max) return text;
-  return `…${text.slice(text.length - max)}`;
-}
-
-/**
- * Honest recording-status LED. Pulses on a 1.2s scale/opacity cycle
- * — clearly identifiable as an LED indicator and (unlike the
- * previously used 3-bar equalizer) does not suggest a response to
- * the audio level. The actual level is not available in the
- * renderer; an IPC channel for it would be its own feature.
- */
-function RecordingDot(): JSX.Element {
-  return (
-    <span
-      className="shrink-0 inline-block h-3 w-3 rounded-full bg-status-recording animate-[vtx-rec-pulse_1200ms_ease-in-out_infinite] mr-1"
-      aria-hidden
-    />
-  );
-}
-
-interface PhaseMeta {
-  label: string;
-  icon: JSX.Element;
-  iconBg: string;
-  iconColor: string;
-}
-
-function phaseMeta(
-  t: TranslateFn,
-  phase: Phase,
-  errorMsg: string | null,
-): PhaseMeta {
-  switch (phase) {
-    case "recording":
-      return {
-        label: t("overlay.phase.recording"),
-        icon: <MicIcon />,
-        iconBg: "bg-status-recording/15",
-        iconColor: "text-status-recording",
-      };
-    case "transcribing":
-      return {
-        label: t("overlay.phase.transcribing"),
-        icon: <WaveIcon />,
-        iconBg: "bg-brand/15",
-        iconColor: "text-brand",
-      };
-    case "postprocessing":
-      return {
-        label: t("overlay.phase.postprocessing"),
-        icon: <SparkleIcon />,
-        iconBg: "bg-status-processing/15",
-        iconColor: "text-status-processing",
-      };
-    case "injecting":
-      return {
-        label: t("overlay.phase.injecting"),
-        icon: <ArrowRightIcon />,
-        iconBg: "bg-brand/15",
-        iconColor: "text-brand",
-      };
-    case "error":
-      return {
-        label: errorMsg
-          ? t("overlay.phase.error_with_msg", { message: errorMsg })
-          : t("overlay.phase.error_generic"),
-        icon: <AlertIcon />,
-        iconBg: "bg-status-error/15",
-        iconColor: "text-status-error",
-      };
-    case "idle":
-    default:
-      return {
-        label: t("overlay.phase.recording"),
-        icon: <MicIcon />,
-        iconBg: "bg-status-recording/15",
-        iconColor: "text-status-recording",
-      };
-  }
-}
-
-function MicIcon(): JSX.Element {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className="h-4 w-4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect x="9" y="3" width="6" height="12" rx="3" />
-      <path d="M5 11a7 7 0 0 0 14 0M12 19v3" />
-    </svg>
-  );
-}
-
-function WaveIcon(): JSX.Element {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className="h-4 w-4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M4 12h2l2-6 4 12 4-9 2 3h2" />
-    </svg>
-  );
-}
-
-function SparkleIcon(): JSX.Element {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className="h-4 w-4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8" />
-    </svg>
-  );
-}
-
-function ArrowRightIcon(): JSX.Element {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className="h-4 w-4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M5 12h14M13 5l7 7-7 7" />
-    </svg>
-  );
-}
-
-function AlertIcon(): JSX.Element {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className="h-4 w-4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 8v5M12 16h.01" />
-    </svg>
-  );
 }

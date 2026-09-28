@@ -17,6 +17,7 @@
 //!        multipart upload lazily wraps it via `encode_wav_16k_mono`
 //!        (s16le, hound) — so no f32->WAV->f32 roundtrip on local STT.
 
+use super::level::{rms, LevelTap};
 use crate::core::error::{Result, VoiceTypeError};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use parking_lot::Mutex;
@@ -51,6 +52,7 @@ pub struct StreamMeta {
 /// Send-safe handle to the recorder thread.
 pub struct RecorderHandle {
     samples: Arc<Mutex<Vec<f32>>>,
+    level: Arc<LevelTap>,
     is_recording: Arc<AtomicBool>,
     stop_tx: Option<oneshot::Sender<()>>,
     meta_rx: Option<oneshot::Receiver<StreamMeta>>,
@@ -63,22 +65,32 @@ impl RecorderHandle {
     /// `stop_and_finalize` returns the resampled 16 kHz mono f32 samples.
     pub fn start(config: RecorderConfig) -> Result<Self> {
         let samples: Arc<Mutex<Vec<f32>>> = Arc::new(Mutex::new(Vec::with_capacity(16_000 * 30)));
+        let level = Arc::new(LevelTap::default());
         let is_recording = Arc::new(AtomicBool::new(true));
         let (stop_tx, stop_rx) = oneshot::channel();
         let (meta_tx, meta_rx) = oneshot::channel();
 
         let samples_clone = Arc::clone(&samples);
+        let level_clone = Arc::clone(&level);
         let is_recording_clone = Arc::clone(&is_recording);
 
         let worker = thread::Builder::new()
             .name("voicetypex-audio".into())
             .spawn(move || {
-                run_recorder_thread(config, samples_clone, is_recording_clone, stop_rx, meta_tx)
+                run_recorder_thread(
+                    config,
+                    samples_clone,
+                    level_clone,
+                    is_recording_clone,
+                    stop_rx,
+                    meta_tx,
+                )
             })
             .map_err(|e| VoiceTypeError::Audio(format!("Worker thread spawn: {e}")))?;
 
         Ok(Self {
             samples,
+            level,
             is_recording,
             stop_tx: Some(stop_tx),
             meta_rx: Some(meta_rx),
@@ -155,6 +167,11 @@ impl RecorderHandle {
         Arc::clone(&self.samples)
     }
 
+    /// Input level of the running recording, for the overlay waveform.
+    pub fn level_handle(&self) -> Arc<LevelTap> {
+        Arc::clone(&self.level)
+    }
+
     /// Wait once for the `StreamMeta` from the worker thread and
     /// cache it. Subsequent calls return the cached value
     /// immediately. The streaming worker calls this right after
@@ -182,6 +199,7 @@ pub fn to_16k_mono(raw: &[f32], meta: StreamMeta) -> Result<Vec<f32>> {
 fn run_recorder_thread(
     config: RecorderConfig,
     samples: Arc<Mutex<Vec<f32>>>,
+    level: Arc<LevelTap>,
     is_recording: Arc<AtomicBool>,
     stop_rx: oneshot::Receiver<()>,
     meta_tx: oneshot::Sender<StreamMeta>,
@@ -214,11 +232,13 @@ fn run_recorder_thread(
     let stream = match supported.sample_format() {
         cpal::SampleFormat::F32 => {
             let samples_cb = Arc::clone(&samples);
+            let level_cb = Arc::clone(&level);
             let recording_cb = Arc::clone(&is_recording);
             device.build_input_stream(
                 &supported.into(),
                 move |data: &[f32], _: &cpal::InputCallbackInfo| {
                     if recording_cb.load(Ordering::Relaxed) {
+                        level_cb.record(rms(data.iter().copied()));
                         samples_cb.lock().extend_from_slice(data);
                     }
                 },
@@ -228,13 +248,16 @@ fn run_recorder_thread(
         }
         cpal::SampleFormat::I16 => {
             let samples_cb = Arc::clone(&samples);
+            let level_cb = Arc::clone(&level);
             let recording_cb = Arc::clone(&is_recording);
             device.build_input_stream(
                 &supported.into(),
                 move |data: &[i16], _: &cpal::InputCallbackInfo| {
                     if recording_cb.load(Ordering::Relaxed) {
+                        let convert = |&s: &i16| s as f32 / i16::MAX as f32;
+                        level_cb.record(rms(data.iter().map(convert)));
                         let mut buf = samples_cb.lock();
-                        buf.extend(data.iter().map(|&s| s as f32 / i16::MAX as f32));
+                        buf.extend(data.iter().map(convert));
                     }
                 },
                 err_fn,
@@ -243,13 +266,16 @@ fn run_recorder_thread(
         }
         cpal::SampleFormat::U16 => {
             let samples_cb = Arc::clone(&samples);
+            let level_cb = Arc::clone(&level);
             let recording_cb = Arc::clone(&is_recording);
             device.build_input_stream(
                 &supported.into(),
                 move |data: &[u16], _: &cpal::InputCallbackInfo| {
                     if recording_cb.load(Ordering::Relaxed) {
+                        let convert = |&s: &u16| (s as f32 - 32_768.0) / 32_768.0;
+                        level_cb.record(rms(data.iter().map(convert)));
                         let mut buf = samples_cb.lock();
-                        buf.extend(data.iter().map(|&s| (s as f32 - 32_768.0) / 32_768.0));
+                        buf.extend(data.iter().map(convert));
                     }
                 },
                 err_fn,

@@ -15,6 +15,8 @@ export const EVENTS = {
   PARTIAL_TRANSCRIPT: "app://partial-transcript",
   /** Active STT/LLM engine + model for the overlay status line, #8. */
   ACTIVE_ENGINE: "app://active-engine",
+  /** Smoothed microphone level 0..1 at 25 Hz while recording (backend → overlay). */
+  AUDIO_LEVEL: "app://audio-level",
   /** Overlay error click → main window switches to the Logs tab. */
   FOCUS_LOGS: "app://focus-logs",
   /** Whisper model download progress (backend → settings/onboarding). */

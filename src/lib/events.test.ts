@@ -21,6 +21,7 @@ const CANONICAL_EVENT_WIRE_NAMES = {
   STATE: "app://state",
   PARTIAL_TRANSCRIPT: "app://partial-transcript",
   ACTIVE_ENGINE: "app://active-engine",
+  AUDIO_LEVEL: "app://audio-level",
   FOCUS_LOGS: "app://focus-logs",
   MODEL_DOWNLOAD_PROGRESS: "model-download-progress",
   LLM_MODEL_DOWNLOAD_PROGRESS: "llm-model-download-progress",
