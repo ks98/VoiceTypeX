@@ -154,9 +154,16 @@ toggle logic is the same as for the hotkey.
   by the caller-supplied `resolve_processor` closure, which `run_stages`
   invokes **after** the `Postprocessing` transition — so a
   processor-resolution failure parks from `Postprocessing` and never
-  skips the STT pass (the original ordering). `run_stages` stops at the
-  inject boundary and returns `StageOutput` (`final_text`,
-  `output_action`, and the #43 `transcribe_ms`/`process_ms`).
+  skips the STT pass (the original ordering). **Raw-transcript
+  fallback:** in a *voice* mode a post-processing failure (resolution or
+  `process()`, e.g. a missing API key or a ChatGPT usage limit) does not
+  park in `Error`: `final_text` becomes the raw transcript and
+  `post_processing_error` carries the reason. Edit (*selection*) modes
+  keep parking in `Error`, because their transcript is the spoken
+  instruction and must never replace the selection. `run_stages` stops
+  at the inject boundary and returns `StageOutput` (`final_text`,
+  `output_action`, the #43 `transcribe_ms`/`process_ms`, and
+  `post_processing_error`).
 - **`finish_recording_and_inject`** keeps everything `AppHandle`-bound
   around that core: streaming-worker abort + `app://partial-transcript`
   clear (#47), the stop cue, `active_mode` clearing, the
@@ -167,8 +174,10 @@ toggle logic is the same as for the hotkey.
   **timing-critical `overlay.hide()` → `sleep(80 ms)` → `inject`** focus
   choreography (Wayland-load-bearing, see the table in
   [§ Branching in the Pipeline Code](#branching-in-the-pipeline-code)),
-  the `Idle` transition and the #43 stage-timing log. `run_stages` has
-  zero window/cue/tray/emit calls.
+  the `Idle` transition, a desktop notification when the raw-transcript
+  fallback was used ("Post-processing failed — the raw transcript was
+  inserted instead", English like all backend messages) and the #43
+  stage-timing log. `run_stages` has zero window/cue/tray/emit calls.
 
 The pipeline tests drive the **real** `run_stages` core directly (issue
 #38): mock `Transcriber`/`Processor` trait impls are injected via

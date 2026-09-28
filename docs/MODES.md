@@ -115,6 +115,13 @@ runtime via the overlay menu (see *Hotkey Model* below).
 Existing TOMLs from older versions keep the `hotkey` field —
 it is accepted and ignored on load.
 
+**If post-processing fails** (`processing = "local"` or `"cloud"`, e.g. a
+missing API key, an unreachable Ollama daemon or a ChatGPT usage limit),
+a voice mode still inserts the **raw transcript** and a desktop
+notification names the reason. Edit modes (`input = "selection"`) show
+the error instead and leave the selection untouched, because their
+transcript is only the spoken instruction.
+
 ## Optional
 
 ```toml
