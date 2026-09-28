@@ -9,7 +9,7 @@ use super::oauth::ORIGINATOR;
 use super::session::Access;
 use reqwest::RequestBuilder;
 
-const USER_AGENT: &str = concat!("VoiceTypeX/", env!("CARGO_PKG_VERSION"));
+pub const USER_AGENT: &str = concat!("VoiceTypeX/", env!("CARGO_PKG_VERSION"));
 
 /// Honest identification: our own originator and User-Agent — never a
 /// browser or another OpenAI client, even if a request gets blocked.

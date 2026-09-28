@@ -116,7 +116,10 @@ still accepted but ignored. You change the menu hotkey itself under
 - **ChatGPT subscription (experimental):** sign in under *Settings →
   ChatGPT account* and pick `chatgpt` as the cloud STT and/or LLM
   provider of a mode — dictation and post-processing then use your
-  ChatGPT Plus/Pro/Business plan instead of an API key. It relies on an unofficial, undocumented ChatGPT
+  ChatGPT Plus/Pro/Business plan instead of an API key. While you speak,
+  the overlay shows a live preview from ChatGPT's dictation stream (can be
+  switched off in the same section; it does not work behind a mandatory
+  HTTPS proxy). It relies on an unofficial, undocumented ChatGPT
   interface and may stop working at any time (details in
   [`docs/PROVIDERS.md`](docs/PROVIDERS.md))
 - **Wayland auto-paste:** ashpd (RemoteDesktop portal) + reis (libei)

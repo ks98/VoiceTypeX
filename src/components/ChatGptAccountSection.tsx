@@ -12,6 +12,7 @@ import {
   ipcChatGptLogout,
 } from "../lib/tauri";
 import { useChatGptStatus } from "../lib/useChatGptStatus";
+import { useSettingsStore } from "../store";
 import { useT } from "../i18n";
 
 // The backend owns the sign-in state and pushes every change as an event;
@@ -20,14 +21,17 @@ import { useT } from "../i18n";
 // it out on its own.
 export default function ChatGptAccountSection({
   showHeader = true,
-  showUsage = showHeader,
+  showExtras = showHeader,
 }: {
   /** The onboarding wizard embeds the section in its own card. */
   showHeader?: boolean;
-  /** Usage meters — Settings only, not in the wizard. */
-  showUsage?: boolean;
+  /** Usage meters and the live-preview switch — Settings only, not in the
+   *  wizard. */
+  showExtras?: boolean;
 }): JSX.Element {
   const t = useT();
+  const settings = useSettingsStore((s) => s.settings);
+  const updateSettings = useSettingsStore((s) => s.update);
   const { status, setStatus, loadError } = useChatGptStatus();
   const [actionError, setActionError] = useState<string | null>(null);
   const [ack, setAck] = useState(false);
@@ -199,7 +203,27 @@ export default function ChatGptAccountSection({
               {t("chatgpt.btn.disconnect")}
             </Button>
           </div>
-          {showUsage ? <ChatGptUsageMeters /> : null}
+          {showExtras && settings ? (
+            <label className="flex items-start gap-2 border-t border-outline pt-3 text-sm text-fg">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={settings.chatgpt_live_preview}
+                onChange={(e) =>
+                  void updateSettings({
+                    chatgpt_live_preview: e.target.checked,
+                  })
+                }
+              />
+              <span className="flex flex-col gap-0.5">
+                <span>{t("chatgpt.live_preview.label")}</span>
+                <span className="text-xs text-fg-faint">
+                  {t("chatgpt.live_preview.hint")}
+                </span>
+              </span>
+            </label>
+          ) : null}
+          {showExtras ? <ChatGptUsageMeters /> : null}
         </div>
       ) : null}
     </div>

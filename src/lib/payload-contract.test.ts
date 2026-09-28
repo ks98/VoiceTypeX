@@ -63,6 +63,7 @@ describe("Settings payload shape", () => {
     "menu_hotkey",
     "last_selected_mode_id",
     "locale",
+    "chatgpt_live_preview",
   ] as const;
 
   it("TS Settings has exactly the canonical Rust serde field set", () => {
@@ -81,6 +82,7 @@ describe("Settings payload shape", () => {
       menu_hotkey: "CommandOrControl+Alt+Space",
       last_selected_mode_id: null,
       locale: null,
+      chatgpt_live_preview: true,
     } satisfies Settings;
     expect(keysOf(sample)).toStrictEqual(sorted(EXPECTED));
   });

@@ -316,7 +316,7 @@ pub fn list_input_devices() -> Result<Vec<String>> {
     Ok(names)
 }
 
-fn stereo_to_mono(samples: &[f32], channels: u16) -> Vec<f32> {
+pub(crate) fn stereo_to_mono(samples: &[f32], channels: u16) -> Vec<f32> {
     if channels <= 1 {
         return samples.to_vec();
     }

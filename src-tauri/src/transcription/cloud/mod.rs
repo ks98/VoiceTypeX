@@ -6,6 +6,7 @@
 //! Whisper-API-compatible, but Deepgram is again distinct.
 
 pub mod chatgpt;
+pub mod chatgpt_live;
 pub mod deepgram;
 pub mod groq;
 pub mod openai;

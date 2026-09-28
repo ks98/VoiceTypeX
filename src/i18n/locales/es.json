@@ -273,6 +273,8 @@
   "chatgpt.usage.unavailable": "No se pudo cargar el uso.",
   "chatgpt.usage.stale": "No se pudo actualizar: últimos valores conocidos.",
   "chatgpt.usage.note": "El pulido con ChatGPT cuenta para estos límites; el dictado no contó de forma medible en nuestras pruebas.",
+  "chatgpt.live_preview.label": "Vista previa en directo al dictar (experimental)",
+  "chatgpt.live_preview.hint": "Envía también el audio al servicio de dictado de ChatGPT para que el overlay muestre el texto mientras hablas. El texto insertado sigue viniendo de la transcripción normal.",
   "api_keys.loading": "Cargando estado de provider …",
   "api_keys.load_error": "No se pudo cargar el estado de provider: {message}",
   "api_keys.title": "Claves API cloud (BYOK)",

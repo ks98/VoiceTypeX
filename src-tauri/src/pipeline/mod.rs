@@ -310,12 +310,14 @@ async fn start_recording(app: &AppHandle, ctx: &Arc<AppContext>, mode: &Mode) ->
         let _ = ctx.state_bus.transition(AppState::Error(e.to_string()));
     })?;
 
-    // Only spawn the streaming worker for local STT. Cloud modes (xAI,
-    // OpenAI, Groq, Deepgram) have no streaming interface; the one-shot
-    // path after the stop hotkey stays active there. We grab the
-    // samples_handle + meta from the recorder now, before it is put into
-    // the slot — afterwards it sits behind a mutex we must not hold
-    // across `.await`.
+    // Live partials: local STT gets the streaming worker, ChatGPT STT the
+    // dictation-socket preview (unless switched off). The other cloud
+    // providers (xAI, OpenAI, Groq, Deepgram) have no streaming interface;
+    // the one-shot path after the stop hotkey stays active everywhere. We
+    // grab the samples_handle + meta from the recorder now, before it is
+    // put into the slot — afterwards it sits behind a mutex we must not
+    // hold across `.await`.
+    let chatgpt_live_preview = ctx.settings.read().chatgpt_live_preview;
     if mode.transcription == TranscriptionTarget::Local {
         let samples_arc = recorder.samples_handle();
         match recorder.await_meta().await {
@@ -353,6 +355,25 @@ async fn start_recording(app: &AppHandle, ctx: &Arc<AppContext>, mode: &Mode) ->
                 tracing::warn!(error = %e, "await_meta before streaming worker failed — running without live partial");
             }
         }
+    } else if mode.cloud_stt_provider.as_deref() == Some("chatgpt") && chatgpt_live_preview {
+        // ChatGPT has a streaming dictation socket: the preview streams
+        // alongside, the final text still comes from the one-shot call.
+        // Stored in the same slot, so finish() aborts it like the local
+        // worker.
+        let samples_arc = recorder.samples_handle();
+        match recorder.await_meta().await {
+            Ok(meta) => {
+                let handle = tauri::async_runtime::spawn(chatgpt_preview_worker(
+                    app.clone(),
+                    samples_arc,
+                    meta,
+                ));
+                *ctx.active_streaming_handle.lock() = Some(handle);
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "await_meta before the ChatGPT live preview failed — running without it");
+            }
+        }
     }
 
     tauri::async_runtime::spawn(level_emitter(
@@ -364,6 +385,48 @@ async fn start_recording(app: &AppHandle, ctx: &Arc<AppContext>, mode: &Mode) ->
     *ctx.recorder_slot.lock() = Some(recorder);
     tracing::info!(mode = %mode.id, "Recording started");
     Ok(())
+}
+
+/// ChatGPT live preview: streams the recording to the dictation socket
+/// and forwards each preview as `app://partial-transcript`. Best effort —
+/// every failure ends only the preview, never the recording.
+async fn chatgpt_preview_worker(
+    app: AppHandle,
+    samples: Arc<parking_lot::Mutex<Vec<f32>>>,
+    meta: crate::audio::recorder::StreamMeta,
+) {
+    use crate::transcription::cloud::chatgpt_live;
+
+    let ctx: Arc<AppContext> = app.state::<Arc<AppContext>>().inner().clone();
+    let result = match chatgpt_live::connect(&ctx.chatgpt, &ctx.http_client).await {
+        Ok(ws) => {
+            tracing::info!("ChatGPT live preview connected");
+            chatgpt_live::stream_preview(
+                ws,
+                samples,
+                meta.sample_rate,
+                meta.channels,
+                |text| {
+                    let payload = PartialTranscriptPayload {
+                        text: text.to_string(),
+                    };
+                    if let Err(e) = app.emit(crate::core::events::PARTIAL_TRANSCRIPT, payload) {
+                        tracing::warn!(error = %e, "Partial emit failed");
+                    }
+                },
+                || matches!(ctx.state_bus.current(), AppState::Recording),
+            )
+            .await
+        }
+        Err(e) => Err(e),
+    };
+    match result {
+        Ok(()) => tracing::info!("ChatGPT live preview ended"),
+        Err(e) => tracing::warn!(
+            error = %e,
+            "ChatGPT live preview stopped — the final transcript is unaffected"
+        ),
+    }
 }
 
 /// Overlay waveform feed for every STT provider: drains the recorder's
@@ -739,10 +802,11 @@ async fn finish_recording_and_inject(
     //    The final pass uses `DecodeProfile::Final`, which never installs
     //    the callback, so it can never be aborted by this flag.
     // 2. `handle.abort()` stops the worker's async loop at the next
-    //    await, so no further streaming pass is started.
-    // Only local STT spawns a streaming worker; for cloud modes there is
-    // nothing to cancel and resolving the transcriber would needlessly
-    // touch the model cache.
+    //    await, so no further streaming pass is started (for ChatGPT it
+    //    drops the dictation socket).
+    // Step 1 only applies to local STT; for cloud modes there is no decode
+    // to cancel and resolving the transcriber would needlessly touch the
+    // model cache.
     if mode.transcription == TranscriptionTarget::Local {
         resolve_local_transcriber(ctx, mode).abort_streaming();
     }
