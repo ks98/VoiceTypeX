@@ -4,6 +4,7 @@ import Banner from "./Banner";
 import Button from "./Button";
 import Input from "./Input";
 import Loading from "./Loading";
+import ChatGptUsageMeters from "./ChatGptUsageMeters";
 import {
   ipcChatGptLoginCancel,
   ipcChatGptLoginCompleteManual,
@@ -19,9 +20,12 @@ import { useT } from "../i18n";
 // it out on its own.
 export default function ChatGptAccountSection({
   showHeader = true,
+  showUsage = showHeader,
 }: {
   /** The onboarding wizard embeds the section in its own card. */
   showHeader?: boolean;
+  /** Usage meters — Settings only, not in the wizard. */
+  showUsage?: boolean;
 }): JSX.Element {
   const t = useT();
   const { status, setStatus, loadError } = useChatGptStatus();
@@ -174,25 +178,28 @@ export default function ChatGptAccountSection({
       ) : null}
 
       {status?.state === "connected" ? (
-        <div className="flex items-center justify-between gap-3 border border-outline rounded-md p-4 bg-surface">
-          <div className="flex flex-col gap-0.5 text-sm">
-            <span className="font-medium text-status-done">
-              {t("chatgpt.status.connected")}
-            </span>
-            <span className="text-fg-muted">
-              {[status.email, plan ? `ChatGPT ${plan}` : null]
-                .filter(Boolean)
-                .join(" · ")}
-            </span>
+        <div className="flex flex-col gap-3 border border-outline rounded-md p-4 bg-surface">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col gap-0.5 text-sm">
+              <span className="font-medium text-status-done">
+                {t("chatgpt.status.connected")}
+              </span>
+              <span className="text-fg-muted">
+                {[status.email, plan ? `ChatGPT ${plan}` : null]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
+            </div>
+            <Button
+              variant="danger"
+              size="sm"
+              disabled={busy}
+              onClick={onDisconnect}
+            >
+              {t("chatgpt.btn.disconnect")}
+            </Button>
           </div>
-          <Button
-            variant="danger"
-            size="sm"
-            disabled={busy}
-            onClick={onDisconnect}
-          >
-            {t("chatgpt.btn.disconnect")}
-          </Button>
+          {showUsage ? <ChatGptUsageMeters /> : null}
         </div>
       ) : null}
     </div>

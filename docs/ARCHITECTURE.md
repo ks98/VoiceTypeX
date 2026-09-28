@@ -670,6 +670,16 @@ cloud STT and LLM provider `chatgpt`.
   `app://chatgpt-status` with the full `ChatGptStatus`
   (`state`, `email`, `plan`, `auth_url`, `error`); tokens never reach
   the frontend.
+- `chatgpt/usage.rs` — usage limits (`ChatGptUsage` with an optional
+  primary/secondary `UsageWindow`): parsed from `wham/usage` or from the
+  `x-codex-*` headers of a post-processing answer. The session keeps the
+  latest snapshot in a `tokio::sync::watch` channel (fetches throttled to
+  once a minute, cleared on sign-out); an emitter task spawned in
+  `lib.rs` forwards every change as `app://chatgpt-usage`. IPC:
+  `get_chatgpt_usage` (cache only) and `refresh_chatgpt_usage`.
+  Frontend: `ChatGptUsageMeters` in the Settings account card and a
+  one-line hint in the overlay's engine line from 80 % (pure logic in
+  `src/lib/chatgptUsage.ts`).
 
 `chatgpt_login_start` binds the listener, opens the browser via
 `tauri-plugin-opener` (Rust side only, no webview capability) and

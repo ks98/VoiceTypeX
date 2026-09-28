@@ -296,6 +296,32 @@ export async function ipcChatGptLogout(): Promise<void> {
   return invoke("chatgpt_logout");
 }
 
+/** One usage window of the ChatGPT plan (e.g. 5 hours, 1 week). */
+export interface UsageWindow {
+  used_percent: number;
+  window_minutes: number | null;
+  /** Unix seconds. */
+  resets_at: number | null;
+}
+
+export interface ChatGptUsage {
+  primary: UsageWindow | null;
+  secondary: UsageWindow | null;
+  limit_reached: boolean;
+  /** Unix seconds. */
+  fetched_at: number;
+}
+
+/** Cached snapshot, no network. */
+export async function ipcGetChatGptUsage(): Promise<ChatGptUsage | null> {
+  return invoke<ChatGptUsage | null>("get_chatgpt_usage");
+}
+
+/** Fetches the usage (the backend throttles to once a minute). */
+export async function ipcRefreshChatGptUsage(): Promise<ChatGptUsage | null> {
+  return invoke<ChatGptUsage | null>("refresh_chatgpt_usage");
+}
+
 export interface TestTranscriptionResult {
   rtf: number;
   text: string;

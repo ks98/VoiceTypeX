@@ -12,5 +12,6 @@ pub mod jwt;
 pub mod loopback;
 pub mod oauth;
 pub mod session;
+pub mod usage;
 
 pub use session::{AuthState, ChatGptSession, ChatGptStatus};
