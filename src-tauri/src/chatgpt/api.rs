@@ -103,12 +103,16 @@ pub fn classify_failure(
     }
 }
 
+/// Weekly resets would otherwise read "~52 h 10 min".
 fn human_duration(secs: i64) -> String {
     let mins = (secs.max(0) + 59) / 60;
-    match (mins / 60, mins % 60) {
-        (0, m) => format!("~{m} min"),
-        (h, 0) => format!("~{h} h"),
-        (h, m) => format!("~{h} h {m} min"),
+    let hours = mins / 60;
+    match (hours / 24, hours % 24, mins % 60) {
+        (0, 0, m) => format!("~{m} min"),
+        (0, h, 0) => format!("~{h} h"),
+        (0, h, m) => format!("~{h} h {m} min"),
+        (d, 0, _) => format!("~{d} d"),
+        (d, h, _) => format!("~{d} d {h} h"),
     }
 }
 
@@ -194,5 +198,7 @@ mod tests {
         assert_eq!(human_duration(61), "~2 min");
         assert_eq!(human_duration(3600), "~1 h");
         assert_eq!(human_duration(7980), "~2 h 13 min");
+        assert_eq!(human_duration(86_400), "~1 d");
+        assert_eq!(human_duration(187_800), "~2 d 4 h");
     }
 }

@@ -21,6 +21,7 @@
 
 use crate::chatgpt::api::{self, FailureKind};
 use crate::chatgpt::session::{Access, AccessError};
+use crate::chatgpt::usage;
 use crate::chatgpt::ChatGptSession;
 use crate::core::error::{ProviderId, Result, VoiceTypeError};
 use crate::core::retry::with_retry;
@@ -77,6 +78,11 @@ impl ChatGptProcessor {
         }
 
         let status = resp.status().as_u16();
+        // Free usage update: the answer carries the plan's rate-limit
+        // headers (also on 429).
+        if let Some(snapshot) = usage::from_headers(resp.headers(), now_unix()) {
+            self.session.record_usage(snapshot);
+        }
         let cf_mitigated = resp.headers().contains_key("cf-mitigated");
         let content_type = resp
             .headers()

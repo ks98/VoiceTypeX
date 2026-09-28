@@ -119,6 +119,8 @@ pub fn run() {
             ipc::chatgpt::chatgpt_login_complete_manual,
             ipc::chatgpt::chatgpt_login_cancel,
             ipc::chatgpt::chatgpt_logout,
+            ipc::chatgpt::get_chatgpt_usage,
+            ipc::chatgpt::refresh_chatgpt_usage,
         ])
         .setup(move |app| {
             let app_handle = app.handle().clone();
@@ -327,6 +329,22 @@ pub fn run() {
             });
 
             app.manage(Arc::clone(&ctx));
+
+            // Forward ChatGPT usage snapshots (Settings fetch or the headers
+            // of a post-processing answer) to the webviews.
+            {
+                use tauri::Emitter;
+                let mut usage_rx = ctx.chatgpt.subscribe_usage();
+                let usage_app = app_handle.clone();
+                tauri::async_runtime::spawn(async move {
+                    while usage_rx.changed().await.is_ok() {
+                        let snapshot = usage_rx.borrow_and_update().clone();
+                        if let Err(e) = usage_app.emit(crate::core::events::CHATGPT_USAGE, snapshot) {
+                            tracing::warn!(error = %e, "emit chatgpt usage failed");
+                        }
+                    }
+                });
+            }
 
             // Tray, hotkeys, state listeners
             let tray_locale = ctx.settings.read().locale.clone();

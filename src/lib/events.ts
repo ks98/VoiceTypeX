@@ -25,4 +25,6 @@ export const EVENTS = {
   LOCALE_CHANGED: "i18n://locale-changed",
   /** ChatGPT account status after every sign-in change (backend → settings). */
   CHATGPT_STATUS: "app://chatgpt-status",
+  /** ChatGPT usage limits after every change (backend → settings/overlay). */
+  CHATGPT_USAGE: "app://chatgpt-usage",
 } as const;

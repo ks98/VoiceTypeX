@@ -4,13 +4,18 @@
 //! of `AppHandle` so it stays testable; the IPC layer emits the status
 //! event after each change.
 
+use super::usage::{self, ChatGptUsage};
 use super::{jwt, oauth};
 use crate::core::error::{Result, VoiceTypeError};
 use crate::secrets::SecretStore;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use tokio::sync::watch;
+
+/// At most one usage request per minute — it is an unofficial endpoint.
+const USAGE_THROTTLE: Duration = Duration::from_secs(60);
 
 /// Secret-store entry holding the serialized [`Credentials`]. Not part of
 /// `ipc::secrets::PROVIDERS`, so `set_provider_key` can never write it.
@@ -144,6 +149,9 @@ pub struct ChatGptSession {
     /// same rotating refresh token twice (a reuse kills the session).
     refresh_lock: tokio::sync::Mutex<()>,
     token_url: String,
+    /// Latest usage snapshot; subscribers (the event emitter) see changes.
+    usage: watch::Sender<Option<ChatGptUsage>>,
+    usage_fetched: Mutex<Option<Instant>>,
 }
 
 impl ChatGptSession {
@@ -167,7 +175,61 @@ impl ChatGptSession {
             last_error: Mutex::new(error),
             refresh_lock: tokio::sync::Mutex::new(()),
             token_url: oauth::TOKEN_URL.to_string(),
+            usage: watch::Sender::new(None),
+            usage_fetched: Mutex::new(None),
         }
+    }
+
+    pub fn usage(&self) -> Option<ChatGptUsage> {
+        self.usage.borrow().clone()
+    }
+
+    pub fn subscribe_usage(&self) -> watch::Receiver<Option<ChatGptUsage>> {
+        self.usage.subscribe()
+    }
+
+    /// Stores a snapshot, e.g. from the rate-limit headers of a
+    /// post-processing answer.
+    pub fn record_usage(&self, snapshot: ChatGptUsage) {
+        self.usage.send_replace(Some(snapshot));
+    }
+
+    /// Fetches the usage from the backend, at most once per
+    /// `USAGE_THROTTLE`; within the window it returns the cached snapshot.
+    /// `Ok(None)` when not signed in.
+    pub async fn refresh_usage(
+        &self,
+        client: &reqwest::Client,
+    ) -> std::result::Result<Option<ChatGptUsage>, String> {
+        if self.creds.lock().is_none() {
+            return Ok(None);
+        }
+        {
+            let mut fetched = self.usage_fetched.lock();
+            if fetched.is_some_and(|t| t.elapsed() < USAGE_THROTTLE) {
+                return Ok(self.usage());
+            }
+            *fetched = Some(Instant::now());
+        }
+        let access = self.access(client).await.map_err(|e| e.to_string())?;
+        let snapshot = match usage::fetch(client, &access, now_unix()).await {
+            Ok(s) => s,
+            Err(usage::FetchError::Unauthorized) => {
+                let access = self
+                    .refresh_after_401(client, &access.token)
+                    .await
+                    .map_err(|e| e.to_string())?;
+                usage::fetch(client, &access, now_unix())
+                    .await
+                    .map_err(|e| match e {
+                        usage::FetchError::Unauthorized => AccessError::Expired.to_string(),
+                        usage::FetchError::Other(msg) => msg,
+                    })?
+            }
+            Err(usage::FetchError::Other(msg)) => return Err(msg),
+        };
+        self.record_usage(snapshot.clone());
+        Ok(Some(snapshot))
     }
 
     /// A valid access token for a provider call, refreshed if it expires
@@ -249,6 +311,7 @@ impl ChatGptSession {
                 }
                 *self.creds.lock() = None;
                 *self.last_error.lock() = Some(AccessError::Expired.to_string());
+                self.usage.send_replace(None);
                 Err(AccessError::Expired)
             }
             Err(oauth::RefreshError::Transient(detail)) => Err(AccessError::Unavailable(detail)),
@@ -368,6 +431,8 @@ impl ChatGptSession {
         SecretStore::delete(SECRET_KEY)?;
         *self.creds.lock() = None;
         *self.last_error.lock() = None;
+        self.usage.send_replace(None);
+        *self.usage_fetched.lock() = None;
         tracing::info!("ChatGPT account disconnected");
         Ok(())
     }
@@ -481,6 +546,8 @@ mod tests {
             last_error: Mutex::new(None),
             refresh_lock: tokio::sync::Mutex::new(()),
             token_url: token_url.to_string(),
+            usage: watch::Sender::new(None),
+            usage_fetched: Mutex::new(None),
         }
     }
 
@@ -642,6 +709,55 @@ mod tests {
             .unwrap();
         assert_eq!(access.token, "new");
         assert_eq!(hits.load(std::sync::atomic::Ordering::SeqCst), 0);
+    }
+
+    fn snapshot(percent: f64) -> ChatGptUsage {
+        ChatGptUsage {
+            primary: Some(usage::UsageWindow {
+                used_percent: percent,
+                window_minutes: Some(300),
+                resets_at: Some(1),
+            }),
+            secondary: None,
+            limit_reached: false,
+            fetched_at: 1,
+        }
+    }
+
+    #[tokio::test]
+    async fn recorded_usage_reaches_subscribers_and_is_cleared_on_forced_sign_out() {
+        let (url, _) = mock_token_endpoint(400, r#"{"error":"invalid_grant"}"#.into()).await;
+        let s = session_with(Some(creds("a", "r", Some(now_unix() - 10))), &url);
+        let mut rx = s.subscribe_usage();
+        s.record_usage(snapshot(42.0));
+        rx.changed().await.unwrap();
+        assert_eq!(rx.borrow_and_update().clone(), Some(snapshot(42.0)));
+        assert_eq!(s.usage(), Some(snapshot(42.0)));
+        // A permanently rejected refresh signs out and drops the snapshot.
+        assert_eq!(
+            s.access(&reqwest::Client::new()).await,
+            Err(AccessError::Expired)
+        );
+        assert_eq!(s.usage(), None);
+    }
+
+    #[tokio::test]
+    async fn refresh_usage_without_sign_in_makes_no_request() {
+        assert_eq!(
+            session().refresh_usage(&reqwest::Client::new()).await,
+            Ok(None)
+        );
+    }
+
+    #[tokio::test]
+    async fn refresh_usage_is_throttled_to_the_cached_snapshot() {
+        let s = session_with(Some(creds("a", "r", None)), "http://127.0.0.1:9/unused");
+        s.record_usage(snapshot(7.0));
+        *s.usage_fetched.lock() = Some(Instant::now());
+        assert_eq!(
+            s.refresh_usage(&reqwest::Client::new()).await,
+            Ok(Some(snapshot(7.0)))
+        );
     }
 
     #[tokio::test]

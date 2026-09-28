@@ -2,8 +2,10 @@
 import { describe, expect, it } from "vitest";
 import type {
   ChatGptStatus,
+  ChatGptUsage,
   HardwareReport,
   ModelDownloadProgress,
+  UsageWindow,
 } from "./tauri";
 import type { Mode, Settings } from "./types";
 
@@ -18,6 +20,7 @@ import type { Mode, Settings } from "./types";
 //   - HardwareReport        -> src-tauri/src/core/hardware.rs
 //   - ModelDownloadProgress -> src-tauri/src/ipc/settings.rs
 //   - ChatGptStatus         -> src-tauri/src/chatgpt/session.rs
+//   - ChatGptUsage/Window   -> src-tauri/src/chatgpt/usage.rs
 //
 // How this catches drift:
 //   * Each `sample` is annotated `satisfies <Interface>`, so `tsc`
@@ -208,5 +211,35 @@ describe("ChatGptStatus payload shape", () => {
       error: null,
     } satisfies ChatGptStatus;
     expect(keysOf(sample)).toStrictEqual(sorted(EXPECTED));
+  });
+});
+
+describe("ChatGptUsage payload shape", () => {
+  const EXPECTED = [
+    "fetched_at",
+    "limit_reached",
+    "primary",
+    "secondary",
+  ] as const;
+  const EXPECTED_WINDOW = [
+    "resets_at",
+    "used_percent",
+    "window_minutes",
+  ] as const;
+
+  it("TS ChatGptUsage has exactly the canonical Rust serde field set", () => {
+    const window = {
+      used_percent: 12,
+      window_minutes: 300,
+      resets_at: 1,
+    } satisfies UsageWindow;
+    const sample = {
+      primary: window,
+      secondary: null,
+      limit_reached: false,
+      fetched_at: 1,
+    } satisfies ChatGptUsage;
+    expect(keysOf(sample)).toStrictEqual(sorted(EXPECTED));
+    expect(keysOf(window)).toStrictEqual(sorted(EXPECTED_WINDOW));
   });
 });

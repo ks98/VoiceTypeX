@@ -3,6 +3,7 @@
 //! sign out. Tokens never leave the backend — the frontend only sees
 //! [`ChatGptStatus`], pushed on every change via `events::CHATGPT_STATUS`.
 
+use crate::chatgpt::usage::ChatGptUsage;
 use crate::chatgpt::{loopback, oauth, ChatGptStatus};
 use crate::core::app_context::AppContext;
 use crate::core::events;
@@ -118,4 +119,21 @@ pub async fn chatgpt_logout(
     state.chatgpt.logout().map_err(|e| e.to_string())?;
     emit_status(&app, &state.chatgpt.status());
     Ok(())
+}
+
+/// Cached usage snapshot, no network — for the first paint.
+#[tauri::command]
+pub async fn get_chatgpt_usage(
+    state: tauri::State<'_, Arc<AppContext>>,
+) -> IpcResult<Option<ChatGptUsage>> {
+    Ok(state.chatgpt.usage())
+}
+
+/// Fetches the usage (throttled to once a minute; returns the cache within
+/// that window). `None` when not signed in.
+#[tauri::command]
+pub async fn refresh_chatgpt_usage(
+    state: tauri::State<'_, Arc<AppContext>>,
+) -> IpcResult<Option<ChatGptUsage>> {
+    state.chatgpt.refresh_usage(&state.http_client).await
 }

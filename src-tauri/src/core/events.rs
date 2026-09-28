@@ -25,6 +25,9 @@ pub const LLM_MODEL_DOWNLOAD_PROGRESS: &str = "llm-model-download-progress";
 /// ChatGPT account status (`ChatGptStatus`) after every sign-in change.
 pub const CHATGPT_STATUS: &str = "app://chatgpt-status";
 
+/// ChatGPT usage limits (`Option<ChatGptUsage>`) after every change.
+pub const CHATGPT_USAGE: &str = "app://chatgpt-usage";
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -38,7 +41,7 @@ mod tests {
     // `pub const` here OR a typo in `events.ts`) breaks its own test
     // instead of silently desyncing the emit/listen channel at runtime.
     //
-    // Only the six events the backend actually emits live here; the
+    // Only the seven events the backend actually emits live here; the
     // frontend-internal `app://focus-logs` and `i18n://locale-changed`
     // (window-to-window) have no Rust counterpart.
     //
@@ -54,5 +57,6 @@ mod tests {
         assert_eq!(MODEL_DOWNLOAD_PROGRESS, "model-download-progress");
         assert_eq!(LLM_MODEL_DOWNLOAD_PROGRESS, "llm-model-download-progress");
         assert_eq!(CHATGPT_STATUS, "app://chatgpt-status");
+        assert_eq!(CHATGPT_USAGE, "app://chatgpt-usage");
     }
 }

@@ -355,6 +355,30 @@ sign-in); everything else is transient. Observed access-token lifetime:
   (2026-09-25) `gpt-5.4` and `gpt-5` returned 400 "not supported when
   using Codex with a ChatGPT account".
 
+**Usage limits** (`chatgpt/usage.rs`, shown under *Settings → ChatGPT
+account* and, from 80 %, in the recording overlay):
+- `GET https://chatgpt.com/backend-api/wham/usage` (undocumented; used
+  by OpenClaw and the Codex CLI), same headers plus `Accept:
+  application/json`. Relevant part of the answer:
+  `rate_limit.{limit_reached, primary_window, secondary_window}` with
+  `used_percent` (integer), `limit_window_seconds`, `reset_at` (Unix
+  seconds) and `reset_after_seconds`. Observed 2026-09-28 (Plus):
+  primary = 5 hours (18000 s), secondary = 1 week (604800 s). Fetched
+  only when the Settings section opens or on "Refresh", throttled to
+  once a minute.
+- Every `/codex/responses` answer (also a 429) carries the same data as
+  headers — `x-codex-{primary,secondary}-used-percent`,
+  `-window-minutes`, `-reset-at` — so post-processing updates the
+  snapshot without an extra request. `/transcribe` sends no such
+  headers.
+- Accounting, measured 2026-09-28: ~11 minutes of transcription and nine
+  short post-processing calls left both windows at 0 %. The values are
+  whole percentages, so small usage does not show; OpenAI's pricing page
+  says voice in Codex Desktop uses the Codex budget, which could not be
+  confirmed for `/transcribe`.
+- Windows whose `reset_at` has passed are not shown; either window may
+  be missing (a 5-hour limit was reportedly suspended for some plans).
+
 A fallback to `api.openai.com/v1/audio/transcriptions` with the ChatGPT
 token is deliberately excluded: it is most likely billed as metered API
 usage, not covered by the plan.

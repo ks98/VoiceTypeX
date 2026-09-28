@@ -4,7 +4,10 @@ import { listen, emit } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { listenAll } from "../lib/tauriListen";
 import { EVENTS } from "../lib/events";
-import { useT, type TranslateFn } from "../i18n";
+import { useLocale, useT, type TranslateFn } from "../i18n";
+import { formatDate, formatNumber } from "../i18n/format";
+import { overlayHint } from "../lib/chatgptUsage";
+import { useChatGptUsage } from "../lib/useChatGptUsage";
 
 type Phase =
   | "idle"
@@ -46,6 +49,8 @@ export default function Overlay(): JSX.Element {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [partial, setPartial] = useState<string>("");
   const [engine, setEngine] = useState<EngineStatusPayload | null>(null);
+  const locale = useLocale();
+  const { usage } = useChatGptUsage();
 
   useEffect(() => {
     return listenAll([
@@ -70,6 +75,34 @@ export default function Overlay(): JSX.Element {
   }, []);
 
   const meta = phaseMeta(t, phase, errorMsg);
+  // ChatGPT usage hint (≥ 80 %), only while a mode that uses ChatGPT runs.
+  const usesChatGpt =
+    engine?.stt.provider === "chatgpt" || engine?.llm?.provider === "chatgpt";
+  const hint = usesChatGpt ? overlayHint(usage, Date.now() / 1000) : null;
+  const hintText = !hint
+    ? null
+    : hint.level === "reached"
+      ? hint.window.resets_at
+        ? t("overlay.usage.reached", {
+            time: formatDate(hint.window.resets_at * 1000, locale, {
+              weekday: "short",
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+          })
+        : t("chatgpt.usage.reached")
+      : t("overlay.usage.warn", {
+          window:
+            hint.kind === "other"
+              ? t("chatgpt.usage.window.other", {
+                  hours: Math.round((hint.window.window_minutes ?? 0) / 60),
+                })
+              : t(`chatgpt.usage.window.${hint.kind}`),
+          percent: formatNumber(hint.window.used_percent / 100, locale, {
+            style: "percent",
+            maximumFractionDigits: 0,
+          }),
+        });
   const visiblePartial = truncateStart(partial, 65);
   const isError = phase === "error";
 
@@ -132,6 +165,18 @@ export default function Overlay(): JSX.Element {
                   t={t}
                 />
               </>
+            ) : null}
+            {hint && hintText ? (
+              <span
+                className={
+                  "ml-auto shrink-0 " +
+                  (hint.level === "reached"
+                    ? "text-status-error"
+                    : "text-status-processing")
+                }
+              >
+                {hintText}
+              </span>
             ) : null}
           </div>
         ) : null}
