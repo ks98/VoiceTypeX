@@ -357,8 +357,10 @@ mod tests {
         assert_eq!(v["type"], "audio.append");
         let bytes = B64.decode(v["audio"].as_str().unwrap()).unwrap();
         let pcm: Vec<i16> = bytes
-            .chunks_exact(2)
-            .map(|b| i16::from_le_bytes([b[0], b[1]]))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|b| i16::from_le_bytes(*b))
             .collect();
         assert_eq!(pcm, [0, 32767, -32767, 32767, 16383]);
     }
