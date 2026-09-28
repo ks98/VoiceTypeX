@@ -52,6 +52,7 @@ function baseSettings(): Settings {
     menu_hotkey: "F9",
     last_selected_mode_id: null,
     locale: "en",
+    chatgpt_live_preview: true,
   };
 }
 

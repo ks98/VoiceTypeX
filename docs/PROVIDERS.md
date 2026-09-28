@@ -13,9 +13,11 @@
 | STT | OpenAI Whisper | `src-tauri/src/transcription/cloud/openai.rs` (wraps `whisper_compatible.rs`) |
 | STT | Groq Whisper | `src-tauri/src/transcription/cloud/groq.rs` (wraps `whisper_compatible.rs`) |
 | STT | Deepgram | `src-tauri/src/transcription/cloud/deepgram.rs` |
+| STT | ChatGPT subscription (experimental) | `src-tauri/src/transcription/cloud/chatgpt.rs`, live preview `chatgpt_live.rs` |
 | LLM | xAI Grok | `src-tauri/src/processing/cloud/xai.rs` (wraps `openai_compatible.rs`) |
 | LLM | OpenAI GPT | `src-tauri/src/processing/cloud/openai.rs` (wraps `openai_compatible.rs`) |
 | LLM | Anthropic Claude | `src-tauri/src/processing/cloud/anthropic.rs` |
+| LLM | ChatGPT subscription (experimental) | `src-tauri/src/processing/cloud/chatgpt.rs` |
 | LLM (local) | Ollama | `src-tauri/src/processing/local.rs` |
 
 The decision of when a wrapper is shared and when it isn't follows the
@@ -321,6 +323,41 @@ sign-in); everything else is transient. Observed access-token lifetime:
   unofficial endpoint may have changed"; other statuses carry the
   backend's `detail` text.
 
+**Live preview while recording** (`transcription/cloud/chatgpt_live.rs`,
+on by default, switch under *Settings → ChatGPT account* —
+`Settings.chatgpt_live_preview`):
+- `wss://chatgpt.com/backend-api/dictation/stream` (undocumented; the
+  socket Codex Desktop dictation streams to). Handshake with the same
+  honest headers as STT (`Authorization: Bearer`, `ChatGPT-Account-Id`,
+  `originator: voicetypex`, `User-Agent: VoiceTypeX/<version>`) and the
+  subprotocol `chatgpt-dictation`; no `Origin`, no token in the
+  subprotocol. A 401 refreshes the token once. TLS: rustls with the ring
+  provider and webpki roots, like reqwest; the socket does **not** honour
+  `HTTPS_PROXY`, so behind a mandatory proxy only the preview fails.
+- Client messages: `session.start` with `config {input_audio_format:
+  "pcm16", sample_rate_hz: <device rate>, num_channels: 1,
+  max_buffer_size_bytes: 4194304, max_utterance_duration_ms: 30000,
+  session_ttl_ms: 600000, provider_mode: "streaming_sse",
+  transcript_delivery_mode: "segment", session_asset_mode: "none", vad:
+  {server_vad, 0.5, 300, 500}}` (the schema is strict — unknown keys are
+  rejected); then `audio.append {audio: <base64 PCM16 LE mono>}` every
+  100 ms with the new samples, downmixed but not resampled.
+- Server events: `transcript.segment {utterance_id, text}` with the
+  cumulative text of the current utterance (~3/s) and
+  `transcript.final` when it ends; the preview joins the utterances in
+  order and is emitted as `app://partial-transcript`. A fatal
+  `session.error` or `transcript.failed` ends the preview; the
+  recording and the final transcript are unaffected. On stop the socket
+  is dropped (the same abort as the local streaming worker).
+- Observed 2026-09-28 (Plus account, honest headers): handshake 101;
+  first segment after 0.8–0.9 s, final 0.7 s after flush; stream text
+  close to `/transcribe` on the same audio; 16, 22.05, 44.1, 48 and
+  96 kHz all accepted and transcribed. The inserted text still comes
+  from `/transcribe` — the stream's final has no second decoding pass.
+  Protocol details were first documented by the open-source project
+  speecher (`docs/research/0004-codex-dictation-protocol.md`), whose
+  claim that a Chromium User-Agent is required did not hold for us.
+
 **LLM post-processing** (`processing/cloud/chatgpt.rs`, provider
 `chatgpt`):
 - `POST https://chatgpt.com/backend-api/codex/responses` (the Codex
@@ -372,10 +409,12 @@ account* and, from 80 %, in the recording overlay):
   snapshot without an extra request. `/transcribe` sends no such
   headers.
 - Accounting, measured 2026-09-28: ~11 minutes of transcription and nine
-  short post-processing calls left both windows at 0 %. The values are
-  whole percentages, so small usage does not show; OpenAI's pricing page
-  says voice in Codex Desktop uses the Codex budget, which could not be
-  confirmed for `/transcribe`.
+  short post-processing calls left both windows at 0 %, and so did
+  13 minutes streamed over the dictation socket (which sends no
+  rate-limit headers). The values are whole percentages, so small usage
+  does not show; OpenAI's pricing page says voice in Codex Desktop uses
+  the Codex budget, which could not be confirmed for `/transcribe` or
+  the dictation stream.
 - Windows whose `reset_at` has passed are not shown; either window may
   be missing (a 5-hour limit was reportedly suspended for some plans).
 

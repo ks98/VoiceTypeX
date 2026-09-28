@@ -132,6 +132,12 @@ pub struct Settings {
     /// crashing or passing the value through unchecked.
     #[serde(default, deserialize_with = "deserialize_locale")]
     pub locale: Option<String>,
+
+    /// Live transcript preview for modes with ChatGPT speech-to-text: the
+    /// audio is streamed to the ChatGPT dictation service while recording.
+    /// The inserted text still comes from the regular `/transcribe` call.
+    #[serde(default = "default_true")]
+    pub chatgpt_live_preview: bool,
 }
 
 /// Validates deserialized locale strings as BCP-47-ish.
@@ -174,6 +180,7 @@ impl Default for Settings {
             menu_hotkey: default_menu_hotkey(),
             last_selected_mode_id: None,
             locale: None,
+            chatgpt_live_preview: true,
         }
     }
 }
@@ -237,6 +244,10 @@ fn default_whisper_beam_size() -> u32 {
     2
 }
 
+fn default_true() -> bool {
+    true
+}
+
 fn default_whisper_slot() -> String {
     // Phase 1: the default moved from Q5_0 (547 MB) to Q8_0 (874 MB).
     // Q8 is equally fast on modern backends and qualitatively much
@@ -291,10 +302,17 @@ mod tests {
             "menu_hotkey",
             "last_selected_mode_id",
             "locale",
+            "chatgpt_live_preview",
         ];
         expected.sort_unstable();
 
         assert_eq!(keys, expected);
+    }
+
+    #[test]
+    fn live_preview_defaults_on_for_existing_settings_files() {
+        let s: Settings = serde_json::from_str("{}").expect("empty settings parse");
+        assert!(s.chatgpt_live_preview);
     }
 
     /// Deserialize a `Settings` from a JSON object that only sets

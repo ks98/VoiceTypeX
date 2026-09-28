@@ -273,6 +273,8 @@
   "chatgpt.usage.unavailable": "Impossible de charger l'utilisation.",
   "chatgpt.usage.stale": "Échec de l'actualisation — dernières valeurs connues.",
   "chatgpt.usage.note": "La retouche via ChatGPT est décomptée de ces limites ; la dictée n'a pas été décomptée de façon mesurable lors de nos tests.",
+  "chatgpt.live_preview.label": "Aperçu en direct pendant la dictée (expérimental)",
+  "chatgpt.live_preview.hint": "Envoie aussi l'audio au service de dictée de ChatGPT afin que l'overlay affiche le texte pendant que vous parlez. Le texte inséré provient toujours de la transcription habituelle.",
   "api_keys.loading": "Chargement du statut des providers …",
   "api_keys.load_error": "Impossible de charger le statut des providers : {message}",
   "api_keys.title": "Clés API cloud (BYOK)",

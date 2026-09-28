@@ -93,6 +93,7 @@ likewise MIT.
 | [Zustand](https://github.com/pmndrs/zustand) | MIT |
 | [tokio](https://tokio.rs/) | MIT |
 | [reqwest](https://github.com/seanmonstar/reqwest) | Apache-2.0 OR MIT |
+| [tokio-tungstenite](https://github.com/snapview/tokio-tungstenite) / [tungstenite](https://github.com/snapview/tungstenite-rs) (WebSocket, ChatGPT live preview) | MIT / MIT OR Apache-2.0 |
 | [serde](https://serde.rs/) / [serde_json](https://github.com/serde-rs/json) | Apache-2.0 OR MIT |
 | [hound](https://github.com/ruuda/hound) (WAV encoding) | Apache-2.0 |
 | [cpal](https://github.com/RustAudio/cpal) (audio capture) | Apache-2.0 |

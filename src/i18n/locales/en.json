@@ -287,6 +287,8 @@
   "chatgpt.usage.unavailable": "Usage couldn't be loaded.",
   "chatgpt.usage.stale": "Couldn't refresh — showing the last known values.",
   "chatgpt.usage.note": "Post-processing with ChatGPT counts against these limits; dictation did not measurably count in our tests.",
+  "chatgpt.live_preview.label": "Live preview while dictating (experimental)",
+  "chatgpt.live_preview.hint": "Streams the audio to ChatGPT's dictation service as well, so the overlay shows the text while you speak. The inserted text still comes from the regular transcription.",
   "api_keys.loading": "Loading provider status…",
   "api_keys.load_error": "Could not load provider status: {message}",
   "api_keys.title": "Cloud API keys (BYOK)",

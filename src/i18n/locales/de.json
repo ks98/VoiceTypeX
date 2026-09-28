@@ -273,6 +273,8 @@
   "chatgpt.usage.unavailable": "Nutzung konnte nicht geladen werden.",
   "chatgpt.usage.stale": "Aktualisieren fehlgeschlagen – letzte bekannte Werte.",
   "chatgpt.usage.note": "Die Nachbearbeitung über ChatGPT zählt gegen diese Limits; das Diktieren hat sich in unseren Tests nicht messbar ausgewirkt.",
+  "chatgpt.live_preview.label": "Live-Vorschau beim Diktieren (experimentell)",
+  "chatgpt.live_preview.hint": "Schickt das Audio zusätzlich an den Diktierdienst von ChatGPT, damit das Overlay den Text schon beim Sprechen zeigt. Der eingefügte Text kommt weiterhin aus der normalen Transkription.",
   "api_keys.loading": "Lade Provider-Status …",
   "api_keys.load_error": "Provider-Status konnte nicht geladen werden: {message}",
   "api_keys.title": "Cloud-API-Keys (BYOK)",

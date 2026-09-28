@@ -400,7 +400,14 @@ speaking.
 **Gating**: the worker spawns only when `mode.transcription ==
 TranscriptionTarget::Local`. Cloud modes still run one-shot after the
 stop hotkey — their REST endpoints (xAI/OpenAI/Groq/Deepgram) have no
-comparable streaming interface.
+comparable streaming interface. The exception is ChatGPT STT: with
+`Settings.chatgpt_live_preview` on (default), `start_recording` spawns
+`chatgpt_preview_worker` in the same `active_streaming_handle` slot. It
+streams the new samples of the recorder buffer every 100 ms (downmixed,
+device rate) to ChatGPT's dictation socket
+(`transcription/cloud/chatgpt_live.rs`) and emits each preview as
+`app://partial-transcript`; the final text still comes from the one-shot
+`/transcribe` call, and any socket failure only ends the preview.
 
 **Decode profile**: streaming passes use `DecodeProfile::Streaming`:
 greedy sampling instead of BeamSearch (3× faster) plus `set_audio_ctx`
@@ -699,6 +706,11 @@ cloud STT and LLM provider `chatgpt`.
   API over server-sent events); both are built by their factories
   without a keychain lookup (they take the session instead) and cached
   like the other cloud providers.
+- `transcription/cloud/chatgpt_live.rs` — the live preview over the
+  dictation WebSocket (`tokio-tungstenite` on rustls/ring): pure message
+  builders, event parser and preview reducer, the honest handshake
+  request, `connect()` (401 → one refresh) and `stream_preview()`,
+  which is generic over the socket so a local mock server tests it.
 - `ipc/chatgpt.rs` — `get_chatgpt_status`, `chatgpt_login_start`,
   `chatgpt_login_complete_manual` (paste fallback),
   `chatgpt_login_cancel`, `chatgpt_logout`. Every change emits

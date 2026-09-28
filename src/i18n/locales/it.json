@@ -273,6 +273,8 @@
   "chatgpt.usage.unavailable": "Impossibile caricare l'utilizzo.",
   "chatgpt.usage.stale": "Aggiornamento non riuscito: ultimi valori noti.",
   "chatgpt.usage.note": "La rifinitura con ChatGPT conta per questi limiti; la dettatura non è stata conteggiata in modo misurabile nei nostri test.",
+  "chatgpt.live_preview.label": "Anteprima dal vivo durante la dettatura (sperimentale)",
+  "chatgpt.live_preview.hint": "Invia l'audio anche al servizio di dettatura di ChatGPT, così l'overlay mostra il testo mentre parli. Il testo inserito proviene sempre dalla trascrizione normale.",
   "api_keys.loading": "Caricamento stato provider …",
   "api_keys.load_error": "Impossibile caricare lo stato provider: {message}",
   "api_keys.title": "Chiavi API cloud (BYOK)",

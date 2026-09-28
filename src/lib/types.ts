@@ -101,6 +101,8 @@ export interface Settings {
    * [en, de, fr, es, it].
    */
   locale: string | null;
+  /** Live transcript preview for ChatGPT speech-to-text modes (default on). */
+  chatgpt_live_preview: boolean;
 }
 
 export interface LogLine {
