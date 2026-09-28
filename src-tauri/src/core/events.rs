@@ -15,6 +15,10 @@ pub const PARTIAL_TRANSCRIPT: &str = "app://partial-transcript";
 /// Active STT/LLM engine + model for the overlay status line (#8).
 pub const ACTIVE_ENGINE: &str = "app://active-engine";
 
+/// Smoothed microphone level (0..1) every 40 ms while recording, sent to
+/// the overlay window only.
+pub const AUDIO_LEVEL: &str = "app://audio-level";
+
 /// Whisper model download progress.
 pub const MODEL_DOWNLOAD_PROGRESS: &str = "model-download-progress";
 
@@ -41,7 +45,7 @@ mod tests {
     // `pub const` here OR a typo in `events.ts`) breaks its own test
     // instead of silently desyncing the emit/listen channel at runtime.
     //
-    // Only the seven events the backend actually emits live here; the
+    // Only the eight events the backend actually emits live here; the
     // frontend-internal `app://focus-logs` and `i18n://locale-changed`
     // (window-to-window) have no Rust counterpart.
     //
@@ -54,6 +58,7 @@ mod tests {
         assert_eq!(STATE, "app://state");
         assert_eq!(PARTIAL_TRANSCRIPT, "app://partial-transcript");
         assert_eq!(ACTIVE_ENGINE, "app://active-engine");
+        assert_eq!(AUDIO_LEVEL, "app://audio-level");
         assert_eq!(MODEL_DOWNLOAD_PROGRESS, "model-download-progress");
         assert_eq!(LLM_MODEL_DOWNLOAD_PROGRESS, "llm-model-download-progress");
         assert_eq!(CHATGPT_STATUS, "app://chatgpt-status");

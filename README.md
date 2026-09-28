@@ -34,8 +34,11 @@ Beta-specific notes: see the section
    confirm the last-used selection). `Esc` closes the menu without
    taking any action.
 3. After `Enter`, recording starts, the tray icon pulses red, and the
-   overlay shows *"Listening …"* plus a status line with the active
-   engine (local vs cloud, STT/LLM model). Speak.
+   overlay shows *"Listening"* with the mode name, a timer and a live
+   waveform of your microphone, plus a status line with the active
+   engine (local vs cloud, STT/LLM model). Speak. If the microphone
+   picks up nothing for four seconds, the overlay asks whether it is
+   muted.
 4. **Press the same hotkey again** → the audio is transcribed (locally
    via whisper.cpp **or** cloud STT), optionally post-processed by an LLM
    according to the selected **mode** (locally via Ollama **or** a cloud

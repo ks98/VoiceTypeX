@@ -8,7 +8,10 @@
 //! the same hotkey stops recording and lets the pipeline run through.
 
 use crate::audio::{
-    play_start_cue, play_stop_cue, recorder::encode_wav_16k_mono, recorder::RecorderHandle,
+    level::{LevelMeter, LevelTap},
+    play_start_cue, play_stop_cue,
+    recorder::encode_wav_16k_mono,
+    recorder::RecorderHandle,
     RecorderConfig,
 };
 use crate::core::edit::{compose_edit_input, resolve_output_action};
@@ -39,6 +42,15 @@ use tauri_plugin_notification::NotificationExt;
 struct PartialTranscriptPayload {
     text: String,
 }
+
+/// Payload of `app://audio-level`: the smoothed input level, 0..1.
+#[derive(Clone, Serialize)]
+struct AudioLevelPayload {
+    level: f32,
+}
+
+/// 25 Hz: smooth enough for the bars, negligible IPC load.
+const LEVEL_INTERVAL_MS: u64 = 40;
 
 /// The `AppHandle`-free dependency bundle the pure stage core
 /// (`run_stages`) needs: the `StateBus` for the transitions, the resolved
@@ -343,9 +355,44 @@ async fn start_recording(app: &AppHandle, ctx: &Arc<AppContext>, mode: &Mode) ->
         }
     }
 
+    tauri::async_runtime::spawn(level_emitter(
+        app.clone(),
+        Arc::clone(ctx),
+        recorder.level_handle(),
+    ));
+
     *ctx.recorder_slot.lock() = Some(recorder);
     tracing::info!(mode = %mode.id, "Recording started");
     Ok(())
+}
+
+/// Overlay waveform feed for every STT provider: drains the recorder's
+/// level tap every tick while `Recording` and ends with the recording.
+async fn level_emitter(app: AppHandle, ctx: Arc<AppContext>, tap: Arc<LevelTap>) {
+    use tokio::time::{interval, Duration, MissedTickBehavior};
+
+    let mut meter = LevelMeter::default();
+    let mut tick = interval(Duration::from_millis(LEVEL_INTERVAL_MS));
+    tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    let mut warned = false;
+    loop {
+        tick.tick().await;
+        if !matches!(ctx.state_bus.current(), AppState::Recording) {
+            break;
+        }
+        let level = (meter.step(tap.take()) * 100.0).round() / 100.0;
+        let sent = app.emit_to(
+            "overlay",
+            crate::core::events::AUDIO_LEVEL,
+            AudioLevelPayload { level },
+        );
+        if let Err(e) = sent {
+            if !warned {
+                tracing::warn!(error = %e, "emit app://audio-level failed");
+                warned = true;
+            }
+        }
+    }
 }
 
 /// Streaming decode loop. Runs while `State::Recording`; emits stable
