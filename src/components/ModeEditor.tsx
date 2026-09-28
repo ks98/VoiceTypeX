@@ -9,6 +9,11 @@ import WhisperModelCards from "./WhisperModelCards";
 import { computeBlockingReasons } from "./modeValidation";
 import { LLM_SLOTS } from "../lib/llmSlots";
 import { useChatGptStatus } from "../lib/useChatGptStatus";
+import {
+  CHATGPT_DEFAULT_MODEL,
+  CHATGPT_MODELS,
+  isListedChatGptModel,
+} from "../lib/chatgptModels";
 import { useT, type TranslateFn } from "../i18n";
 
 // Local input classes — the ModeEditor has ~17 sites with different
@@ -26,6 +31,8 @@ interface ModeEditorProps {
 }
 
 const STT_PROVIDERS = ["xai", "openai", "groq", "deepgram", "chatgpt"];
+/** Select value for "Other model…" in the chatgpt model picker. */
+const CUSTOM_MODEL = "__custom__";
 const LLM_PROVIDERS = ["xai", "openai", "anthropic", "chatgpt"];
 
 function emptyMode(): Mode {
@@ -66,6 +73,13 @@ export default function ModeEditor({
 }: ModeEditorProps): JSX.Element {
   const t = useT();
   const { status: chatgpt } = useChatGptStatus();
+  // chatgpt model picker: a saved model outside the curated list opens in
+  // the free-text "Other model…" mode instead of being rewritten.
+  const [chatgptCustomModel, setChatgptCustomModel] = useState<boolean>(
+    () =>
+      !!initial?.cloud_llm_model &&
+      !isListedChatGptModel(initial.cloud_llm_model),
+  );
   const isEdit = initial !== null;
   const [draft, setDraft] = useState<Mode>(initial ?? emptyMode());
   const [saving, setSaving] = useState(false);
@@ -452,9 +466,18 @@ export default function ModeEditor({
                   <select
                     className={inputCls}
                     value={draft.cloud_llm_provider ?? ""}
-                    onChange={(e) =>
-                      update("cloud_llm_provider", e.target.value || null)
-                    }
+                    onChange={(e) => {
+                      const next = e.target.value || null;
+                      update("cloud_llm_provider", next);
+                      // Another provider's model ID means nothing to ChatGPT.
+                      if (
+                        next === "chatgpt" &&
+                        !isListedChatGptModel(draft.cloud_llm_model)
+                      ) {
+                        update("cloud_llm_model", null);
+                        setChatgptCustomModel(false);
+                      }
+                    }}
                   >
                     <option value="">{t("mode_editor.stt.choose")}</option>
                     {LLM_PROVIDERS.map((p) => (
@@ -466,22 +489,75 @@ export default function ModeEditor({
                     ))}
                   </select>
                 </Field>
-                <Field
-                  label={t("mode_editor.llm.cloud_model.label")}
-                  hint={
-                    draft.cloud_llm_provider === "chatgpt"
-                      ? t("mode_editor.llm.chatgpt_model_hint")
-                      : t("mode_editor.llm.cloud_model.hint")
-                  }
-                >
-                  <input
-                    className={`${inputCls} font-mono`}
-                    value={draft.cloud_llm_model ?? ""}
-                    onChange={(e) =>
-                      update("cloud_llm_model", e.target.value || null)
-                    }
-                  />
-                </Field>
+                {draft.cloud_llm_provider === "chatgpt" ? (
+                  <Field
+                    label={t("mode_editor.llm.cloud_model.label")}
+                    hint={t("mode_editor.llm.chatgpt_model.hint")}
+                  >
+                    <select
+                      className={inputCls}
+                      value={
+                        chatgptCustomModel
+                          ? CUSTOM_MODEL
+                          : (draft.cloud_llm_model ?? "")
+                      }
+                      onChange={(e) => {
+                        if (e.target.value === CUSTOM_MODEL) {
+                          setChatgptCustomModel(true);
+                        } else {
+                          setChatgptCustomModel(false);
+                          update("cloud_llm_model", e.target.value || null);
+                        }
+                      }}
+                    >
+                      <option value="">
+                        {t("mode_editor.llm.chatgpt_model.default", {
+                          model: CHATGPT_DEFAULT_MODEL,
+                        })}
+                      </option>
+                      {CHATGPT_MODELS.map((m) => (
+                        <option key={m.slug} value={m.slug}>
+                          {m.label}
+                        </option>
+                      ))}
+                      <option value={CUSTOM_MODEL}>
+                        {t("mode_editor.llm.chatgpt_model.other")}
+                      </option>
+                    </select>
+                    {chatgptCustomModel ? (
+                      <input
+                        className={`${inputCls} font-mono`}
+                        value={draft.cloud_llm_model ?? ""}
+                        onChange={(e) =>
+                          update("cloud_llm_model", e.target.value || null)
+                        }
+                        placeholder="gpt-…"
+                      />
+                    ) : null}
+                    {chatgptCustomModel &&
+                    draft.cloud_llm_model &&
+                    !isListedChatGptModel(draft.cloud_llm_model) ? (
+                      <div className="text-xs text-status-processing">
+                        {t("mode_editor.llm.chatgpt_model.unlisted", {
+                          model: draft.cloud_llm_model,
+                        })}
+                      </div>
+                    ) : null}
+                  </Field>
+                ) : (
+                  <Field
+                    label={t("mode_editor.llm.cloud_model.label")}
+                    hint={t("mode_editor.llm.cloud_model.hint")}
+                  >
+                    <input
+                      className={`${inputCls} font-mono`}
+                      value={draft.cloud_llm_model ?? ""}
+                      onChange={(e) =>
+                        update("cloud_llm_model", e.target.value || null)
+                      }
+                    />
+                  </Field>
+                )}
               </div>
             ) : null}
 

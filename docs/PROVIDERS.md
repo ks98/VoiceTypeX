@@ -334,12 +334,26 @@ sign-in); everything else is transient. Observed access-token lifetime:
   `response.output_text.delta`, end marker `response.completed`;
   `response.failed`/`error` or a stream without completion is an error
   (no partial text is ever injected).
-- Model: the mode's `cloud_llm_model`, default `gpt-5.5`. Of the models
-  tried on 2026-09-25 only `gpt-5.5` was accepted with a ChatGPT account;
-  `gpt-5.4` and `gpt-5` return 400 "not supported when using Codex with
-  a ChatGPT account".
-- Observed: the bundled German correction prompt on a short dictation
-  took ~2.8 s.
+- Model: the mode's `cloud_llm_model`, default **`gpt-6-luna`** (all
+  plans; per OpenAI meant for "focused, repeatable tasks"). The previous
+  default `gpt-5.5` **retires from ChatGPT sign-in on 2026-10-14**
+  (learn.chatgpt.com/docs/models.md; replacement `gpt-6-sol` for
+  Plus/Pro/Business/Enterprise/Edu, `gpt-6-luna` for Free/Go).
+- Model list: the mode editor offers a curated list (`gpt-6-luna`,
+  `gpt-6-sol`, `gpt-6-astra`, `src/lib/chatgptModels.ts`) plus "Other
+  model…" for any ID. The account's catalog endpoint
+  `GET https://chatgpt.com/backend-api/codex/models?client_version=…`
+  (what the Codex CLI uses) returns `{"models":[]}` for our real version
+  `0.2.x` and 400 without the parameter — it filters by Codex client
+  version, and VoiceTypeX does not pose as the Codex CLI, so the list
+  cannot be fetched live.
+- Observed 2026-09-28 (Plus account, bundled German correction prompt,
+  one run each): `gpt-6-sol` 2.3 s, `gpt-6-luna` 2.4 s, `gpt-6-astra`
+  2.5 s, `gpt-5.6-terra` 1.7 s, `gpt-5.6-luna` 1.4 s, `gpt-5.5` 3.7 s;
+  `gpt-5.6-sol` (2.6 s) rewrote "drei Uhr" to "15 Uhr", i.e. changed the
+  content. `reasoning: {effort: "low"}` gave no measurable gain. Earlier
+  (2026-09-25) `gpt-5.4` and `gpt-5` returned 400 "not supported when
+  using Codex with a ChatGPT account".
 
 A fallback to `api.openai.com/v1/audio/transcriptions` with the ChatGPT
 token is deliberately excluded: it is most likely billed as metered API
