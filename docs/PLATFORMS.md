@@ -232,6 +232,10 @@ libxdo, clang, cmake) stays the same.
   when a WM shortcut already uses the same combo). In that case
   `tauri-plugin-global-shortcut` reports an error and VoiceTypeX shows
   a notification.
+- Overlay and menu are transparent windows around a rounded card. X11
+  only renders transparency with a compositing manager (KWin, Mutter,
+  xfwm4 with compositing, picom); on a bare WM such as i3 without picom
+  the corners around the card are not transparent.
 
 ### Keystrokes mode (X11 + Windows)
 
