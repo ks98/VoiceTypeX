@@ -37,6 +37,12 @@ const win = params.get("window");
 const view =
   win === "overlay" ? <Overlay /> : win === "menu" ? <Menu /> : <App />;
 
+// Overlay and menu are transparent windows: the page background must not
+// paint, or the rounded card sits on an opaque rectangle.
+if (win === "overlay" || win === "menu") {
+  document.documentElement.classList.add("vtx-floating");
+}
+
 // i18n bootstrap BEFORE React render: fetches Settings.locale from the
 // backend and sets the store. The backend detected and persisted the
 // OS locale on the first app start (see lib.rs::run), so we usually

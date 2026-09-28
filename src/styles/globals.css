@@ -130,24 +130,19 @@
   }
 }
 
-/*
- * Glass-backdrop utility for floating windows (overlay/menu). Default
- * uses backdrop-blur; on compositors without backdrop-filter support
- * (sway, Hyprland without a plugin) it falls back to a denser, solid
- * variant so the background does not show through.
- */
-.vtx-glass {
-  background-color: rgb(var(--canvas-rgb) / 0.8);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgb(var(--fg-rgb) / 0.1);
+html.vtx-floating body {
+  background-color: transparent;
 }
 
-@supports not (
-  (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
-) {
-  .vtx-glass {
-    background-color: rgb(var(--canvas-rgb) / 0.95);
-    border-color: rgb(var(--fg-rgb) / 0.15);
-  }
+/*
+ * Card surface of the floating windows (overlay/menu). Dense and without
+ * backdrop-filter: the desktop behind a transparent webview is not part
+ * of its backdrop, so a blur has nothing to blur — it only costs repaints
+ * on WebKitGTK without GPU compositing. The shadow reaches at most 8 px
+ * out, so it fits the p-2 window padding instead of being cut off.
+ */
+.vtx-glass {
+  background-color: rgb(var(--canvas-rgb) / 0.95);
+  border: 1px solid rgb(var(--fg-rgb) / 0.15);
+  box-shadow: 0 2px 8px -2px rgb(0 0 0 / 0.25);
 }

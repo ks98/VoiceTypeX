@@ -118,7 +118,7 @@ export default function Menu(): JSX.Element {
       onKeyDown={(e) => void onKeyDown(e)}
       className="h-screen w-screen overflow-hidden p-2 select-none outline-none"
     >
-      <div className="h-full w-full rounded-lg vtx-glass shadow-2xl flex flex-col overflow-hidden">
+      <div className="h-full w-full rounded-lg vtx-glass flex flex-col overflow-hidden">
         <div className="px-4 py-2.5 border-b border-fg/10 flex items-center justify-between shrink-0">
           <span className="text-fg text-xs font-semibold tracking-wide uppercase">
             {t("menu.title")}
