@@ -10,8 +10,14 @@
 //!   `response.output_text.delta`, the end as `response.completed`.
 //!
 //! The backend requires `store: false` and streaming. Sampling parameters
-//! (temperature, top_p, …) and max_tokens are not sent. Of the models
-//! tried with a ChatGPT account on 2026-09-25 only `gpt-5.5` was accepted.
+//! (temperature, top_p, …) and max_tokens are not sent.
+//!
+//! Default model: `gpt-6-luna` — available on every ChatGPT plan and meant
+//! for "focused, repeatable tasks" (learn.chatgpt.com/docs/models.md).
+//! `gpt-5.5`, the previous default, retires from ChatGPT sign-in on
+//! 2026-10-14. The model catalog endpoint returns no models for our honest
+//! `client_version`, so the frontend offers a curated list instead
+//! (`src/lib/chatgptModels.ts`).
 
 use crate::chatgpt::api::{self, FailureKind};
 use crate::chatgpt::session::{Access, AccessError};
@@ -24,7 +30,8 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const URL: &str = "https://chatgpt.com/backend-api/codex/responses";
-const DEFAULT_MODEL: &str = "gpt-5.5";
+/// Keep in sync with `CHATGPT_DEFAULT_MODEL` in `src/lib/chatgptModels.ts`.
+const DEFAULT_MODEL: &str = "gpt-6-luna";
 const TIMEOUT: Duration = Duration::from_secs(90);
 
 pub struct ChatGptProcessor {
@@ -276,12 +283,18 @@ mod tests {
 
     #[test]
     fn request_uses_instructions_and_disables_storage() {
-        let b = request_body("gpt-5.5", "Fix punctuation.", "hello world");
-        assert_eq!(b["model"], "gpt-5.5");
+        let b = request_body("gpt-6-sol", "Fix punctuation.", "hello world");
+        assert_eq!(b["model"], "gpt-6-sol");
         assert_eq!(b["instructions"], "Fix punctuation.");
         assert_eq!(b["input"][0]["content"][0]["text"], "hello world");
         assert_eq!(b["store"], false);
         assert_eq!(b["stream"], true);
+    }
+
+    #[test]
+    fn default_model_is_pinned() {
+        // The frontend shows this as "Default (…)" — see chatgptModels.ts.
+        assert_eq!(DEFAULT_MODEL, "gpt-6-luna");
     }
 
     #[test]
