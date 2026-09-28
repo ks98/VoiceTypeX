@@ -99,34 +99,107 @@
 }
 
 /*
- * Recording pulse for the recording overlay. A single dot pulses as an
- * honest "recording in progress" status LED — the equalizer animation
- * used here earlier suggested an audio-level reaction that did not
- * actually exist (the renderer has no level). 1.2s cycle: scale +
- * opacity breathing, clearly recognizable as an LED.
+ * Overlay motion ("Editorial Calm": short, eased, never bouncy). Only
+ * opacity and transform animate, so WebKitGTK without GPU compositing
+ * repaints just the small elements involved. With reduced motion the card
+ * only fades, the processing wave stands still (the timer still shows
+ * progress) and words appear without motion; the live level bars keep
+ * moving because they carry information.
  */
-@keyframes vtx-rec-pulse {
-  0%,
-  100% {
-    transform: scale(0.85);
-    opacity: 0.55;
-  }
-  50% {
-    transform: scale(1.1);
-    opacity: 1;
-  }
+:root {
+  --vtx-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/*
- * Soft fade-in for key-based re-mounts (phase cross-fade in the overlay,
- * partial-word refresh after an LA-2 revision).
- */
 @keyframes vtx-fadein {
   from {
     opacity: 0;
   }
   to {
     opacity: 1;
+  }
+}
+
+@keyframes vtx-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes vtx-nudge {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes vtx-pop {
+  0% {
+    transform: scale(0.9);
+  }
+  60% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+@keyframes vtx-bar-wave {
+  0%,
+  100% {
+    transform: scaleY(0.12);
+  }
+  50% {
+    transform: scaleY(0.55);
+  }
+}
+
+/* Card entrance at the start of each recording. */
+.vtx-enter {
+  animation: vtx-rise 240ms var(--vtx-ease-out) both;
+}
+
+/* Phase row / new transcript words. */
+.vtx-phase-in {
+  animation: vtx-nudge 180ms var(--vtx-ease-out) both;
+}
+
+.vtx-word-in {
+  animation: vtx-nudge 160ms var(--vtx-ease-out) both;
+}
+
+.vtx-pop {
+  animation: vtx-pop 260ms var(--vtx-ease-out);
+}
+
+/* Processing wave; the per-bar delay comes from the inline style. */
+.vtx-bar-wave {
+  animation: vtx-bar-wave 1.2s ease-in-out infinite;
+}
+
+.vtx-bar-wave-slow {
+  animation: vtx-bar-wave 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vtx-enter {
+    animation: vtx-fadein 120ms ease-out both;
+  }
+  .vtx-phase-in,
+  .vtx-word-in,
+  .vtx-pop,
+  .vtx-bar-wave,
+  .vtx-bar-wave-slow {
+    animation: none;
   }
 }
 

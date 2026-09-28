@@ -2,6 +2,7 @@
 //! Audio capture, resampling, cues.
 
 pub mod cues;
+pub mod level;
 pub mod recorder;
 
 pub use cues::{play_start_cue, play_stop_cue};

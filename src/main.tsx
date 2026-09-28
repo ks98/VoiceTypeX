@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import ReactDOM from "react-dom/client";
 import { listen } from "@tauri-apps/api/event";
 import App from "./App";
@@ -34,8 +34,23 @@ if (!rootEl) {
 const params = new URLSearchParams(window.location.search);
 const win = params.get("window");
 
+// Dev-only overlay state gallery; the DEV guard drops it from release builds.
+const OverlayPreview = import.meta.env.DEV
+  ? lazy(() => import("./dev/OverlayPreview"))
+  : null;
+
 const view =
-  win === "overlay" ? <Overlay /> : win === "menu" ? <Menu /> : <App />;
+  win === "overlay" ? (
+    <Overlay />
+  ) : win === "menu" ? (
+    <Menu />
+  ) : OverlayPreview && win === "overlay-preview" ? (
+    <Suspense>
+      <OverlayPreview />
+    </Suspense>
+  ) : (
+    <App />
+  );
 
 // Overlay and menu are transparent windows: the page background must not
 // paint, or the rounded card sits on an opaque rectangle.

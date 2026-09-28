@@ -635,6 +635,8 @@ pub struct EngineSegment {
 /// Which engines + models the active mode uses, for the overlay status line.
 #[derive(Debug, Clone, Serialize)]
 pub struct EngineStatus {
+    /// Display name of the mode, shown next to the phase label.
+    pub mode_name: String,
     pub stt: EngineSegment,
     /// `None` when the mode does no LLM post-processing (`processing = none`).
     pub llm: Option<EngineSegment>,
@@ -691,7 +693,11 @@ pub fn resolve_engine_status(mode: &Mode, settings: &Settings) -> EngineStatus {
         }),
     };
 
-    EngineStatus { stt, llm }
+    EngineStatus {
+        mode_name: mode.name.clone(),
+        stt,
+        llm,
+    }
 }
 
 #[cfg(test)]
@@ -786,6 +792,7 @@ mod tests {
         )
         .unwrap();
         let s = resolve_engine_status(&m, &Settings::default());
+        assert_eq!(s.mode_name, "T");
         assert_eq!(s.stt.location, "local");
         assert_eq!(s.stt.provider, None);
         assert_eq!(s.stt.model, Settings::default().whisper_default_slot);

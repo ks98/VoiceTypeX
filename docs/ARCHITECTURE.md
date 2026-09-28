@@ -74,8 +74,16 @@ overlay state listener.
 
 `start_recording` additionally emits `app://active-engine` — the
 `EngineStatus` from `core::modes::resolve_engine_status` — so the overlay's
-status line shows the active mode's STT/LLM engine + model (local vs cloud).
-(#8)
+status line shows the active mode's name and STT/LLM engine + model (local
+vs cloud). (#8)
+
+It also spawns the **level emitter**: the cpal callback keeps the loudest
+block RMS since the last read in an atomic (`audio::level::LevelTap` — no
+lock or allocation on the real-time thread); every 40 ms the emitter drains
+it, smooths it (`LevelMeter`: −60…−10 dBFS → 0…1, instant attack, calm
+release) and sends `app://audio-level` `{ level }` to the overlay window
+only (`emit_to("overlay", …)`). It runs for every STT provider and ends
+with the `Recording` state.
 
 ## Pipeline (menu hotkey + toggle)
 
@@ -382,7 +390,7 @@ speaking.
    ├─ t+2.8s: Snapshot → ...                                          → "Heute scheint"
    ├─ each new decode → emit app://partial-transcript
    │  (LocalAgreement-2 still computes prefix convergence as telemetry)
-   └─ Overlay shows "Heute scheint" under "Listening ..."
+   └─ Overlay shows "Heute scheint" under "Listening"
                                                        [Release]
                                                        └─►abort()
                                                        └─►final pass (BeamSearch=2, audio_ctx)
@@ -571,12 +579,17 @@ code comments in `libei_worker.rs`):
 | Window | Purpose | Size | Focus | Pointer events | Position |
 |---|---|---|---|---|---|
 | `main` | Main window (Settings, Modes, Logs) | 960 × 720, resizable | yes | yes | centered |
-| `overlay` | Status indicator during Recording / Transcribing / … | 520 × 96, **non-resizable** | **no** (`focus: false`) | **none** (CSS) | centered |
+| `overlay` | Status indicator during Recording / Transcribing / … | 520 × 120, **non-resizable**, transparent | **no** (`focus: false`) | **none** (CSS; the error card accepts clicks) | centered |
 | `menu` | Mode selection via arrow navigation + Enter | 480 × 360, non-resizable, scrollable with many modes | yes | yes | centered |
 
 All three windows load the same `index.html`; routing happens in
 `src/main.tsx` via the `?window=overlay` / `?window=menu` URL query,
-otherwise it falls back to `App.tsx` (main window).
+otherwise it falls back to `App.tsx` (main window). Overlay and menu mark
+`<html>` with `vtx-floating`, which keeps the page background transparent
+so only the rounded card (`.vtx-glass`) is visible. In dev builds
+`?window=overlay-preview` renders every overlay state with fixtures in a
+plain browser (`src/dev/OverlayPreview.tsx`, dropped from release builds);
+`?theme=dark`, `?lang=de` and `?freeze=1` (for screenshots) adjust it.
 
 ### Visibility Is Backend-Driven
 
@@ -594,10 +607,32 @@ in `pipeline/mod.rs` and `ipc/recording.rs`:
 
 ### Overlay View (`src/views/Overlay.tsx`)
 
-Lean: subscribes to `app://state`, renders phase-appropriate status text
-(*"Listening …"*, *"Transcribing …"*, *"Processing …"*, *"Inserting …"*,
-*"Error"*). No keyboard interaction, no pointer events (CSS protection,
-in case the window ever stays visible).
+`Overlay.tsx` is the container: it subscribes to `app://state`,
+`app://partial-transcript`, `app://active-engine`, `app://audio-level` and
+the ChatGPT usage, keeps the phase clock, and renders the pure
+`components/overlay/OverlayCard.tsx` (view logic in `lib/overlayModel.ts`,
+unit-tested). The card has three rows:
+
+- **Top:** phase icon, phase label and mode name, a timer (recording
+  `0:07`; transcribing/processing in seconds) and 28 level bars
+  (`LevelWaveform`). While recording they scroll the microphone level —
+  written straight to the DOM at 25 Hz, no React render per event; while
+  transcribing/processing they turn into a travelling wave.
+- **Middle:** the live transcript (only new or revised words fade in), or
+  *"No audio detected — is the microphone muted?"* when nothing louder than
+  room noise arrived in the first four seconds, or the stop hint with the
+  menu hotkey.
+- **Bottom:** the engine line, doubling as a progress stepper (the running
+  stage is underlined, finished stages get ✓), with the ChatGPT usage hint
+  on the right.
+
+On `Error` the card names the failed stage (the phase before the error),
+shows the message on one line (full text as tooltip) and *"Click for
+details · {hotkey} dismisses"*; a click opens the Logs tab. On `Idle` the
+card renders empty, so the next show never flashes the previous frame.
+Motion is opacity/transform only (entrance, phase row, words, wave); with
+`prefers-reduced-motion` the card only fades and the wave stands still.
+No keyboard interaction; pointer events only on the error card.
 
 ### Menu View (`src/views/Menu.tsx`)
 
