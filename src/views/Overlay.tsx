@@ -86,6 +86,8 @@ export default function Overlay(): JSX.Element {
           setPartial("");
         } else if (previous !== "recording") {
           setSession((s) => s + 1);
+          // A partial that raced the previous stop must not open this one.
+          setPartial("");
           setSilent(false);
           maxLevel.current = 0;
           // Re-read per recording: the hotkey may have changed meanwhile.
