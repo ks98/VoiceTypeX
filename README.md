@@ -96,7 +96,7 @@ still accepted but ignored. You change the menu hotkey itself under
   `gpu-cuda`/`gpu-metal`/`gpu-coreml` as opt-in features, and `fast-cpu`
   (OpenBLAS) as the headless fallback.
 - **Local LLM:** **Embedded** has been the default path since May 2026
-  (**Linux/macOS-only**) — llama-cpp-2 0.1.146 with the Vulkan backend
+  (**Linux/macOS-only**) — llama-cpp-2 0.1.158 with the Vulkan backend
   runs directly in the VoiceTypeX process, **no external daemon needed**.
   Modes with `processing = "local"` and no explicit `local_engine`
   automatically use Embedded. **On Windows** Embedded is not compiled

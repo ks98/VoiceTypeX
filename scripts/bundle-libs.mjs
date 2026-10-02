@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Copies the shared libs needed at runtime (Linux: `libllama.so*`,
+// Copies the shared libs needed at runtime (Linux: `libllama*.so*`,
 // `libggml*.so*`; Windows: `llama.dll`, `ggml*.dll`) to
 // `src-tauri/resources/lib/`, so the tauri-bundler packs them into the
 // final bundle via `bundle.resources`. Triggered via
@@ -53,7 +53,11 @@ const IS_WINDOWS = process.platform === "win32";
 
 const PATTERNS = IS_WINDOWS
   ? [/^ggml(-[a-z0-9_]+)?\.dll$/, /^llama\.dll$/]
-  : [/^libggml(-[a-z0-9_]+)?\.so(\.[\d.]+)?$/, /^libllama\.so(\.[\d.]+)?$/];
+  : [
+      /^libggml(-[a-z0-9_]+)?\.so(\.[\d.]+)?$/,
+      // libllama.so plus libllama-common.so (llama-cpp-sys-2 >= 0.1.158).
+      /^libllama(-[a-z0-9_]+)?\.so(\.[\d.]+)?$/,
+    ];
 
 // Marker file by which we recognize the correct out directory.
 const MARKER = IS_WINDOWS

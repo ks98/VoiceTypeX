@@ -37,7 +37,7 @@ use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
-use llama_cpp_2::model::{AddBos, LlamaChatMessage, LlamaModel, Special};
+use llama_cpp_2::model::{LlamaChatMessage, LlamaModel};
 use llama_cpp_2::sampling::LlamaSampler;
 use parking_lot::RwLock;
 use std::path::{Path, PathBuf};
@@ -189,9 +189,9 @@ fn run_llama_blocking(
         .apply_chat_template(&template, &messages, true)
         .map_err(|e| VoiceTypeError::processing(format!("apply_chat_template: {e}")))?;
 
-    let tokens = model
-        .str_to_token(&prompt, AddBos::Always)
-        .map_err(|e| VoiceTypeError::processing(format!("str_to_token: {e}")))?;
+    // add_special (BOS) and parse_special (chat-template tags as tokens).
+    let vocab = model.vocab();
+    let tokens = vocab.tokenize(prompt.as_bytes(), true, true);
 
     let prompt_len = tokens.len() as i32;
     if prompt_len > 4000 {
@@ -226,12 +226,12 @@ fn run_llama_blocking(
     // deterministic outputs (rewriting use case).
     let mut sampler = if temperature <= 0.0 {
         LlamaSampler::chain_simple([
-            LlamaSampler::penalties(64, repeat_penalty, 0.0, 0.0),
+            LlamaSampler::penalties(model.n_vocab(), 64, repeat_penalty, 0.0, 0.0),
             LlamaSampler::greedy(),
         ])
     } else {
         LlamaSampler::chain_simple([
-            LlamaSampler::penalties(64, repeat_penalty, 0.0, 0.0),
+            LlamaSampler::penalties(model.n_vocab(), 64, repeat_penalty, 0.0, 0.0),
             LlamaSampler::top_p(top_p, 1),
             LlamaSampler::temp(temperature),
             // Deterministic seed (0): with temp > 0 still stochastic
@@ -241,7 +241,9 @@ fn run_llama_blocking(
         ])
     };
 
-    let mut output = String::new();
+    // Raw bytes, decoded once at the end: a multi-byte character (umlaut)
+    // can be split across two tokens.
+    let mut output = Vec::new();
     let mut cursor = prompt_len;
     // `cursor` is the KV-cache position (starts at prompt_len), not a plain
     // loop counter — explicit_counter_loop is a false positive here.
@@ -249,15 +251,12 @@ fn run_llama_blocking(
     for _ in 0..max_tokens {
         // -1 = last token in the batch (the one set with logits=true).
         let token = sampler.sample(&ctx, -1);
-        if model.is_eog_token(token) {
+        if vocab.is_eog(token) {
             break;
         }
-        // Special::Plaintext = special tokens (chat tags etc.) are
-        // dropped; only "visible" text comes out.
-        let piece = model
-            .token_to_str(token, Special::Plaintext)
-            .map_err(|e| VoiceTypeError::processing(format!("token_to_str: {e}")))?;
-        output.push_str(&piece);
+        // special = false: special tokens (chat tags etc.) are dropped;
+        // only "visible" text comes out.
+        output.extend(vocab.token_to_piece(token, false, None));
 
         // Feed the next decode with the sampled token.
         batch.clear();
@@ -269,5 +268,5 @@ fn run_llama_blocking(
             .map_err(|e| VoiceTypeError::processing(format!("decode gen: {e}")))?;
     }
 
-    Ok(output.trim().to_string())
+    Ok(String::from_utf8_lossy(&output).trim().to_string())
 }

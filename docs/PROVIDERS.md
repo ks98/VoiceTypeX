@@ -122,7 +122,8 @@ The **embedded** LLM path embeds llama.cpp directly into the VoiceTypeX
 process — no external daemon needed. Enabled per mode via
 `local_engine = "embedded"` in the mode TOML.
 
-- **Crate:** `llama-cpp-2 = "0.1.146"`, features `vulkan + sampler +
+- **Crate:** `llama-cpp-2 = "=0.1.158"` (pinned together with
+  `llama-cpp-sys-2`: 0.1.x releases break the API), features `vulkan + sampler +
   dynamic-link`. `dynamic-link` is mandatory (otherwise it collides
   with whisper-rs-sys over a statically linked ggml).
 - **Backend:** GPU via Vulkan (same as Whisper), CPU fallback.
@@ -174,8 +175,8 @@ All with pinned SHA-256 hashes; download via `download_llm()` in
 unsloth re-packs are preferred because the bartowski/google original
 repos have a license gate (Gemma acceptance on first download).
 
-**Known build quirk (automated):** llama-cpp-sys-2 0.1.146's
-build.rs has a TOC/TOU bug with dangling symlinks in `target/
+**Known build quirk (automated):** llama-cpp-sys-2's build.rs (still
+in 0.1.158) has a TOC/TOU bug with dangling symlinks in `target/
 debug/`. The `predev`/`prebuild` hook in `package.json`
 (`scripts/clean-dangling-libs.mjs`) cleans this up automatically before
 every Tauri build. See PLATFORMS.md for details.

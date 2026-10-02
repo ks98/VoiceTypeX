@@ -18,7 +18,7 @@ Fixed — alternatives are not introduced without prior discussion.
 | Async runtime | tokio |
 | Audio | cpal + hound (WAV) + rubato (sinc resampling) |
 | Local STT | whisper-rs 0.16 + Silero-VAD v6, **default backend `gpu-vulkan`** (Phase 3a, May 2026); `gpu-cuda`/`gpu-metal`/`gpu-coreml` opt-in, `fast-cpu` (OpenBLAS) as the headless fallback. The CPU fallback when no Vulkan device is present is internal to whisper.cpp — not an app-code path. |
-| Local LLM | **Embedded llama-cpp-2 0.1.146** with Vulkan + `dynamic-link` has been the production standard since May 2026 (no external daemon needed, GGUF runs inside the VoiceTypeX process) — **Linux/macOS only**. Per-mode switch via `local_engine = "embedded"` (default) vs `"ollama"`. Ollama remains opt-in for users who run their own daemon. **On Windows the embedded LLM is not compiled** (Issue #1: whisper-rs-sys + llama-cpp-sys-2 collide on duplicate ggml symbols during MSVC linking); there `local_engine` defaults to `"ollama"`, and the local LLM runs via a self-installed Ollama daemon or the cloud. |
+| Local LLM | **Embedded llama-cpp-2 0.1.158** with Vulkan + `dynamic-link` has been the production standard since May 2026 (no external daemon needed, GGUF runs inside the VoiceTypeX process) — **Linux/macOS only**. Per-mode switch via `local_engine = "embedded"` (default) vs `"ollama"`. Ollama remains opt-in for users who run their own daemon. **On Windows the embedded LLM is not compiled** (Issue #1: whisper-rs-sys + llama-cpp-sys-2 collide on duplicate ggml symbols during MSVC linking); there `local_engine` defaults to `"ollama"`, and the local LLM runs via a self-installed Ollama daemon or the cloud. |
 | Cloud STT | xAI (one-shot REST), OpenAI Whisper, Groq Whisper, Deepgram |
 | Cloud LLM | xAI Grok (default `grok-4-fast-non-reasoning`), OpenAI GPT, Anthropic Claude |
 | HTTP client | reqwest (rustls-tls) |
@@ -460,7 +460,7 @@ state.
 
 [`processing/embedded.rs`](../src-tauri/src/processing/embedded.rs):
 
-- llama-cpp-2 0.1.146 with features `vulkan + sampler + dynamic-link`.
+- llama-cpp-2 0.1.158 with features `vulkan + sampler + dynamic-link`.
   `dynamic-link` is mandatory — otherwise the statically linked ggml
   versions of whisper-rs-sys and llama-cpp-sys-2 collide.
 - `LlamaBackend::init()` once via a `OnceLock` singleton.
