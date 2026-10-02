@@ -75,6 +75,14 @@ jobs:
           # Bumped so the GGML_* ISA baseline change actually rebuilds whisper
           # (whisper-rs-sys has no rerun-if-env-changed for GGML_*).
           prefix-key: "v1-ggml-x86-64-v3"
+      # The restored target/ can hold libggml*/libllama links from an earlier
+      # llama-cpp-sys-2 build (e.g. after a version bump), and pnpm build's
+      # prebuild cleanup ran before the restore — clean them up before the
+      # first cargo build, or llama-cpp-sys-2's build.rs panics (Os code 17,
+      # AlreadyExists; the TOC/TOU bug scripts/clean-dangling-libs.mjs
+      # addresses).
+      - name: Clean dangling GPU libs restored from the cache
+        run: node scripts/clean-dangling-libs.mjs
       - name: cargo fmt
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
       - name: cargo clippy
@@ -84,9 +92,8 @@ jobs:
       - name: prettier
         run: pnpm format:check
       # clippy produced the ggml/llama build above; before the SECOND build
-      # (cargo test) clean up the dangling libggml*/libllama links, otherwise
-      # llama-cpp-sys-2 0.1.146 panics (Os code 17, AlreadyExists) — the same
-      # TOC/TOU bug that scripts/clean-dangling-libs.mjs addresses.
+      # (cargo test) clean up the dangling libggml*/libllama links again, for
+      # the same reason.
       - name: Clean dangling GPU libs before the second build
         run: node scripts/clean-dangling-libs.mjs
       - name: cargo test
