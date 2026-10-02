@@ -58,12 +58,21 @@ export default function Menu(): JSX.Element {
     return () => window.clearTimeout(t);
   }, []);
 
-  useEffect(() => {
-    if (modes.length === 0) return;
-    const lastId = settings?.last_selected_mode_id ?? null;
+  // Put the cursor on the last-used mode whenever the modes or that id
+  // change — adjusted during render rather than in an effect.
+  const lastId = settings?.last_selected_mode_id ?? null;
+  const [cursorFor, setCursorFor] = useState<{
+    modes: Mode[];
+    lastId: string | null;
+  } | null>(null);
+  if (
+    modes.length > 0 &&
+    (cursorFor?.modes !== modes || cursorFor.lastId !== lastId)
+  ) {
+    setCursorFor({ modes, lastId });
     const idx = lastId ? modes.findIndex((m) => m.id === lastId) : -1;
     setCursor(idx >= 0 ? idx : 0);
-  }, [modes, settings?.last_selected_mode_id]);
+  }
 
   useEffect(() => {
     itemRefs.current[cursor]?.scrollIntoView({ block: "nearest" });

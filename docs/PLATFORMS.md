@@ -260,7 +260,7 @@ the Tauri installer).
 ### Build requirements
 
 - Rust stable (`rustup` with the MSVC toolchain — recommended over GNU)
-- Node.js 20+ and pnpm (easiest via `corepack enable`)
+- Node.js 20.19+, 22.13+ or 24+ (Vite 8 / ESLint 10) and pnpm (easiest via `corepack enable`)
 - Visual Studio Build Tools 2019+ with *"Desktop development with C++"*
 - WebView2 Runtime (preinstalled on Win 11; otherwise from
   https://developer.microsoft.com/microsoft-edge/webview2/)

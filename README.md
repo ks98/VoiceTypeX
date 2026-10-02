@@ -139,7 +139,7 @@ Conventions + mindset: [`CLAUDE.md`](CLAUDE.md).
 
 **Prerequisites:**
 - Rust stable via `rustup` (`rust-toolchain.toml` pins the channel)
-- Node.js 20+ and `pnpm` (`corepack enable && corepack prepare pnpm@latest --activate`)
+- Node.js 20.19+, 22.13+ or 24+ and `pnpm` (`corepack enable && corepack prepare pnpm@latest --activate`)
 - Linux: system packages per [`docs/PLATFORMS.md`](docs/PLATFORMS.md)
 - Windows: WebView2 Runtime + MSVC Build Tools
 
