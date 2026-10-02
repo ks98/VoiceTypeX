@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode, type JSX } from "react";
 import { emit, listen } from "@tauri-apps/api/event";
 import { listenAll } from "../lib/tauriListen";
 import { EVENTS } from "../lib/events";

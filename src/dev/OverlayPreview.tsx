@@ -8,7 +8,7 @@
 //   ?freeze=1     no entrance motion, paused waves, fixed levels (screenshots)
 //
 // Labels here are developer-facing and deliberately not translated.
-import { useEffect } from "react";
+import { useEffect, type JSX } from "react";
 import OverlayCard, {
   type OverlayCardProps,
 } from "../components/overlay/OverlayCard";

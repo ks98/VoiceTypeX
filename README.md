@@ -68,7 +68,7 @@ still accepted but ignored. You change the menu hotkey itself under
 
 - **App framework:** Tauri 2 (stable)
 - **Backend:** Rust 2021+ with tokio
-- **Frontend:** React 18 + TypeScript strict + Vite + TailwindCSS +
+- **Frontend:** React 19 + TypeScript strict + Vite + TailwindCSS +
   shadcn/ui + Zustand
 - **Internationalization:** a custom `useT()` hook (~70 LOC, no i18next)
   with `Intl.PluralRules`. Fully shipped in `de`, `en`, `fr`, `es`, `it`:

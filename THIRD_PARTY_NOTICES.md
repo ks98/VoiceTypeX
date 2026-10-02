@@ -88,7 +88,7 @@ likewise MIT.
 | Component | License |
 |---|---|
 | [Tauri 2](https://tauri.app/) | Apache-2.0 OR MIT |
-| [React 18](https://react.dev/) | MIT |
+| [React 19](https://react.dev/) | MIT |
 | [TailwindCSS](https://tailwindcss.com/) | MIT |
 | [Zustand](https://github.com/pmndrs/zustand) | MIT |
 | [tokio](https://tokio.rs/) | MIT |

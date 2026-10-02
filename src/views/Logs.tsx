@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type JSX } from "react";
 import Banner from "../components/Banner";
 import Button from "../components/Button";
 import { ipcGetRecentLogs } from "../lib/tauri";
