@@ -105,8 +105,9 @@ The `fast-cpu` feature links OpenBLAS instead of Vulkan. Build
 prerequisite for it: `libopenblas-dev` and `BLAS_INCLUDE_DIRS` set (see
 below).
 
-**Phase 3b — llama-cpp-sys-2 0.1.146 build quirk (automated):**
-llama-cpp-sys-2 0.1.146's build.rs has a TOC/TOU bug — `Path::
+**Phase 3b — llama-cpp-sys-2 build quirk (automated):**
+llama-cpp-sys-2's build.rs (seen in 0.1.146, still in 0.1.158) has a
+TOC/TOU bug — `Path::
 exists()` follows symlinks and returns false for dangling links, but
 `std::fs::hard_link()` then fails because the symlink entry is still
 there. The result without a workaround: an `Os { code: 17, kind:
@@ -123,8 +124,14 @@ node scripts/clean-dangling-libs.mjs
 
 **Phase 3b — `dynamic-link` runtime expectations + bundle pipeline:**
 llama-cpp-2 is linked with the `dynamic-link` feature; this produces
-`libllama.so`, `libggml.so`, `libggml-cpu.so`, `libggml-vulkan.so`
-and `libggml-base.so` as separate shared libs.
+`libllama.so`, `libllama-common.so` (since 0.1.158), `libggml.so`,
+`libggml-cpu.so`, `libggml-vulkan.so` and `libggml-base.so` as separate
+shared libs. `libllama-common.so` is built without OpenSSL
+(`CMAKE_DISABLE_FIND_PACKAGE_OpenSSL` in `src-tauri/.cargo/config.toml`):
+llama.cpp's HTTPS model downloader is unused, and a TLS-linked lib would
+need `libssl.so.3` on every host. Changing that variable needs
+`cargo clean -p llama-cpp-sys-2` — the build script only re-runs for
+`CMAKE_*` variables it saw on its last run.
 
 - **Dev build (`pnpm tauri dev`):** Cargo places the libs in
   `target/debug/` and sets the rpath there automatically. The binary

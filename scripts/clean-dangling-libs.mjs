@@ -3,7 +3,7 @@
 // Cleans up the `libggml*.so*` and `libllama.so*` files from
 // `src-tauri/target/debug/` (+ deps/, examples/) before every build.
 //
-// Background: llama-cpp-sys-2 0.1.146's build.rs has a TOC/TOU
+// Background: llama-cpp-sys-2's build.rs (0.1.146, still 0.1.158) has a TOC/TOU
 // bug — `Path::exists()` follows symlinks and returns false for
 // dangling links, but `std::fs::hard_link()` fails because the
 // symlink entry is still there. Result: `Os { code: 17, kind:
@@ -31,8 +31,8 @@ const TARGETS = [
 const PATTERNS = [
   // libggml.so, libggml.so.0, libggml.so.0.9.11, libggml-cpu.so, ...
   /^libggml(-[a-z0-9_]+)?\.so(\.[\d.]+)?$/,
-  // libllama.so, libllama.so.0, libllama.so.0.0.0
-  /^libllama\.so(\.[\d.]+)?$/,
+  // libllama.so, libllama.so.0, libllama.so.0.0.0, libllama-common.so…
+  /^libllama(-[a-z0-9_]+)?\.so(\.[\d.]+)?$/,
 ];
 
 function cleanDir(dir) {

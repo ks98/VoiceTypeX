@@ -26,3 +26,12 @@ BLAS_INCLUDE_DIRS = { value = "/usr/include/x86_64-linux-gnu/openblas-pthread", 
 # cargo build` in their shell wins — debugging the C++ internals stays
 # possible. Standard users with tight RAM get the fast, stable path.
 CMAKE_BUILD_TYPE = { value = "Release", force = false }
+
+# llama.cpp's common library (llama-cpp-sys-2 >= 0.1.158 always builds it
+# as libllama-common.so) links OpenSSL for its HTTPS model downloader,
+# which VoiceTypeX never uses (models come in via reqwest). Without this,
+# the bundled lib would need libssl.so.3 + libcrypto.so.3 on every host.
+# llama-cpp-sys-2 forwards CMAKE_* variables to CMake, and this standard
+# CMake switch makes find_package(OpenSSL) fail, so cpp-httplib builds
+# without TLS.
+CMAKE_DISABLE_FIND_PACKAGE_OpenSSL = { value = "TRUE", force = false }

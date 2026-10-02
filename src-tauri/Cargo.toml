@@ -160,13 +160,12 @@ zbus = { version = "5", default-features = false, features = ["tokio"] }
 # Features: vulkan (GPU), sampler (idiomatic sampling API), dynamic-link
 # (llama.cpp as a shared lib; on Linux this puts ggml in a separate .so).
 # default-features=false: without openmp (libomp build dep) + android-shared-stdcxx.
-# Pinned (both crates): 0.1.x releases break the API, and from 0.1.158 on
-# the always-on `common` feature adds libllama-common.so (linked against
-# OpenSSL), which the bundle pipeline does not ship yet — update
+# Pinned (both crates): 0.1.x releases break the API, and the shared
+# libraries they build change (0.1.158 added libllama-common.so) — update
 # deliberately together with scripts/bundle-libs.mjs.
 [target.'cfg(not(target_os = "windows"))'.dependencies]
-llama-cpp-2 = { version = "=0.1.146", default-features = false, features = ["vulkan", "sampler", "dynamic-link"] }
-llama-cpp-sys-2 = "=0.1.146"
+llama-cpp-2 = { version = "=0.1.158", default-features = false, features = ["vulkan", "sampler", "dynamic-link"] }
+llama-cpp-sys-2 = "=0.1.158"
 
 [features]
 # Default from Phase 3a: 'gpu-vulkan' — Vulkan covers iGPU + AMD + Intel
