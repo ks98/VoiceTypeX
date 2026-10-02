@@ -22,7 +22,7 @@ import { useT, type TranslateFn } from "../i18n";
 // component. Deliberately kept inline here, with a focus-visible
 // ring for a11y parity with the Input component.
 const inputCls =
-  "bg-surface border border-outline rounded-md px-2 py-1.5 text-sm w-full text-fg placeholder:text-fg-faint focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-1 focus-visible:ring-offset-canvas focus:border-brand transition-colors";
+  "bg-surface border border-outline rounded-md px-2 py-1.5 text-sm w-full text-fg placeholder:text-fg-faint focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-1 focus-visible:ring-offset-canvas focus:border-brand transition-colors";
 
 interface ModeEditorProps {
   initial: Mode | null;
@@ -181,7 +181,7 @@ export default function ModeEditor({
 
   return (
     <div
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="mode-editor-title"
@@ -779,7 +779,7 @@ function Section({
           type="button"
           onClick={onToggle}
           aria-expanded={open}
-          className="flex items-center justify-between text-left text-sm font-semibold text-fg hover:text-brand transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 rounded"
+          className="flex items-center justify-between text-left text-sm font-semibold text-fg hover:text-brand transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand/40 rounded-sm"
         >
           <span>{title}</span>
           <span className="text-xs text-fg-muted">{open ? "▾" : "▸"}</span>

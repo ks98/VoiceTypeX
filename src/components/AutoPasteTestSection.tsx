@@ -53,7 +53,7 @@ export default function AutoPasteTestSection() {
       </p>
       <div className="flex flex-col gap-2">
         <input
-          className="bg-elevated border border-outline rounded-md px-2 py-1.5 text-sm font-mono text-fg placeholder:text-fg-faint focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/40"
+          className="bg-elevated border border-outline rounded-md px-2 py-1.5 text-sm font-mono text-fg placeholder:text-fg-faint focus:outline-hidden focus:border-brand focus:ring-1 focus:ring-brand/40"
           value={text}
           onChange={(e) => setText(e.target.value)}
           disabled={running}

@@ -784,7 +784,7 @@ would additively enable further calls, not filter existing ones.
 
 ## Frontend
 
-React 19 + TypeScript strict + Tailwind v3 + Zustand.
+React 19 + TypeScript strict + Tailwind v4 + Zustand.
 
 - **Views (`src/views/`):** Settings, Modes, Logs, Overlay, Menu (Menu
   and Overlay are their own Tauri windows from the same `index.html`,
@@ -801,10 +801,15 @@ React 19 + TypeScript strict + Tailwind v3 + Zustand.
 
 - **Tokens live as CSS custom properties** (RGB triplets) in
   `src/styles/globals.css` under `:root` (light) and `html.dark`
-  (dark). Tailwind maps them to semantic classes in
-  `tailwind.config.ts`: `bg-canvas/surface/elevated`,
-  `text-fg/muted/faint`, `border-outline/strong`, `brand/brand-hover`,
-  `status-*`.
+  (dark). Tailwind v4 is configured in the same file (no
+  `tailwind.config.ts`): `@theme inline` maps the tokens to semantic
+  classes — `bg-canvas/surface/elevated`, `text-fg/muted/faint`,
+  `border-outline/strong`, `brand/brand-hover`, `status-*` — and opacity
+  modifiers (`bg-fg/35`) compile to `color-mix()`. A few v3 behaviours
+  are kept on purpose (class-based `dark:`, `hover:` without the
+  `(hover: hover)` gate, pointer cursor on buttons, fixed line heights).
+  Tailwind runs as the Vite plugin; `build.cssTarget` is Tailwind's
+  minimum (Chrome 111 / Safari 16.4).
 - **Theme choice** (system/light/dark) lives in `src/lib/theme.ts`, is
   persisted in localStorage, and applied synchronously before the React
   render in `main.tsx` (FOUC prevention). A matchMedia listener reacts

@@ -34,7 +34,7 @@ export default function Sidebar(): JSX.Element {
           onClick={() => setActiveTab(id)}
           aria-current={activeTab === id ? "page" : undefined}
           className={
-            "px-3 py-2 rounded-md text-sm text-left whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 " +
+            "px-3 py-2 rounded-md text-sm text-left whitespace-nowrap transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand/40 " +
             (activeTab === id
               ? "bg-elevated text-fg font-medium"
               : "text-fg-muted hover:text-fg hover:bg-elevated/60")

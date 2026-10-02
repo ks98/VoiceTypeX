@@ -116,7 +116,7 @@ export default function Menu(): JSX.Element {
       ref={rootRef}
       tabIndex={-1}
       onKeyDown={(e) => void onKeyDown(e)}
-      className="h-screen w-screen overflow-hidden p-2 select-none outline-none"
+      className="h-screen w-screen overflow-hidden p-2 select-none outline-hidden"
     >
       <div className="h-full w-full rounded-lg vtx-glass flex flex-col overflow-hidden">
         <div className="px-4 py-2.5 border-b border-fg/10 flex items-center justify-between shrink-0">
@@ -229,7 +229,7 @@ function ModeRow({
     >
       <span
         className={
-          "absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r " +
+          "absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-sm " +
           (active ? "bg-brand" : "bg-transparent")
         }
         aria-hidden

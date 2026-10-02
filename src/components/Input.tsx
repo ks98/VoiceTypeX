@@ -23,7 +23,7 @@ const DENSITY: Record<Density, string> = {
 };
 
 const BASE =
-  "bg-surface border rounded-md text-sm w-full text-fg placeholder:text-fg-faint focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-1 focus-visible:ring-offset-canvas focus:border-brand transition-colors disabled:opacity-50";
+  "bg-surface border rounded-md text-sm w-full text-fg placeholder:text-fg-faint focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-1 focus-visible:ring-offset-canvas focus:border-brand transition-colors disabled:opacity-50";
 
 /**
  * Consolidated input element. Replaces the 3× duplicated `inputCls`

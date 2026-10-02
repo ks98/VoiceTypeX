@@ -266,7 +266,7 @@ export default function OnboardingWizard({
     whisperStatus.kind === "running" || llmStatus.kind === "running";
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
       <div className="bg-surface border border-outline rounded-xl max-w-2xl w-full overflow-auto shadow-2xl">
         <div className="px-6 pt-6 pb-4 border-b border-outline">
           <div className="flex justify-between items-start mb-4">
@@ -285,7 +285,7 @@ export default function OnboardingWizard({
                 onChange={(e) =>
                   onPickLocale(e.target.value as SupportedLocale)
                 }
-                className="bg-elevated border border-outline rounded-md text-xs text-fg-muted px-2 py-1 focus:outline-none focus:ring-1 focus:ring-brand"
+                className="bg-elevated border border-outline rounded-md text-xs text-fg-muted px-2 py-1 focus:outline-hidden focus:ring-1 focus:ring-brand"
               >
                 {SUPPORTED_LOCALES.map((l) => (
                   <option key={l} value={l}>
@@ -499,7 +499,7 @@ function ChoiceCard({
       <label className="flex items-center gap-2 cursor-pointer">
         <input type="radio" checked={selected} onChange={onSelect} />
         <span className="text-sm font-semibold text-fg">{title}</span>
-        <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-elevated border border-outline text-fg-muted">
+        <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-sm bg-elevated border border-outline text-fg-muted">
           {badge}
         </span>
       </label>

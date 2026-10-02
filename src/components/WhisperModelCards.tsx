@@ -81,7 +81,7 @@ function ModelCard({
       aria-checked={selected}
       onClick={onSelect}
       className={
-        "text-left rounded-lg border px-3.5 py-3 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 " +
+        "text-left rounded-lg border px-3.5 py-3 transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand/40 " +
         (selected
           ? "border-brand bg-brand/5"
           : "border-outline bg-surface hover:border-brand/50")
@@ -90,7 +90,7 @@ function ModelCard({
       <div className="flex items-center gap-2">
         <span className="font-medium text-sm text-fg">{t(model.nameKey)}</span>
         {model.german ? (
-          <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-brand/15 text-brand">
+          <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-sm bg-brand/15 text-brand">
             {t("whisper_cards.de_badge")}
           </span>
         ) : null}
@@ -151,7 +151,7 @@ function GlobalCard({
       aria-checked={selected}
       onClick={onSelect}
       className={
-        "text-left rounded-lg border px-3.5 py-2.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 " +
+        "text-left rounded-lg border px-3.5 py-2.5 transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand/40 " +
         (selected
           ? "border-brand bg-brand/5"
           : "border-outline bg-surface hover:border-brand/50")
