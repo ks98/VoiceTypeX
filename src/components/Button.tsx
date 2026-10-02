@@ -2,12 +2,7 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
 type Variant =
-  | "primary"
-  | "secondary"
-  | "ghost"
-  | "danger"
-  | "danger-strong"
-  | "tab";
+  "primary" | "secondary" | "ghost" | "danger" | "danger-strong" | "tab";
 type Size = "md" | "sm";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {

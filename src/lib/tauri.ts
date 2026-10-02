@@ -136,12 +136,7 @@ export interface HardwareReport {
   /** Currently available RAM in GB. 0 = not implemented. */
   available_ram_gb: number;
   recommended_variant:
-    | "cpu"
-    | "openblas"
-    | "vulkan"
-    | "cuda"
-    | "metal"
-    | "coreml";
+    "cpu" | "openblas" | "vulkan" | "cuda" | "metal" | "coreml";
   recommended_speedup: number;
 }
 

@@ -42,11 +42,7 @@ export function engineSteps(phase: Phase): { stt: StepState; llm: StepState } {
 }
 
 export type ErrorStage =
-  | "recording"
-  | "transcribing"
-  | "postprocessing"
-  | "injecting"
-  | "generic";
+  "recording" | "transcribing" | "postprocessing" | "injecting" | "generic";
 
 /** The stage that failed = the last phase before `error`. */
 export function errorStage(previous: Phase | null): ErrorStage {

@@ -742,10 +742,7 @@ function StepApiKey({
   xaiKey: string;
   setXaiKey: (v: string) => void;
   keyStatus:
-    | null
-    | { kind: "saving" }
-    | { kind: "ok" }
-    | { kind: "error"; msg: string };
+    null | { kind: "saving" } | { kind: "ok" } | { kind: "error"; msg: string };
   onSaveKey: () => Promise<void>;
 }): JSX.Element {
   const t = useT();
