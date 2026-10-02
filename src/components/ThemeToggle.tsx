@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+import type { JSX } from "react";
 import { useUIStore } from "../store";
 import { useT } from "../i18n";
 import type { ThemeChoice } from "../lib/theme";

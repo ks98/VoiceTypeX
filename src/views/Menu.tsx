@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type JSX } from "react";
 import { useModesStore, useSettingsStore } from "../store";
 import { ipcCancelMenu, ipcReloadModes, ipcStartRecording } from "../lib/tauri";
 import type { Mode } from "../lib/types";

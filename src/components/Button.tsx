@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, ReactNode, JSX } from "react";
 
 type Variant =
   "primary" | "secondary" | "ghost" | "danger" | "danger-strong" | "tab";

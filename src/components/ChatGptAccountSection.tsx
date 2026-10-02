@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { useState } from "react";
+import { useState, type JSX } from "react";
 import Banner from "./Banner";
 import Button from "./Button";
 import Input from "./Input";

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { useEffect, useState } from "react";
+import { useEffect, useState, type JSX } from "react";
 import { useModesStore } from "../store";
 import {
   ipcDeleteMode,

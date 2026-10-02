@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import type { ReactNode } from "react";
+import type { ReactNode, JSX } from "react";
 import { useLocale, useT, type TranslateFn } from "../../i18n";
 import { formatNumber } from "../../i18n/format";
 import {

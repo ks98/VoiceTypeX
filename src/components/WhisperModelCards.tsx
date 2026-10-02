@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+import type { JSX } from "react";
 //
 // Local Whisper model picker rendered as comparison cards: each slot
 // shows a tempo + accuracy bar, its disk/RAM footprint, a DE badge for

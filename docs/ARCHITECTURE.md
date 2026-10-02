@@ -12,7 +12,7 @@ Fixed — alternatives are not introduced without prior discussion.
 |---|---|
 | App framework | Tauri 2 (stable) |
 | Backend | Rust 2021+ |
-| Frontend | React 18 + TypeScript + Vite |
+| Frontend | React 19 + TypeScript + Vite |
 | Styling | TailwindCSS + shadcn/ui |
 | Frontend state | Zustand |
 | Async runtime | tokio |
@@ -784,7 +784,7 @@ would additively enable further calls, not filter existing ones.
 
 ## Frontend
 
-React 18 + TypeScript strict + Tailwind v3 + Zustand.
+React 19 + TypeScript strict + Tailwind v3 + Zustand.
 
 - **Views (`src/views/`):** Settings, Modes, Logs, Overlay, Menu (Menu
   and Overlay are their own Tauri windows from the same `index.html`,

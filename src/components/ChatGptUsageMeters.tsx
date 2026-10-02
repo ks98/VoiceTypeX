@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { useEffect } from "react";
+import { useEffect, type JSX } from "react";
 import { shownWindows, type UsageLevel } from "../lib/chatgptUsage";
 import { useChatGptUsage } from "../lib/useChatGptUsage";
 import { formatDate, formatNumber } from "../i18n/format";

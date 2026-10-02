@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+import type { JSX } from "react";
 
 interface LogoProps {
   className?: string;

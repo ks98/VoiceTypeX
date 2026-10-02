@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type JSX } from "react";
 
 export type LevelListener = (level: number) => void;
 /** Registers a listener for 0..1 input levels; returns the unsubscribe. */

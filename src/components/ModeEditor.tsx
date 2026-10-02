@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { useEffect, useState } from "react";
+import { useEffect, useState, type JSX } from "react";
 import type { Mode } from "../lib/types";
 import { ipcCreateMode, ipcUpdateMode } from "../lib/tauri";
 import { isWindows } from "../lib/platform";
