@@ -195,7 +195,7 @@ jobs:
           # rationale + review date below; keep this list identical to the
           # [advisories] ignore in src-tauri/deny.toml.
           #
-          # glib 0.18 stack (tauri 2.11, tray-icon 0.25 and libappindicator
+          # glib 0.18 stack (tauri 2.12, tray-icon 0.25 and libappindicator
           # 0.9 all pin gtk/glib 0.18; gtk3-rs resumed development — the
           # gtk3-rs unmaintained advisories RUSTSEC-2024-0411..0420 were
           # withdrawn on 2026-08-14 — and gtk 0.19 moved to glib 0.22, but
@@ -204,31 +204,11 @@ jobs:
           #     (transitive via glib-macros 0.18 + gtk3-macros 0.18)
           #   RUSTSEC-2024-0429: glib 0.18 unsound (VariantStrIter,
           #     patched >=0.20; gtk 0.18 pins glib 0.18)
-          # unic-* stack (unmaintained, RUSTSEC issue #2414; transitive via
-          #   urlpattern 0.3 -> tauri-utils); review 2026-12:
-          #   RUSTSEC-2025-0075: unic-char-range 0.9 unmaintained
-          #   RUSTSEC-2025-0080: unic-common 0.9 unmaintained
-          #   RUSTSEC-2025-0081: unic-char-property 0.9 unmaintained
-          #   RUSTSEC-2025-0098: unic-ucd-version 0.9 unmaintained
-          #   RUSTSEC-2025-0100: unic-ucd-ident 0.9 unmaintained
-          # quick-xml 0.37 (Windows only; notify-rust 4.18 ->
-          #   tauri-winrt-notification 0.7). Both advisories are in the XML
-          #   reader; tauri-winrt-notification 0.7 only calls
-          #   quick_xml::escape::escape, so the vulnerable code is
-          #   unreachable. notify-rust main already moved to
-          #   tauri-winrt-notification 0.8, which drops quick-xml
-          #   (hoodie/notify-rust#288), but no release carries it yet;
-          #   review 2026-12:
-          #   RUSTSEC-2026-0194: quick-xml <0.41 quadratic
-          #     duplicate-attribute check
-          #   RUSTSEC-2026-0195: quick-xml <0.41 unbounded NsReader
-          #     namespace allocation
+          # The unic-* (urlpattern) and quick-xml 0.37 (notify-rust)
+          # entries were dropped in 2026-10: the Tauri 2.12 / notify-rust
+          # 4.18.1 update no longer pulls those crates in.
           cargo audit --file src-tauri/Cargo.lock --deny warnings \
-            --ignore RUSTSEC-2024-0370 --ignore RUSTSEC-2024-0429 \
-            --ignore RUSTSEC-2025-0075 --ignore RUSTSEC-2025-0080 \
-            --ignore RUSTSEC-2025-0081 --ignore RUSTSEC-2025-0098 \
-            --ignore RUSTSEC-2025-0100 --ignore RUSTSEC-2026-0194 \
-            --ignore RUSTSEC-2026-0195
+            --ignore RUSTSEC-2024-0370 --ignore RUSTSEC-2024-0429
       # cargo-deny gates licenses (GPL-3.0 compatibility, machine-enforced
       # — not just THIRD_PARTY_NOTICES.md), advisories and crate sources.
       # The advisory ignore list lives in src-tauri/deny.toml and mirrors

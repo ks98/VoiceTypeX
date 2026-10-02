@@ -144,7 +144,8 @@ pub fn setup_tray(app: &AppHandle, locale: Option<&str>) -> Result<()> {
 /// Reveal the settings (main) window from the tray.
 ///
 /// On Linux/Wayland the WM close (X) button is dead until the window's
-/// first `configure` event (tao 0.35.3, tauri#13440 — open upstream).
+/// first `configure` event (seen with tao 0.35.3; tauri#13440 is closed
+/// upstream, unverified whether tao 0.37 fixes this case).
 /// Because the window starts `visible:false` (focus-steal guard) and is
 /// re-mapped fresh on every tray reveal, the X is dead again each time.
 /// We replicate the manual maximize→restore the user would otherwise do:

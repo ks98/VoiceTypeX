@@ -25,8 +25,9 @@ dialog on subsequent app starts.
   (with an 80 ms pause) so that focus jumps back to the target app.
 - Consequence + workaround: because the main window is first mapped only
   later (via the tray), its WM close (X) button is dead on Wayland until
-  the first `configure` event (tao 0.35.3, tauri#13440 — still open
-  upstream). Worked around in `src-tauri/src/tray/mod.rs`
+  the first `configure` event (seen with tao 0.35.3; tauri#13440 was
+  closed upstream on 2026-06-29 — whether tao 0.37 / Tauri 2.12 fixes
+  this case is not verified yet, so the workaround stays). Worked around in `src-tauri/src/tray/mod.rs`
   (`reveal_main_window`): on Linux, after each tray `show()`, the window is
   briefly `maximize()`-d then `unmaximize()`-d (deferred so the fresh map
   settles first), which fires the `configure` that binds the close
@@ -477,7 +478,10 @@ If FUSE is missing or disabled on the system:
 ```
 
 The AppImage bundles the GTK/WebKit stack (not glibc — see the glibc
-floor above). It does **not** integrate into the app menu by itself;
+floor above). Since Tauri CLI 2.12 (VoiceTypeX after 0.4.0) it runs
+natively on Wayland like the `.deb`/`.rpm`; older AppImages forced
+`GDK_BACKEND=x11` and ran through XWayland. It does **not** integrate
+into the app menu by itself;
 to add an entry:
 
 ```bash
