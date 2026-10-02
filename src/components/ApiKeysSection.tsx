@@ -273,7 +273,7 @@ export default function ApiKeysSection(): JSX.Element {
                             : t("api_keys.show_key")
                         }
                         aria-pressed={showKey}
-                        className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex items-center justify-center h-6 w-6 rounded text-fg-muted hover:text-fg hover:bg-elevated focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex items-center justify-center h-6 w-6 rounded-sm text-fg-muted hover:text-fg hover:bg-elevated focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand/40"
                       >
                         <EyeIcon open={showKey} />
                       </button>

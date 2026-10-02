@@ -1,15 +1,72 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Scan only what the v3 `content` setting covered, not every git file. */
+@import "tailwindcss" source(none);
+@source "../../index.html";
+@source "../**/*.{ts,tsx}";
+
+/*
+ * Tailwind v3 behaviour, kept on purpose so the v4 upgrade changes no
+ * pixels: `dark:` follows the .dark class, `hover:` also applies on
+ * touch-capable devices (v4 gates it on `(hover: hover)`, which some
+ * 2-in-1 laptops report wrongly), buttons keep the pointer cursor, and
+ * font sizes keep fixed line heights instead of v4's ratios (children
+ * with arbitrary sizes like text-[10px] inherit them).
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+@custom-variant hover (&:hover);
+
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+/*
+ * Semantic colours (bg-canvas, text-fg, border-outline, …) resolve to the
+ * RGB-triplet tokens below; `inline` makes them follow the light/dark
+ * switch, and opacity modifiers (bg-fg/35) become color-mix().
+ */
+@theme inline {
+  --color-canvas: rgb(var(--canvas-rgb));
+  --color-surface: rgb(var(--surface-rgb));
+  --color-elevated: rgb(var(--elevated-rgb));
+  --color-outline: rgb(var(--outline-rgb));
+  --color-outline-strong: rgb(var(--outline-strong-rgb));
+  --color-fg: rgb(var(--fg-rgb));
+  --color-fg-muted: rgb(var(--fg-muted-rgb));
+  --color-fg-faint: rgb(var(--fg-faint-rgb));
+  --color-brand: rgb(var(--brand-rgb));
+  --color-brand-hover: rgb(var(--brand-hover-rgb));
+  --color-brand-contrast: rgb(var(--brand-contrast-rgb));
+  --color-status-idle: rgb(var(--status-idle-rgb));
+  --color-status-recording: rgb(var(--status-recording-rgb));
+  --color-status-processing: rgb(var(--status-processing-rgb));
+  --color-status-done: rgb(var(--status-done-rgb));
+  --color-status-error: rgb(var(--status-error-rgb));
+}
+
+@theme {
+  --font-mono:
+    "JetBrains Mono", "SF Mono", "Cascadia Mono", "Roboto Mono", "Consolas",
+    "Liberation Mono", "Menlo", monospace;
+  /* Smaller size for supporting text (sidebar subtitle, menu hotkey hint,
+   * mode description in the menu, initials badge); 11px lower bound per
+   * readability recommendation. */
+  --text-xxs: 11px;
+  --text-xxs--line-height: 14px;
+  --text-xs--line-height: 1rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg--line-height: 1.75rem;
+  --text-xl--line-height: 1.75rem;
+}
 
 /*
  * Design tokens — "Editorial Calm".
  *
- * Tokens live as CSS custom properties (RGB triplets without commas, so
- * they compose with Tailwind's `<alpha-value>` modifier).
- * Tailwind maps these variables to semantic classes in tailwind.config.ts
- * (bg-canvas, text-fg, border-outline, …).
+ * Tokens live as CSS custom properties (RGB triplets without commas);
+ * the @theme block above maps them to Tailwind's semantic colours.
  *
  * Light is the default; .dark on <html> activates the dark theme.
  * The class is set synchronously in src/lib/theme.ts before the React

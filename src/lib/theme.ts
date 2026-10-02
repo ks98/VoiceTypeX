@@ -3,8 +3,8 @@
 // Theme control: system / light / dark.
 //
 // The choice is persisted to localStorage. Applied by adding/removing
-// the `dark` class on <html> — Tailwind's darkMode: "class" picks up
-// the class. Foundation phase: the default stays explicitly "dark" so
+// the `dark` class on <html> — the `dark` custom variant in
+// globals.css picks up the class. Foundation phase: the default stays explicitly "dark" so
 // nothing flips visually after the token refactor; wave 2 changes the
 // default to "system" and exposes the toggle in the settings.
 

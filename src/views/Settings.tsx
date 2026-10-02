@@ -52,7 +52,7 @@ import {
 } from "../i18n";
 
 const inputCls =
-  "bg-surface border border-outline rounded-md px-3 py-2 text-sm text-fg placeholder:text-fg-faint focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/40";
+  "bg-surface border border-outline rounded-md px-3 py-2 text-sm text-fg placeholder:text-fg-faint focus:outline-hidden focus:border-brand focus:ring-1 focus:ring-brand/40";
 
 /**
  * Text input that keeps a local draft while typing and only commits the
@@ -604,7 +604,7 @@ function SettingsSubNav(): JSX.Element {
         <a
           key={it.id}
           href={`#${it.id}`}
-          className="px-3 py-1.5 rounded-md text-sm text-fg-muted hover:text-fg hover:bg-elevated transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+          className="px-3 py-1.5 rounded-md text-sm text-fg-muted hover:text-fg hover:bg-elevated transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand/40"
         >
           {t(it.key)}
         </a>
@@ -1079,7 +1079,7 @@ function CacheManagementField(): JSX.Element {
                 className="flex items-center gap-2 text-sm py-1.5 px-2 rounded-md border border-outline bg-surface"
               >
                 <span
-                  className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${kindColor(f.kind)}`}
+                  className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium ${kindColor(f.kind)}`}
                 >
                   {kindLabel(f.kind)}
                 </span>

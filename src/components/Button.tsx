@@ -18,7 +18,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
  * accessibility.
  */
 const BASE =
-  "inline-flex items-center justify-center whitespace-nowrap leading-none rounded-md font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:cursor-not-allowed";
+  "inline-flex items-center justify-center whitespace-nowrap leading-none rounded-md font-medium transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:cursor-not-allowed";
 
 const VARIANTS: Record<Variant, string> = {
   primary:

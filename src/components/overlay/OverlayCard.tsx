@@ -80,7 +80,7 @@ export default function OverlayCard(props: OverlayCardProps): JSX.Element {
       className={
         "vtx-enter h-full w-full rounded-lg vtx-glass px-4 py-2 flex flex-col justify-center gap-1 transition-colors duration-200 " +
         (isError
-          ? "pointer-events-auto cursor-pointer !border-status-error/40"
+          ? "pointer-events-auto cursor-pointer border-status-error/40!"
           : "")
       }
     >
