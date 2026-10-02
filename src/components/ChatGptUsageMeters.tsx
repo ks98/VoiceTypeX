@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { useEffect, type JSX } from "react";
+import { useEffect, useState, type JSX } from "react";
 import { shownWindows, type UsageLevel } from "../lib/chatgptUsage";
 import { useChatGptUsage } from "../lib/useChatGptUsage";
 import { formatDate, formatNumber } from "../i18n/format";
@@ -31,7 +31,13 @@ export default function ChatGptUsageMeters(): JSX.Element {
     void refresh();
   }, [refresh]);
 
-  const now = Date.now() / 1000;
+  // Hides windows that reset while the view is open; a minute is precise
+  // enough for that.
+  const [now, setNow] = useState(() => Date.now() / 1000);
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now() / 1000), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
   const windows = shownWindows(usage, now);
   // Absolute local times, so nothing has to tick: "16:40" today,
   // "Mon 09:12" otherwise.

@@ -77,10 +77,11 @@ function CommitOnBlurInput({
   placeholder?: string;
 }): JSX.Element {
   const [draft, setDraft] = useState(value);
-
-  useEffect(() => {
+  const [syncedValue, setSyncedValue] = useState(value);
+  if (value !== syncedValue) {
+    setSyncedValue(value);
     setDraft(value);
-  }, [value]);
+  }
 
   const commit = () => {
     if (draft !== value) onCommit(draft);
@@ -952,14 +953,14 @@ function CacheManagementField(): JSX.Element {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
-  const refresh = async () => {
-    try {
-      const list = await ipcListCachedFiles();
-      setFiles(list);
-    } catch (e) {
-      setStatus(t("settings.cache.status.list_failed", { message: String(e) }));
-    }
-  };
+  const refresh = () =>
+    ipcListCachedFiles()
+      .then(setFiles)
+      .catch((e) =>
+        setStatus(
+          t("settings.cache.status.list_failed", { message: String(e) }),
+        ),
+      );
 
   useEffect(() => {
     void refresh();
