@@ -155,6 +155,15 @@ need `libssl.so.3` on every host. Changing that variable needs
          transitively (llama -> ggml -> ggml-{cpu,vulkan,base}). Since
          DT_RUNPATH is not inherited by transitive deps, build.rs passes
          `-Wl,--disable-new-dtags` to emit DT_RPATH, which is.
+  5. The binary also contains whisper-rs-sys's **statically linked**
+     ggml (a different version than llama's shared one, same symbol
+     names). build.rs links with `-Wl,--exclude-libs,ALL`, so none of
+     those symbols are exported. Without it the linker exports every
+     ggml symbol the llama libs reference, `ld.so` binds the libs to the
+     binary's copies, and `libggml-vulkan`'s static initializer writes
+     into the binary's read-only shader tables — v0.4.1 crashed with
+     SIGSEGV before `main` on every Linux package. Check with
+     `nm -D --defined-only voicetypex | grep -c ggml` (must be 0).
 
 `src-tauri/resources/lib/` is gitignored except for `.gitkeep` — its
 contents are regenerated on every bundle build and don't belong in the
@@ -596,7 +605,9 @@ it the script prints instructions for seahorse / kwalletmanager.
 ## CI
 
 GitHub Actions builds on every push/PR (`.github/workflows/ci.yml`):
-- Linux (ubuntu-24.04) — `cargo fmt + clippy + test`, `pnpm lint + build`
+- Linux (ubuntu-24.04) — `cargo fmt + clippy + test`, `pnpm lint + build`,
+  and a headless smoke start of the built binary (`scripts/smoke-start.sh`:
+  a signal or loader error while starting fails the job)
 - Windows (windows-latest) — `cargo build + test`, `pnpm build` (embedded
   llama-cpp-2 disabled, hence a full link instead of just `cargo check`)
 - Supply-chain audit (`cargo audit`, `pnpm audit`)
@@ -604,7 +615,8 @@ GitHub Actions builds on every push/PR (`.github/workflows/ci.yml`):
 On `v*` tags, `release.yml` builds the bundle artifacts
 (deb/rpm/AppImage/nsis) for both platforms via `tauri-action`, signs
 the updater artifacts and creates a GitHub release (draft) with assets +
-`latest.json`.
+`latest.json`. The Linux leg smoke-starts the release binary against the
+bundled libs before the draft can be published.
 
 > The native Vulkan GPU build on the hosted runners (whisper.cpp /
 > llama.cpp) must be validated on the first real CI run — the pinned

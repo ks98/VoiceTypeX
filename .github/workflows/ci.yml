@@ -52,7 +52,8 @@ jobs:
             libayatana-appindicator3-dev librsvg2-dev \
             libasound2-dev libxdo-dev libudev-dev \
             libxcb1-dev libxcb-xtest0-dev libxcb-xfixes0-dev \
-            libdbus-1-dev libclang-dev patchelf
+            libdbus-1-dev libclang-dev patchelf \
+            mesa-vulkan-drivers
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
         with:
           version: 9.15.0
@@ -98,6 +99,17 @@ jobs:
         run: node scripts/clean-dangling-libs.mjs
       - name: cargo test
         run: cargo test --manifest-path src-tauri/Cargo.toml --lib
+      # clippy and the test harness never start the real binary, so a crash
+      # while loading it (v0.4.1: SIGSEGV in libggml-vulkan's static
+      # initializer) went unnoticed — build and start it once. Needs a Vulkan
+      # driver like every real install (the packages depend on
+      # mesa-vulkan-drivers, installed above): without any ICD, ggml-vulkan
+      # throws at startup.
+      - name: Smoke-start the app binary
+        run: |
+          cargo build --manifest-path src-tauri/Cargo.toml
+          scripts/smoke-start.sh src-tauri/target/debug/voicetypex \
+            "$(ls -td src-tauri/target/debug/build/llama-cpp-sys-2-*/out/lib | head -1)"
       - name: vitest
         run: pnpm test
 

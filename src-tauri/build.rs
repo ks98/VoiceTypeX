@@ -30,6 +30,15 @@ fn main() {
         // inherited by libllama's transitive ggml deps (see module doc).
         println!("cargo:rustc-link-arg=-Wl,--disable-new-dtags");
 
+        // Keep the symbols of static archives — above all whisper-rs-sys's
+        // statically linked ggml — out of the dynamic symbol table. Otherwise
+        // the linker exports every ggml symbol the llama-cpp-sys-2 shared libs
+        // also reference, ld.so binds those libs to the binary's (different
+        // version) ggml, and libggml-vulkan's static initializer writes into
+        // the binary's read-only copy of its shader tables: SIGSEGV before
+        // main (v0.4.1). The binary itself needs to export nothing.
+        println!("cargo:rustc-link-arg=-Wl,--exclude-libs,ALL");
+
         // rpath cascade (tried in order, missing dirs ignored):
         // 1. deb/rpm — Tauri resource root is the productName "VoiceTypeX";
         //    binary in /usr/bin, so $ORIGIN/../lib = /usr/lib. Update this

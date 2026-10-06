@@ -113,7 +113,8 @@ jobs:
             libayatana-appindicator3-dev librsvg2-dev \
             libasound2-dev libxdo-dev libudev-dev \
             libxcb1-dev libxcb-xtest0-dev libxcb-xfixes0-dev \
-            libdbus-1-dev libclang-dev patchelf
+            libdbus-1-dev libclang-dev patchelf \
+            mesa-vulkan-drivers
       # No FUSE2 step needed: the tauri-bundler invokes linuxdeploy anyway
       # with --appimage-extract-and-run + APPIMAGE_EXTRACT_AND_RUN=1,
       # so it mounts nothing. The libfuse2t64 previously installed here was
@@ -210,6 +211,11 @@ jobs:
           # action version if you ever bump @v0.
           includeUpdaterJson: true
           args: ${{ matrix.args }}
+      # Start the release binary with the libs the bundles ship: a load-time
+      # crash fails the workflow, so the draft never gets published.
+      - name: Smoke-start the release binary
+        if: runner.os == 'Linux'
+        run: scripts/smoke-start.sh src-tauri/target/release/voicetypex src-tauri/resources/lib
 
   # Self-update is offered for the AppImage + NSIS only. tauri-plugin-updater
   # looks up `{os}-{arch}-{bundle}` first and falls back to `{os}-{arch}`, so
