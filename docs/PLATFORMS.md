@@ -607,7 +607,9 @@ it the script prints instructions for seahorse / kwalletmanager.
 GitHub Actions builds on every push/PR (`.github/workflows/ci.yml`):
 - Linux (ubuntu-24.04) — `cargo fmt + clippy + test`, `pnpm lint + build`,
   and a headless smoke start of the built binary (`scripts/smoke-start.sh`:
-  a signal or loader error while starting fails the job)
+  without a display a healthy binary reaches GTK init and panics there; not
+  reaching that point — a crash or loader error while starting — fails the
+  job)
 - Windows (windows-latest) — `cargo build + test`, `pnpm build` (embedded
   llama-cpp-2 disabled, hence a full link instead of just `cargo check`)
 - Supply-chain audit (`cargo audit`, `pnpm audit`)
