@@ -5,7 +5,9 @@
 ### Wayland (KDE Plasma 6, GNOME 46+)
 
 Functionally complete: hotkeys via `xdg-desktop-portal.GlobalShortcuts`
-(through `ashpd`), auto-paste via `xdg-desktop-portal.RemoteDesktop` +
+(through `ashpd`; bound on every start, since KDE ≥ 6.7.4 only activates
+shortcuts bound in the current session — no dialog for known ones),
+auto-paste via `xdg-desktop-portal.RemoteDesktop` +
 `reis` (libei). On the first dictation the compositor shows a
 permission dialog *"VoiceTypeX wants to send keystrokes"*; once granted,
 the `restore_token` is persisted to
