@@ -670,7 +670,14 @@ KDE remembers the assignment and ignores later `preferred_trigger`
 values; the user can additionally adjust the hotkey in
 *System Settings → Global Shortcuts → VoiceTypeX*.
 
-`hotkey::linux_wayland::run_global_shortcuts_session` therefore calls
+The shortcuts are bound on **every** start: a portal session only
+delivers activations for shortcuts bound in that session.
+xdg-desktop-portal-kde enforces this since 6.7.4 (KDE bug 523063; before,
+creating the session re-activated stored shortcuts, so an older "skip the
+bind if already listed" gate happened to work), and since Plasma 6.4
+re-binding a known shortcut shows no dialog.
+
+`hotkey::linux_wayland::run_global_shortcuts_session` then calls
 `list_shortcuts` once after `bind_shortcuts` and writes the
 `trigger_description` of the first action into
 `AppContext.effective_menu_hotkey: Arc<RwLock<Option<String>>>`. The IPC

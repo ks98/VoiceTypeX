@@ -11,7 +11,7 @@
 use crate::core::error::{Result, VoiceTypeError};
 use crate::hotkey::{HotkeyEvent, HotkeyEventKind};
 use parking_lot::RwLock;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 
@@ -51,53 +51,26 @@ pub async fn run_global_shortcuts_session(
         .await
         .map_err(|e| VoiceTypeError::Hotkey(format!("create_session: {e}")))?;
 
-    // Spec-recommended pattern: list first, bind only what isn't bound
-    // yet. `bind_shortcuts` is the call that triggers the compositor's
-    // assignment dialog, and "an application can only attempt to bind
-    // shortcuts of a session once". On a fresh first run the list is
-    // empty → we bind (one-time dialog). On later starts the portal
-    // returns the previously-bound shortcuts → we skip the bind and KDE
-    // shows no dialog. Without this gate, the unconditional bind
-    // re-prompted on every start.
-    let already_bound: HashSet<String> = match proxy.list_shortcuts(&session).await {
-        Ok(req) => match req.response() {
-            Ok(list) => list
-                .shortcuts()
-                .iter()
-                .map(|s| s.id().to_string())
-                .collect(),
-            Err(e) => {
-                tracing::warn!(error = %e, "list_shortcuts.response() before bind failed — assuming none bound");
-                HashSet::new()
-            }
-        },
-        Err(e) => {
-            tracing::warn!(error = %e, "list_shortcuts before bind failed — assuming none bound");
-            HashSet::new()
-        }
-    };
-
-    let new_shortcuts: Vec<NewShortcut> = shortcuts
+    // Bind every shortcut on every start: a portal session only delivers
+    // activations for shortcuts bound in that session. KDE made this
+    // explicit in xdg-desktop-portal-kde 6.7.4 ("Shortcuts should only
+    // become active when BindShortcuts is called", KDE bug 523063) — before,
+    // creating the session silently re-activated the stored shortcuts, so
+    // skipping the bind for already-known ids happened to work. Re-binding
+    // a known shortcut shows no dialog: since Plasma 6.4 KDE only prompts
+    // for new ids and keeps the user's stored key for returning ones.
+    let requested: Vec<NewShortcut> = shortcuts
         .iter()
-        .filter(|s| !already_bound.contains(&s.id))
         .map(|s| {
             NewShortcut::new(&s.id, &s.description)
                 .preferred_trigger(Some(s.preferred_trigger.as_str()))
         })
         .collect();
-
-    if new_shortcuts.is_empty() {
-        tracing::info!(
-            count = shortcuts.len(),
-            "Wayland hotkeys already bound — skipping bind_shortcuts (no portal dialog)"
-        );
-    } else {
-        proxy
-            .bind_shortcuts(&session, &new_shortcuts, None)
-            .await
-            .map_err(|e| VoiceTypeError::Hotkey(format!("bind_shortcuts: {e}")))?;
-        tracing::info!(count = new_shortcuts.len(), "Wayland hotkeys registered");
-    }
+    proxy
+        .bind_shortcuts(&session, &requested, None)
+        .await
+        .map_err(|e| VoiceTypeError::Hotkey(format!("bind_shortcuts: {e}")))?;
+    tracing::info!(count = requested.len(), "Wayland hotkeys bound");
 
     // Call `list_shortcuts` after `bind_shortcuts` to learn the
     // actually bound trigger. This is portal behavior: on the very
