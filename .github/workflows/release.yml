@@ -210,6 +210,11 @@ jobs:
           # action version if you ever bump @v0.
           includeUpdaterJson: true
           args: ${{ matrix.args }}
+      # Start the release binary with the libs the bundles ship: a load-time
+      # crash fails the workflow, so the draft never gets published.
+      - name: Smoke-start the release binary
+        if: runner.os == 'Linux'
+        run: scripts/smoke-start.sh src-tauri/target/release/voicetypex src-tauri/resources/lib
 
   # Self-update is offered for the AppImage + NSIS only. tauri-plugin-updater
   # looks up `{os}-{arch}-{bundle}` first and falls back to `{os}-{arch}`, so

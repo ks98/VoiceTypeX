@@ -98,6 +98,14 @@ jobs:
         run: node scripts/clean-dangling-libs.mjs
       - name: cargo test
         run: cargo test --manifest-path src-tauri/Cargo.toml --lib
+      # clippy and the test harness never start the real binary, so a crash
+      # while loading it (v0.4.1: SIGSEGV in libggml-vulkan's static
+      # initializer) went unnoticed — build and start it once.
+      - name: Smoke-start the app binary
+        run: |
+          cargo build --manifest-path src-tauri/Cargo.toml
+          scripts/smoke-start.sh src-tauri/target/debug/voicetypex \
+            "$(ls -td src-tauri/target/debug/build/llama-cpp-sys-2-*/out/lib | head -1)"
       - name: vitest
         run: pnpm test
 
