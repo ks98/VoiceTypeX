@@ -113,7 +113,8 @@ jobs:
             libayatana-appindicator3-dev librsvg2-dev \
             libasound2-dev libxdo-dev libudev-dev \
             libxcb1-dev libxcb-xtest0-dev libxcb-xfixes0-dev \
-            libdbus-1-dev libclang-dev patchelf
+            libdbus-1-dev libclang-dev patchelf \
+            mesa-vulkan-drivers
       # No FUSE2 step needed: the tauri-bundler invokes linuxdeploy anyway
       # with --appimage-extract-and-run + APPIMAGE_EXTRACT_AND_RUN=1,
       # so it mounts nothing. The libfuse2t64 previously installed here was
